@@ -20,6 +20,7 @@ import { usePublicClient } from 'wagmi'
 import { isAddress } from 'viem'
 import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/contexts/ToastContext'
 
 type OnboardingStep = 'welcome' | 'connect-wallet' | 'enter-contract'
 
@@ -28,6 +29,7 @@ export function ContractSetup() {
   const { recentAddresses, addAddress, removeAddress } = useRecentAddresses()
   const { data: safeAddress } = useSafeAddress()
   const publicClient = usePublicClient()
+  const { toast } = useToast()
 
   const [defiInteractorInput, setDefiInteractorInput] = useState('')
   const [error, setError] = useState('')
@@ -103,7 +105,7 @@ export function ContractSetup() {
     const url = `${window.location.origin}${window.location.pathname}?${params}`
 
     navigator.clipboard.writeText(url)
-    alert('Shareable link copied to clipboard!')
+    toast.success('Link copied!')
   }
 
   if (isConfigured && addresses.defiInteractor) {

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,12 +7,13 @@ import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useReadContract } from 'wagmi'
 import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { useToast } from '@/contexts/ToastContext'
 
 export function EmergencyControls() {
   const { isSafeOwner } = useIsSafeOwner()
   const { addresses } = useContractAddresses()
-  const { proposeTransaction, isPending, error } = useSafeProposal()
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const { proposeTransaction, isPending } = useSafeProposal()
+  const { toast } = useToast()
 
   // Read current pause status
   const { data: isPaused } = useReadContract({
@@ -27,13 +27,11 @@ export function EmergencyControls() {
 
   const handlePause = async () => {
     if (!addresses.defiInteractor) {
-      alert('Contract address not configured')
+      toast.warning('Contract not configured')
       return
     }
 
     try {
-      setSuccessMessage(null)
-
       const data = encodeContractCall(
         addresses.defiInteractor,
         DEFI_INTERACTOR_ABI as unknown as any[],
@@ -47,9 +45,7 @@ export function EmergencyControls() {
       )
 
       if (result.success) {
-        setSuccessMessage(
-          `Contract paused successfully! Transaction hash: ${result.transactionHash}`
-        )
+        toast.success('Contract paused successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -59,19 +55,17 @@ export function EmergencyControls() {
     } catch (error) {
       console.error('Error proposing pause:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose pause transaction. ${errorMsg}`)
+      toast.error(`Pause failed: ${errorMsg}`)
     }
   }
 
   const handleUnpause = async () => {
     if (!addresses.defiInteractor) {
-      alert('Contract address not configured')
+      toast.warning('Contract not configured')
       return
     }
 
     try {
-      setSuccessMessage(null)
-
       const data = encodeContractCall(
         addresses.defiInteractor,
         DEFI_INTERACTOR_ABI as unknown as any[],
@@ -85,9 +79,7 @@ export function EmergencyControls() {
       )
 
       if (result.success) {
-        setSuccessMessage(
-          `Contract unpaused successfully! Transaction hash: ${result.transactionHash}`
-        )
+        toast.success('Contract unpaused successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -97,7 +89,7 @@ export function EmergencyControls() {
     } catch (error) {
       console.error('Error proposing unpause:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose unpause transaction. ${errorMsg}`)
+      toast.error(`Unpause failed: ${errorMsg}`)
     }
   }
 
@@ -207,16 +199,6 @@ export function EmergencyControls() {
               {isPending ? 'Proposing to Safe...' : '✓ Unpause Contract'}
             </Button>
           </div>
-        )}
-
-        {/* Success Message */}
-        {successMessage && (
-          <p className="text-small text-success">✓ {successMessage}</p>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <p className="text-small text-error">✗ {String(error)}</p>
         )}
       </CardContent>
     </Card>

@@ -9,11 +9,19 @@ import { DEFI_INTERACTOR_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
 import { SpendingLimits } from '@/components/SpendingLimits'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
-import { useIsSafeOwner, useHasRole, useManagedAccounts, useSpendingAllowance, useSafeValue, useSubAccountLimits } from '@/hooks/useSafe'
+import {
+  useIsSafeOwner,
+  useHasRole,
+  useManagedAccounts,
+  useSpendingAllowance,
+  useSafeValue,
+  useSubAccountLimits,
+} from '@/hooks/useSafe'
 import { formatUSD } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { isAddress } from 'viem'
+import { useToast } from '@/contexts/ToastContext'
 
 export function SubAccountManager() {
   const { addresses } = useContractAddresses()
@@ -21,33 +29,31 @@ export function SubAccountManager() {
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
   const [grantTransfer, setGrantTransfer] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const { toast } = useToast()
 
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
 
   // Use Safe proposal hook
-  const { proposeTransaction, isPending, error } = useSafeProposal()
+  const { proposeTransaction, isPending } = useSafeProposal()
 
   const handleAddSubAccount = async () => {
     if (!isAddress(newSubAccount)) {
-      alert('Invalid Ethereum address')
+      toast.warning('Invalid Ethereum address')
       return
     }
 
     if (!grantExecute && !grantTransfer) {
-      alert('Please select at least one role to grant')
+      toast.warning('Select at least one role')
       return
     }
 
     if (!addresses.defiInteractor) {
-      alert('DeFi Interactor address not configured')
+      toast.warning('Contract not configured')
       return
     }
 
     try {
-      setSuccessMessage(null)
-
       // Check if the subaccount already exists and filter roles already granted
       const existingAccount = managedAccounts.find(
         acc => acc.address.toLowerCase() === newSubAccount.toLowerCase()
@@ -62,7 +68,7 @@ export function SubAccountManager() {
       }
 
       if (rolesToGrant.length === 0) {
-        alert('This subaccount already has all the selected roles')
+        toast.info('This address already has the selected roles')
         return
       }
 
@@ -83,7 +89,7 @@ export function SubAccountManager() {
         setNewSubAccount('')
         setGrantExecute(false)
         setGrantTransfer(false)
-        setSuccessMessage(`Transaction executed successfully!`)
+        toast.success('Transaction submitted')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -93,7 +99,7 @@ export function SubAccountManager() {
     } catch (error) {
       console.error('Error proposing role grant:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose transaction. ${errorMsg}`)
+      toast.error(`Transaction failed: ${errorMsg}`)
     }
   }
 
@@ -101,8 +107,6 @@ export function SubAccountManager() {
     if (!addresses.defiInteractor) return
 
     try {
-      setSuccessMessage(null)
-
       const data = encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
         account,
         roleId,
@@ -114,7 +118,7 @@ export function SubAccountManager() {
       )
 
       if (result.success) {
-        setSuccessMessage(`Role revoked successfully!`)
+        toast.success('Role revoked successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -124,7 +128,7 @@ export function SubAccountManager() {
     } catch (error) {
       console.error('Error proposing role revoke:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose transaction. ${errorMsg}`)
+      toast.error(`Transaction failed: ${errorMsg}`)
     }
   }
 
@@ -132,8 +136,6 @@ export function SubAccountManager() {
     if (!addresses.defiInteractor) return
 
     try {
-      setSuccessMessage(null)
-
       const data = encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
         account,
         roleId,
@@ -145,7 +147,7 @@ export function SubAccountManager() {
       )
 
       if (result.success) {
-        setSuccessMessage(`Role granted successfully!`)
+        toast.success('Role granted successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -155,7 +157,7 @@ export function SubAccountManager() {
     } catch (error) {
       console.error('Error proposing role grant:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose transaction. ${errorMsg}`)
+      toast.error(`Transaction failed: ${errorMsg}`)
     }
   }
 
@@ -247,18 +249,6 @@ export function SubAccountManager() {
               >
                 {isPending ? 'Proposing...' : 'Add Sub-Account'}
               </Button>
-
-              {successMessage && (
-                <div className="bg-success-muted p-3 border border-success/20 rounded-lg">
-                  <p className="text-small text-success">{successMessage}</p>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-error-muted p-3 border border-error/20 rounded-lg">
-                  <p className="text-error text-small">{error}</p>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -320,7 +310,13 @@ interface SubAccountRowProps {
   index: number
 }
 
-function SubAccountRow({ account, onRevokeRole, onGrantRole, isRevoking, index }: SubAccountRowProps) {
+function SubAccountRow({
+  account,
+  onRevokeRole,
+  onGrantRole,
+  isRevoking,
+  index,
+}: SubAccountRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'spending' | 'protocols'>('spending')
 
@@ -333,20 +329,19 @@ function SubAccountRow({ account, onRevokeRole, onGrantRole, isRevoking, index }
   const { data: limits } = useSubAccountLimits(account)
 
   // Calculate spending progress
-  const maxAllowance = safeValue && limits
-    ? (safeValue[0] * BigInt(limits[0])) / 10000n
-    : null
-  const percentUsed = maxAllowance && spendingAllowance !== undefined && maxAllowance > 0n
-    ? Number((maxAllowance - spendingAllowance) * 10000n / maxAllowance) / 100
-    : 0
+  const maxAllowance = safeValue && limits ? (safeValue[0] * BigInt(limits[0])) / 10000n : null
+  const percentUsed =
+    maxAllowance && spendingAllowance !== undefined && maxAllowance > 0n
+      ? Number(((maxAllowance - spendingAllowance) * 10000n) / maxAllowance) / 100
+      : 0
 
   return (
     <div
       className="border border-subtle rounded-xl overflow-hidden animate-fade-in-up"
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      <div className="flex justify-between items-center bg-elevated hover:bg-elevated-2 p-4 transition-colors">
-        <div className="flex-1 min-w-0">
+      <div className="flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 bg-elevated hover:bg-elevated-2 p-3 sm:p-4 transition-colors">
+        <div className="flex-1 w-full sm:w-auto min-w-0">
           <div className="flex items-center gap-1">
             <p className="font-mono font-medium text-primary text-small truncate">
               {account.slice(0, 6)}...{account.slice(-4)}
@@ -362,24 +357,25 @@ function SubAccountRow({ account, onRevokeRole, onGrantRole, isRevoking, index }
           </div>
           {/* Spending Progress Bar */}
           {maxAllowance !== null && maxAllowance > 0n && (
-            <div className="w-full mt-3">
-              <div className="flex justify-between text-xs text-tertiary mb-1">
+            <div className="mt-2 sm:mt-3 w-full">
+              <div className="flex justify-between mb-1 text-tertiary text-xs">
                 <span>Used: {percentUsed.toFixed(1)}%</span>
                 <span>${formatUSD(spendingAllowance ?? 0n)} remaining</span>
               </div>
-              <div className="h-2 bg-elevated-3 rounded-full overflow-hidden">
+              <div className="bg-elevated-3 rounded-full h-2 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-info to-accent-primary rounded-full transition-all"
+                  className="bg-gradient-to-r from-info rounded-full h-full transition-all to-accent-primary"
                   style={{ width: `${Math.min(percentUsed, 100)}%` }}
                 />
               </div>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
           <Button
             size="sm"
             variant="ghost"
+            className="order-last sm:order-first w-full sm:w-auto sm:min-w-[100px]"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? 'Hide' : 'Configure'}
@@ -388,47 +384,55 @@ function SubAccountRow({ account, onRevokeRole, onGrantRole, isRevoking, index }
             <Button
               size="sm"
               variant="outline"
+              className="flex-1 sm:flex-none"
               onClick={() => onRevokeRole(account, ROLES.DEFI_EXECUTE_ROLE)}
               disabled={isRevoking}
             >
-              Revoke Execute
+              <span className="sm:hidden">- Exec</span>
+              <span className="hidden sm:inline">Revoke Execute</span>
             </Button>
           ) : (
             <Button
               size="sm"
               variant="default"
+              className="flex-1 sm:flex-none"
               onClick={() => onGrantRole(account, ROLES.DEFI_EXECUTE_ROLE)}
               disabled={isRevoking}
             >
-              Grant Execute
+              <span className="sm:hidden">+ Exec</span>
+              <span className="hidden sm:inline">Grant Execute</span>
             </Button>
           )}
           {hasTransferRole ? (
             <Button
               size="sm"
               variant="outline"
+              className="flex-1 sm:flex-none"
               onClick={() => onRevokeRole(account, ROLES.DEFI_TRANSFER_ROLE)}
               disabled={isRevoking}
             >
-              Revoke Transfer
+              <span className="sm:hidden">- Transfer</span>
+              <span className="hidden sm:inline">Revoke Transfer</span>
             </Button>
           ) : (
             <Button
               size="sm"
               variant="default"
+              className="flex-1 sm:flex-none"
               onClick={() => onGrantRole(account, ROLES.DEFI_TRANSFER_ROLE)}
               disabled={isRevoking}
             >
-              Grant Transfer
+              <span className="sm:hidden">+ Transfer</span>
+              <span className="hidden sm:inline">Grant Transfer</span>
             </Button>
           )}
         </div>
       </div>
 
       {isExpanded && (
-        <div className="bg-elevated-2 p-4 border-subtle border-t">
+        <div className="bg-elevated-2 p-3 sm:p-4 border-subtle border-t">
           {/* Tab Navigation */}
-          <div className="flex gap-1 mb-4 p-1 bg-elevated rounded-lg">
+          <div className="flex gap-1 bg-elevated mb-4 p-1 rounded-lg">
             <button
               onClick={() => setActiveTab('spending')}
               className={`flex-1 px-3 py-2 text-small font-medium rounded-md transition-all ${

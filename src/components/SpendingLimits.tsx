@@ -11,6 +11,7 @@ import { useSubAccountLimits, useSafeValue } from '@/hooks/useSafe'
 import { formatUSD } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
+import { useToast } from '@/contexts/ToastContext'
 
 interface SpendingLimitsProps {
   subAccountAddress: `0x${string}`
@@ -36,7 +37,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
     : null
   const [windowHours, setWindowHours] = useState('24') // Default 24 hours
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const { toast } = useToast()
 
   // Sync form values with contract data when available
   useEffect(() => {
@@ -46,7 +47,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     }
   }, [currentLimits])
 
-  const { proposeTransaction, isPending, error } = useSafeProposal()
+  const { proposeTransaction, isPending } = useSafeProposal()
 
   const hasChanges = useMemo(() => {
     if (!currentLimits) return true // Pas de limites actuelles = on peut proposer
@@ -79,23 +80,21 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     const windowSeconds = Math.floor(parseFloat(windowHours) * 3600)
 
     if (spendingBps < 0 || spendingBps > 10000) {
-      alert('Spending limit must be between 0% and 100%')
+      toast.warning('Limit must be 0-100%')
       return
     }
 
     if (windowSeconds < 3600) {
-      alert('Window duration must be at least 1 hour')
+      toast.warning('Minimum window: 1 hour')
       return
     }
 
     if (!addresses.defiInteractor) {
-      alert('Contract address not configured')
+      toast.warning('Contract not configured')
       return
     }
 
     try {
-      setSuccessMessage(null)
-
       // NEW signature: only 3 params (subAccount, maxSpendingBps, windowDuration)
       const data = encodeContractCall(
         addresses.defiInteractor,
@@ -110,7 +109,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       )
 
       if (result.success) {
-        setSuccessMessage(`Spending limits set successfully!`)
+        toast.success('Spending limits updated')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -120,7 +119,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     } catch (error) {
       console.error('Error proposing limits:', error)
       const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      alert(`Failed to propose transaction. ${errorMsg}`)
+      toast.error(`Transaction failed: ${errorMsg}`)
     }
   }
 
@@ -276,18 +275,6 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
             >
               {isPending ? 'Proposing to Safe...' : 'Propose Spending Limits'}
             </Button>
-
-            {successMessage && (
-              <div className="bg-success-muted p-3 border border-success/20 rounded-lg text-center">
-                <p className="text-small text-success">{successMessage}</p>
-              </div>
-            )}
-
-            {error && (
-              <div className="bg-error-muted p-3 border border-error/20 rounded-lg text-center">
-                <p className="text-error text-small">{String(error)}</p>
-              </div>
-            )}
           </div>
         </div>
       </CardContent>

@@ -6,7 +6,10 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import App from './App.tsx'
 import { config } from './wagmi.ts'
 import { ContractAddressProvider } from './contexts/ContractAddressContext.tsx'
+import { ViewModeProvider } from './contexts/ViewModeContext.tsx'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
+import { ToastProvider } from './contexts/ToastContext.tsx'
+import { ToastContainer } from './components/ui/toast.tsx'
 import { injected } from 'wagmi/connectors'
 
 import '@rainbow-me/rainbowkit/styles.css'
@@ -41,15 +44,20 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       defaultTheme="system"
       storageKey="msw-ui-theme"
     >
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider>
-            <ContractAddressProvider>
-              <SafeProviderWrapper />
-            </ContractAddressProvider>
-          </RainbowKitProvider>
-        </QueryClientProvider>
-      </WagmiProvider>
+      <ToastProvider>
+        <WagmiProvider config={config}>
+          <QueryClientProvider client={queryClient}>
+            <RainbowKitProvider>
+              <ContractAddressProvider>
+                <ViewModeProvider>
+                  <SafeProviderWrapper />
+                </ViewModeProvider>
+                <ToastContainer />
+              </ContractAddressProvider>
+            </RainbowKitProvider>
+          </QueryClientProvider>
+        </WagmiProvider>
+      </ToastProvider>
     </ThemeProvider>
   </React.StrictMode>
 )

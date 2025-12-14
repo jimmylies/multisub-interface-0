@@ -2,12 +2,13 @@ import { useAccount } from 'wagmi'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
-import { useIsSafeOwner, useSafeAddress } from '@/hooks/useSafe'
+import { useSafeAddress } from '@/hooks/useSafe'
+import { useUserRoles } from '@/hooks/useUserRoles'
 
 export function SafeStatus() {
   const { address, isConnected } = useAccount()
   const { data: safeAddress } = useSafeAddress()
-  const { isSafeOwner, isLoading } = useIsSafeOwner()
+  const { isSafeOwner, isDualRole, isLoading } = useUserRoles()
 
   if (!isConnected) {
     return null
@@ -54,6 +55,11 @@ export function SafeStatus() {
             <p className="mb-1 text-caption text-tertiary uppercase tracking-wider">Role</p>
             {isLoading ? (
               <Badge variant="outline" className="text-xs">Checking...</Badge>
+            ) : isDualRole ? (
+              <div className="flex gap-1">
+                <Badge variant="info" className="text-xs">Owner</Badge>
+                <Badge variant="outline" className="text-xs">Sub</Badge>
+              </div>
             ) : isSafeOwner ? (
               <Badge variant="info" className="text-xs">Safe Signer</Badge>
             ) : (
