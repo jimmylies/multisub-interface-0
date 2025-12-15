@@ -146,10 +146,13 @@ function ProtocolAccessCompact({ protocol, subAccount, index }: ProtocolAccessCo
       style={{ animationDelay: `${index * 50}ms` }}
     >
       <Tooltip
-        content={contractChecks
-          .filter(c => c.isAllowed)
-          .map(c => c.contract.name)
-          .join('\n')}
+        content={
+          '- ' +
+          contractChecks
+            .filter(c => c.isAllowed)
+            .map(c => c.contract.name)
+            .join('\n- ')
+        }
         className="text-left whitespace-pre-line"
         align="left"
       >
