@@ -250,7 +250,8 @@ export function SubAccountManager() {
                         Set spending limits now
                       </label>
                       <p className="mt-0.5 text-caption text-tertiary">
-                        Configure spending restrictions for this sub-account (can be set later)
+                        Configure spending restrictions for this sub-account (can be set later,
+                        default 5%)
                       </p>
                     </div>
                   </div>
@@ -283,8 +284,9 @@ export function SubAccountManager() {
                           )}
                         </div>
                         <p className="text-caption text-tertiary">
-                          Time window fixed at 24 hours
-                          {/* (adjustable later via Configure) */}
+                          Limit updates may take up to 2 minutes to apply.
+                          <br />
+                          Time window fixed at 24 hours.
                         </p>
                       </div>
                     </div>

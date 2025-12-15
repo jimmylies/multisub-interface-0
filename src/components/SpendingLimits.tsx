@@ -268,6 +268,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                   • Limits automatically reset every{' '}
                   <strong className="text-primary">{windowHours} hours</strong>
                 </p>
+                <p>• Limit updates may take up to 2 minutes to apply</p>
               </div>
             </div>
 
