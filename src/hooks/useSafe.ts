@@ -3,6 +3,8 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { DEFI_INTERACTOR_ABI, SAFE_ABI, ROLES } from '@/lib/contracts'
 import { useQuery } from '@tanstack/react-query'
 import type { SubAccount } from '@/types'
+import { useAcquiredBalancesFromSubgraph } from './useSubgraph'
+import { AcquiredTokenWithTimestamp } from '@/lib/subgraph'
 
 /**
  * Hook to read the target Safe address from the DeFi Interactor contract
@@ -313,16 +315,17 @@ export function useIsValueStale(maxAge: number = 3600) {
  * Hook to fetch acquired balances for multiple tokens
  * Returns a map of token address -> balance
  */
-export function useAcquiredBalances(
+function useAcquiredBalancesFromContract(
   subAccountAddress?: `0x${string}`,
-  tokenAddresses?: `0x${string}`[]
+  tokenAddresses?: `0x${string}`[],
+  options?: { enabled?: boolean }
 ) {
   const { addresses } = useContractAddresses()
   const publicClient = usePublicClient()
 
   return useQuery({
     queryKey: ['acquiredBalances', addresses.defiInteractor, subAccountAddress, tokenAddresses],
-    queryFn: async (): Promise<Map<string, bigint>> => {
+    queryFn: async (): Promise<Map<string, AcquiredTokenWithTimestamp>> => {
       if (!publicClient || !subAccountAddress || !tokenAddresses || tokenAddresses.length === 0) {
         return new Map()
       }
@@ -345,20 +348,64 @@ export function useAcquiredBalances(
         })
       )
 
-      // Build map of token -> balance
-      const balanceMap = new Map<string, bigint>()
+      // Build map of token -> AcquiredTokenWithTimestamp
+      const balanceMap = new Map<string, AcquiredTokenWithTimestamp>()
       results.forEach(({ address, balance }) => {
-        balanceMap.set(address, balance)
+        balanceMap.set(address, {
+          token: address,
+          balance,
+          timestamp: 0, // No timestamp from contract
+        })
       })
 
       return balanceMap
     },
-    enabled: Boolean(
-      addresses.defiInteractor &&
-        publicClient &&
-        subAccountAddress &&
-        tokenAddresses &&
-        tokenAddresses.length > 0
-    ),
+    enabled:
+      options?.enabled !== false &&
+      Boolean(
+        addresses.defiInteractor &&
+          publicClient &&
+          subAccountAddress &&
+          tokenAddresses &&
+          tokenAddresses.length > 0
+      ),
   })
+}
+
+export function useAcquiredBalances(
+  subAccountAddress?: `0x${string}`,
+  tokenAddresses?: `0x${string}`[]
+) {
+  // Try subgraph first
+  const {
+    data: subgraphData,
+    isLoading: subgraphLoading,
+    error: subgraphError,
+  } = useAcquiredBalancesFromSubgraph(subAccountAddress)
+
+  // Fallback to contract if subgraph fails or empty
+  const shouldUseContract = Boolean(subgraphError) || !subgraphData || subgraphData.size === 0
+
+  const { data: contractData, isLoading: contractLoading } = useAcquiredBalancesFromContract(
+    subAccountAddress,
+    tokenAddresses,
+    {
+      enabled: shouldUseContract,
+    }
+  )
+
+  // Return subgraph data if available, otherwise contract data
+  if (subgraphData && subgraphData.size > 0) {
+    return {
+      data: subgraphData,
+      isLoading: subgraphLoading,
+      dataSource: 'subgraph' as const,
+    }
+  }
+
+  return {
+    data: contractData || new Map(),
+    isLoading: contractLoading,
+    dataSource: 'contract' as const,
+  }
 }
