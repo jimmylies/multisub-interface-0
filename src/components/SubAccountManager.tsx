@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
+import { TooltipIcon } from '@/components/ui/tooltip'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { ChevronDown } from 'lucide-react'
 import { DEFI_INTERACTOR_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
 import { SpendingLimits } from '@/components/SpendingLimits'
@@ -17,7 +20,7 @@ import {
   useSafeValue,
   useSubAccountLimits,
 } from '@/hooks/useSafe'
-import { formatUSD } from '@/lib/utils'
+import { formatUSD, cn } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { isAddress } from 'viem'
@@ -29,10 +32,21 @@ export function SubAccountManager() {
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
   const [grantTransfer, setGrantTransfer] = useState(false)
+  const [setSpendingLimits, setSetSpendingLimits] = useState(false)
+  const [spendingLimit, setSpendingLimit] = useState('5')
   const { toast } = useToast()
 
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
+
+  // Get Safe portfolio value for USD calculations
+  const { data: safeValue } = useSafeValue()
+
+  // Calculate USD amount based on user input (real-time)
+  const inputAllowanceUSD =
+    safeValue && setSpendingLimits
+      ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
+      : null
 
   // Use Safe proposal hook
   const { proposeTransaction, isPending } = useSafeProposal()
@@ -46,6 +60,15 @@ export function SubAccountManager() {
     if (!grantExecute && !grantTransfer) {
       toast.warning('Select at least one role')
       return
+    }
+
+    if (setSpendingLimits) {
+      const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+
+      if (spendingBps < 0 || spendingBps > 10000) {
+        toast.warning('Spending limit must be between 0-100%')
+        return
+      }
     }
 
     if (!addresses.defiInteractor) {
@@ -72,13 +95,34 @@ export function SubAccountManager() {
         return
       }
 
-      const transactions = rolesToGrant.map(roleId => ({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
-          newSubAccount,
-          roleId,
-        ]),
-      }))
+      const transactions: any[] = []
+
+      // Add grantRole transactions
+      rolesToGrant.forEach(roleId => {
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
+            newSubAccount,
+            roleId,
+          ]),
+        })
+      })
+
+      // Add setSubAccountLimits transaction if enabled
+      if (setSpendingLimits) {
+        const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+        const windowSeconds = 24 * 3600 // 24 hours fixed
+
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(
+            addresses.defiInteractor,
+            DEFI_INTERACTOR_ABI as unknown as any[],
+            'setSubAccountLimits',
+            [newSubAccount as `0x${string}`, BigInt(spendingBps), BigInt(windowSeconds)]
+          ),
+        })
+      }
 
       const result = await proposeTransaction(
         transactions.length === 1 ? transactions[0] : transactions,
@@ -89,65 +133,9 @@ export function SubAccountManager() {
         setNewSubAccount('')
         setGrantExecute(false)
         setGrantTransfer(false)
+        setSetSpendingLimits(false)
+        setSpendingLimit('5')
         toast.success('Transaction submitted')
-      } else if ('cancelled' in result && result.cancelled) {
-        // User cancelled - do nothing
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error proposing role grant:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      toast.error(`Transaction failed: ${errorMsg}`)
-    }
-  }
-
-  const handleRevokeRole = async (account: `0x${string}`, roleId: number) => {
-    if (!addresses.defiInteractor) return
-
-    try {
-      const data = encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
-        account,
-        roleId,
-      ])
-
-      const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
-        { transactionType: TRANSACTION_TYPES.REVOKE_ROLE }
-      )
-
-      if (result.success) {
-        toast.success('Role revoked successfully')
-      } else if ('cancelled' in result && result.cancelled) {
-        // User cancelled - do nothing
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error proposing role revoke:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      toast.error(`Transaction failed: ${errorMsg}`)
-    }
-  }
-
-  const handleGrantRole = async (account: `0x${string}`, roleId: number) => {
-    if (!addresses.defiInteractor) return
-
-    try {
-      const data = encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
-        account,
-        roleId,
-      ])
-
-      const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
-        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
-      )
-
-      if (result.success) {
-        toast.success('Role granted successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
         return
@@ -242,6 +230,66 @@ export function SubAccountManager() {
                 </div>
               </div>
 
+              <div className="space-y-3">
+                <label className="block font-medium text-primary text-small">
+                  Spending Limits (Optional)
+                </label>
+                <div className="bg-elevated-2 p-3 border border-subtle rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="set-limits"
+                      checked={setSpendingLimits}
+                      onChange={e => setSetSpendingLimits((e.target as HTMLInputElement).checked)}
+                    />
+                    <div className="flex-1">
+                      <label
+                        htmlFor="set-limits"
+                        className="font-medium text-primary text-small cursor-pointer"
+                      >
+                        Set spending limits now
+                      </label>
+                      <p className="mt-0.5 text-caption text-tertiary">
+                        Configure spending restrictions for this sub-account (can be set later)
+                      </p>
+                    </div>
+                  </div>
+
+                  {setSpendingLimits && (
+                    <div className="mt-4 pl-8">
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 font-medium text-small">
+                          Spending Limit
+                          <TooltipIcon content="Maximum spending as percentage of portfolio value per 24-hour window" />
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={spendingLimit}
+                            onChange={e => setSpendingLimit(e.target.value)}
+                            placeholder="5"
+                            className="flex-1"
+                          />
+                          <span className="min-w-[30px] font-medium text-small text-tertiary">
+                            %
+                          </span>
+                          {inputAllowanceUSD !== null && (
+                            <span className="text-muted-foreground text-sm">
+                              ≈ ${formatUSD(inputAllowanceUSD)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-caption text-tertiary">
+                          Time window fixed at 24 hours (adjustable later via Configure)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <Button
                 onClick={handleAddSubAccount}
                 disabled={isPending || !newSubAccount}
@@ -287,8 +335,6 @@ export function SubAccountManager() {
                   <SubAccountRow
                     key={account.address}
                     account={account.address}
-                    onRevokeRole={handleRevokeRole}
-                    onGrantRole={handleGrantRole}
                     isRevoking={isPending}
                     index={index}
                   />
@@ -304,24 +350,31 @@ export function SubAccountManager() {
 
 interface SubAccountRowProps {
   account: `0x${string}`
-  onRevokeRole: (account: `0x${string}`, roleId: number) => Promise<void>
-  onGrantRole: (account: `0x${string}`, roleId: number) => Promise<void>
   isRevoking: boolean
   index: number
 }
 
-function SubAccountRow({
-  account,
-  onRevokeRole,
-  onGrantRole,
-  isRevoking,
-  index,
-}: SubAccountRowProps) {
+function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'spending' | 'protocols'>('spending')
+  const [isRolesPopoverOpen, setIsRolesPopoverOpen] = useState(false)
 
   const { data: hasExecuteRole } = useHasRole(account, ROLES.DEFI_EXECUTE_ROLE)
   const { data: hasTransferRole } = useHasRole(account, ROLES.DEFI_TRANSFER_ROLE)
+
+  // Local editing state - tracks checkbox values during modification
+  const [localExecuteRole, setLocalExecuteRole] = useState<boolean>(false)
+  const [localTransferRole, setLocalTransferRole] = useState<boolean>(false)
+
+  // Sync local state with contract state when it updates
+  useEffect(() => {
+    if (hasExecuteRole !== undefined) {
+      setLocalExecuteRole(hasExecuteRole)
+    }
+    if (hasTransferRole !== undefined) {
+      setLocalTransferRole(hasTransferRole)
+    }
+  }, [hasExecuteRole, hasTransferRole])
 
   // Spending allowance data for progress bar
   const { data: spendingAllowance } = useSpendingAllowance(account)
@@ -335,12 +388,105 @@ function SubAccountRow({
       ? Number(((maxAllowance - spendingAllowance) * 10000n) / maxAllowance) / 100
       : 0
 
+  // Get necessary dependencies for handlers
+  const { addresses } = useContractAddresses()
+  const { toast } = useToast()
+  const { proposeTransaction } = useSafeProposal()
+
+  // Compute if there are changes to show Update/Cancel buttons
+  const hasChanges = useMemo(() => {
+    // Return false if contract state is still loading
+    if (hasExecuteRole === undefined || hasTransferRole === undefined) {
+      return false
+    }
+
+    // Compare local state with contract state
+    return localExecuteRole !== hasExecuteRole || localTransferRole !== hasTransferRole
+  }, [localExecuteRole, localTransferRole, hasExecuteRole, hasTransferRole])
+
+  // Event handlers
+  const handleExecuteChange = (checked: boolean) => {
+    setLocalExecuteRole(checked)
+  }
+
+  const handleTransferChange = (checked: boolean) => {
+    setLocalTransferRole(checked)
+  }
+
+  const handleUpdatePermissions = async () => {
+    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+
+    if (!addresses.defiInteractor) {
+      toast.warning('Contract not configured')
+      return
+    }
+
+    // Build transactions for Execute role if changed
+    if (hasExecuteRole !== undefined && localExecuteRole !== hasExecuteRole) {
+      const functionName = localExecuteRole ? 'grantRole' : 'revokeRole'
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+          account,
+          ROLES.DEFI_EXECUTE_ROLE,
+        ]),
+      })
+    }
+
+    // Build transactions for Transfer role if changed
+    if (hasTransferRole !== undefined && localTransferRole !== hasTransferRole) {
+      const functionName = localTransferRole ? 'grantRole' : 'revokeRole'
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+          account,
+          ROLES.DEFI_TRANSFER_ROLE,
+        ]),
+      })
+    }
+
+    if (transactions.length === 0) {
+      toast.warning('No changes to apply')
+      return
+    }
+
+    try {
+      const result = await proposeTransaction(
+        transactions.length === 1 ? transactions[0] : transactions,
+        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
+      )
+
+      if (result.success) {
+        toast.success('Permissions updated successfully')
+        setIsRolesPopoverOpen(false)
+      } else if ('cancelled' in result && result.cancelled) {
+        return
+      } else {
+        throw result.error || new Error('Transaction failed')
+      }
+    } catch (error) {
+      console.error('Error updating permissions:', error)
+      const errorMsg = error instanceof Error ? error.message : 'Failed to update permissions'
+      toast.error(`Transaction failed: ${errorMsg}`)
+    }
+  }
+
+  const handleCancel = () => {
+    setLocalExecuteRole(hasExecuteRole || false)
+    setLocalTransferRole(hasTransferRole || false)
+  }
+
   return (
     <div
-      className="border border-subtle rounded-xl overflow-hidden animate-fade-in-up"
+      className="border border-subtle rounded-xl animate-fade-in-up"
       style={{ animationDelay: `${index * 50}ms` }}
     >
-      <div className="flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 bg-elevated hover:bg-elevated-2 p-3 sm:p-4 transition-colors">
+      <div
+        className={cn(
+          'flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 p-3 sm:p-4 rounded-xl transition-all',
+          'bg-elevated hover:bg-elevated-2'
+        )}
+      >
         <div className="flex-1 w-full sm:w-auto min-w-0">
           <div className="flex items-center gap-1">
             <p className="font-mono font-medium text-primary text-small truncate">
@@ -371,61 +517,108 @@ function SubAccountRow({
             </div>
           )}
         </div>
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Configure Button */}
           <Button
             size="sm"
             variant="ghost"
-            className="order-last sm:order-first w-full sm:w-auto sm:min-w-[100px]"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? 'Hide' : 'Configure'}
           </Button>
-          {hasExecuteRole ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1 sm:flex-none"
-              onClick={() => onRevokeRole(account, ROLES.DEFI_EXECUTE_ROLE)}
-              disabled={isRevoking}
+
+          {/* Update Roles Popover */}
+          <Popover
+            open={isRolesPopoverOpen}
+            onOpenChange={setIsRolesPopoverOpen}
+          >
+            <PopoverTrigger asChild>
+              <Button
+                size="sm"
+                variant={hasChanges ? 'default' : 'outline'}
+                className={cn(hasChanges && 'ring-2 ring-green-500/50')}
+                disabled={isRevoking}
+              >
+                <div className="flex items-center whitespace-nowrap">
+                  {isRevoking ? 'Updating...' : 'Update Roles'}
+                  {!isRevoking && <ChevronDown className="ml-1 w-3 h-3" />}
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="p-3 w-56"
+              align="end"
             >
-              <span className="sm:hidden">- Exec</span>
-              <span className="hidden sm:inline">Revoke Execute</span>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="default"
-              className="flex-1 sm:flex-none"
-              onClick={() => onGrantRole(account, ROLES.DEFI_EXECUTE_ROLE)}
-              disabled={isRevoking}
-            >
-              <span className="sm:hidden">+ Exec</span>
-              <span className="hidden sm:inline">Grant Execute</span>
-            </Button>
-          )}
-          {hasTransferRole ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1 sm:flex-none"
-              onClick={() => onRevokeRole(account, ROLES.DEFI_TRANSFER_ROLE)}
-              disabled={isRevoking}
-            >
-              <span className="sm:hidden">- Transfer</span>
-              <span className="hidden sm:inline">Revoke Transfer</span>
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="default"
-              className="flex-1 sm:flex-none"
-              onClick={() => onGrantRole(account, ROLES.DEFI_TRANSFER_ROLE)}
-              disabled={isRevoking}
-            >
-              <span className="sm:hidden">+ Transfer</span>
-              <span className="hidden sm:inline">Grant Transfer</span>
-            </Button>
-          )}
+              <div className="space-y-3">
+                <p className="font-medium text-muted-foreground text-sm">Edit Roles</p>
+
+                {/* Checkboxes */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`execute-${account}`}
+                      checked={localExecuteRole}
+                      onChange={e => handleExecuteChange((e.target as HTMLInputElement).checked)}
+                      disabled={isRevoking}
+                    />
+                    <label
+                      htmlFor={`execute-${account}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      Execute
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`transfer-${account}`}
+                      checked={localTransferRole}
+                      onChange={e => handleTransferChange((e.target as HTMLInputElement).checked)}
+                      disabled={isRevoking}
+                    />
+                    <label
+                      htmlFor={`transfer-${account}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      Transfer
+                    </label>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {hasChanges && !isRevoking && (
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={handleUpdatePermissions}
+                      className="flex-1"
+                    >
+                      Update
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCancel}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+
+                {isRevoking && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled
+                    className="w-full"
+                  >
+                    Updating...
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
