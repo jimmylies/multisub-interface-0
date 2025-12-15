@@ -1265,3 +1265,28 @@ export const AAVE_V3_POOL_ABI = [
     stateMutability: 'nonpayable',
   },
 ] as const
+
+// ERC20 Standard ABI (minimal for metadata)
+export const ERC20_ABI = [
+  {
+    type: 'function',
+    name: 'symbol',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    inputs: [],
+    outputs: [{ type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'name',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+    stateMutability: 'view',
+  },
+] as const

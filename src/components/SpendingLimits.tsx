@@ -210,7 +210,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-medium text-primary text-small">
                 Time Window
-                <TooltipIcon content="Duration in hours for the spending window. Transfer limits reset after this period." />
+                <TooltipIcon content="Duration in hours for the spending window. Transfer limits reset after this period. Coming soon." />
               </label>
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
@@ -223,12 +223,14 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                     onChange={e => setWindowHours(e.target.value)}
                     placeholder="24"
                     className="pr-8"
+                    disabled
                   />
                   <div className="top-1/2 right-4 absolute flex flex-col gap-0.5 -translate-y-1/2">
                     <button
                       type="button"
                       onClick={incrementWindowHours}
                       className="text-tertiary hover:text-primary transition-colors cursor-pointer"
+                      disabled
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
                     </button>
@@ -236,6 +238,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                       type="button"
                       onClick={decrementWindowHours}
                       className="text-tertiary hover:text-primary transition-colors cursor-pointer"
+                      disabled
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
