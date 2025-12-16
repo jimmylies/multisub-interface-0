@@ -18,29 +18,48 @@ export function useAcquiredBalancesFromSubgraph(
         { subAccount: subAccountAddress.toLowerCase() }
       )
 
-      // Group by token: keep FIRST timestamp + LAST balance
+      // Group by token: analyze balance changes to track oldest active batch
       const tokenMap = new Map<string, AcquiredTokenWithTimestamp>()
 
       // Data is sorted by timestamp asc (oldest first)
-      // First event = acquisition timestamp
-      // Last event = current balance
+      // Analyze balance changes to determine oldest batch timestamp
       for (const event of data.acquiredBalanceUpdateds) {
         const tokenKey = event.token.toLowerCase()
         const existingToken = tokenMap.get(tokenKey)
+        const currentBalance = BigInt(event.newBalance)
+        const currentTimestamp = parseInt(event.blockTimestamp)
 
         if (!existingToken) {
-          // First event for this token = save both timestamp and balance
+          // First event for this token
           tokenMap.set(tokenKey, {
             token: event.token,
-            balance: BigInt(event.newBalance),
-            timestamp: parseInt(event.blockTimestamp), // First acquisition timestamp
+            balance: currentBalance,
+            timestamp: currentTimestamp,
+            lastBalance: currentBalance,
           })
         } else {
-          // Subsequent events = update ONLY the balance, keep original timestamp
+          const lastBalance = existingToken.lastBalance
+          let newTimestamp = existingToken.timestamp
+
+          // Analyze balance changes to maintain accurate oldest batch timestamp
+          if (currentBalance > lastBalance) {
+            // INCREASE: New acquisition
+            if (lastBalance === 0n) {
+              // Reacquisition after complete depletion = new oldest batch
+              newTimestamp = currentTimestamp
+            }
+            // Else: keep oldest timestamp (new batch added to FIFO queue)
+          } else if (currentBalance === 0n) {
+            // Complete depletion = reset timestamp
+            newTimestamp = 0
+          }
+          // Partial consumption (balance decrease but > 0): keep existing timestamp (conservative)
+
           tokenMap.set(tokenKey, {
             ...existingToken,
-            balance: BigInt(event.newBalance), // Update to latest balance
-            // timestamp stays the same (first acquisition)
+            balance: currentBalance,
+            timestamp: newTimestamp,
+            lastBalance: currentBalance,
           })
         }
       }

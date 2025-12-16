@@ -1,10 +1,11 @@
+import React from 'react'
 import { useAccount, useReadContract, usePublicClient } from 'wagmi'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { DEFI_INTERACTOR_ABI, SAFE_ABI, ROLES } from '@/lib/contracts'
 import { useQuery } from '@tanstack/react-query'
 import type { SubAccount } from '@/types'
-import { useAcquiredBalancesFromSubgraph } from './useSubgraph'
 import { AcquiredTokenWithTimestamp } from '@/lib/subgraph'
+import { useFifoBalances } from './useFifoBalances'
 
 /**
  * Hook to read the target Safe address from the DeFi Interactor contract
@@ -355,6 +356,7 @@ function useAcquiredBalancesFromContract(
           token: address,
           balance,
           timestamp: 0, // No timestamp from contract
+          lastBalance: balance, // Same as current balance for contract fallback
         })
       })
 
@@ -376,30 +378,47 @@ export function useAcquiredBalances(
   subAccountAddress?: `0x${string}`,
   tokenAddresses?: `0x${string}`[]
 ) {
-  // Try subgraph first
+  // Try FIFO reconstruction first
   const {
-    data: subgraphData,
-    isLoading: subgraphLoading,
-    error: subgraphError,
-  } = useAcquiredBalancesFromSubgraph(subAccountAddress)
+    data: fifoData,
+    isLoading: fifoLoading,
+    error: fifoError,
+  } = useFifoBalances(subAccountAddress)
 
-  // Fallback to contract if subgraph fails or empty
-  const shouldUseContract = Boolean(subgraphError) || !subgraphData || subgraphData.size === 0
+  // Fallback to contract if FIFO fails or empty
+  const shouldUseContract =
+    Boolean(fifoError) || (!fifoLoading && (!fifoData || fifoData.size === 0))
 
   const { data: contractData, isLoading: contractLoading } = useAcquiredBalancesFromContract(
     subAccountAddress,
-    tokenAddresses,
+    tokenAddresses || [],
     {
       enabled: shouldUseContract,
     }
   )
 
-  // Return subgraph data if available, otherwise contract data
-  if (subgraphData && subgraphData.size > 0) {
+  // Convert FIFO data to expected format
+  const convertedFifoData = React.useMemo(() => {
+    if (!fifoData) return new Map()
+
+    const converted = new Map()
+    for (const [token, data] of fifoData.entries()) {
+      converted.set(token, {
+        token,
+        balance: data.balance,
+        timestamp: data.oldestTimestamp || 0,
+        lastBalance: data.balance, // Not used anymore but keep for compatibility
+      })
+    }
+    return converted
+  }, [fifoData])
+
+  // Return FIFO data if available, otherwise contract data
+  if (fifoData && fifoData.size > 0) {
     return {
-      data: subgraphData,
-      isLoading: subgraphLoading,
-      dataSource: 'subgraph' as const,
+      data: convertedFifoData,
+      isLoading: fifoLoading,
+      dataSource: 'fifo' as const,
     }
   }
 
