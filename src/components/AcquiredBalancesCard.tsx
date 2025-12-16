@@ -35,15 +35,21 @@ function TokenRow({ token }: TokenRowProps) {
         </div>
       </div>
       <div className="text-right">
-        <p className="font-semibold text-sm">
-          {formatTokenAmount(token.balance, token.decimals)}
-        </p>
-        {token.timestamp === 0 ? (
-          <p className="text-green-600 dark:text-green-400 text-xs">No cost</p>
-        ) : timeRemaining.isExpired ? (
-          <p className="text-orange-600 dark:text-orange-400 text-xs">Expired</p>
+        <p className="font-semibold text-sm">{formatTokenAmount(token.balance, token.decimals)}</p>
+        {timeRemaining.isExpired ? (
+          <div>
+            <p className="text-orange-600 dark:text-orange-400 text-xs">
+              {timeRemaining.formatted}
+            </p>
+            <p className="opacity-70 text-muted-foreground text-xs">Pending oracle update</p>
+          </div>
         ) : (
-          <p className="text-green-600 dark:text-green-400 text-xs">{timeRemaining.formatted} left</p>
+          <div>
+            <p className="text-green-600 dark:text-green-400 text-xs">
+              {timeRemaining.formatted}
+              {token.timestamp !== 0 && ' left'}
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -77,10 +83,7 @@ const TOKENS_TO_TRACK = [
 
 export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
   const tokenAddresses = TOKENS_TO_TRACK.map(t => t.address)
-  const {
-    data: balances = new Map(),
-    isLoading,
-  } = useAcquiredBalances(address, tokenAddresses)
+  const { data: balances = new Map(), isLoading } = useAcquiredBalances(address, tokenAddresses)
 
   // Extract token addresses from balances
   const tokenAddressesFromBalances = Array.from(balances.keys()).map(addr => addr as `0x${string}`)
@@ -141,7 +144,10 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
       <CardContent>
         <div className="space-y-2">
           {tokensWithBalance.map(token => (
-            <TokenRow key={token.address} token={token} />
+            <TokenRow
+              key={token.address}
+              token={token}
+            />
           ))}
         </div>
         <div className="bg-blue-50 dark:bg-blue-950/30 mt-3 p-2 border border-blue-200 dark:border-blue-900 rounded">

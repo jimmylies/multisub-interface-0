@@ -10,7 +10,7 @@ export interface TimeRemaining {
 
 /**
  * Hook to calculate and auto-refresh time remaining before free period expires
- * @param acquisitionTimestamp Unix timestamp in seconds when token was acquired
+ * @param acquisitionTimestamp Unix timestamp in seconds when token was acquired (0 = no expiry)
  * @returns TimeRemaining object with auto-updating countdown
  */
 export function useTimeRemaining(acquisitionTimestamp: number): TimeRemaining {
@@ -24,6 +24,15 @@ export function useTimeRemaining(acquisitionTimestamp: number): TimeRemaining {
 
     return () => clearInterval(interval)
   }, [])
+
+  // Special case: timestamp 0 = no expiry (balance depleted or no data)
+  if (acquisitionTimestamp === 0) {
+    return {
+      seconds: 0,
+      isExpired: false,
+      formatted: 'No cost',
+    }
+  }
 
   // Calculate time remaining
   const elapsed = now - acquisitionTimestamp
