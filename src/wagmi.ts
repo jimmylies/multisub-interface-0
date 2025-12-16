@@ -1,9 +1,12 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
-import { mainnet, sepolia, base, polygon } from 'wagmi/chains'
+import { selectedChain, getTransports } from './lib/chains'
 
 export const config = getDefaultConfig({
   appName: 'MultiSub Interface',
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID',
-  chains: [sepolia /*, mainnet, base, polygon*/],
+  chains: [selectedChain],
+  transports: getTransports(),
   ssr: false,
 })
+
+export { selectedChain }

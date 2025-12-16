@@ -16,21 +16,32 @@ import '@rainbow-me/rainbowkit/styles.css'
 import './index.css'
 
 import { SafeProvider, createConfig } from '@safe-global/safe-react-hooks'
-import { sepolia } from 'viem/chains'
+import { selectedChain } from './lib/chains'
 
 const queryClient = new QueryClient()
 
 const SafeProviderWrapper = () => {
-  const { address, chain, chainId } = useAccount()
+  const { address, chain } = useAccount()
 
-  const provider = chainId === sepolia.id ? 'https://sepolia.drpc.org' : 'https://polygon-rpc.com'
+  // Get RPC URL from env based on selected chain
+  const getRpcProvider = () => {
+    if (selectedChain.id === 11155111) {
+      // Sepolia
+      return 'https://sepolia.drpc.org'
+    }
+    if (selectedChain.id === 1) {
+      // Mainnet
+      return 'https://eth.llamarpc.com'
+    }
+    return 'https://sepolia.drpc.org' // fallback
+  }
 
   const safeConfig = createConfig({
-    chain: chain || sepolia,
-    // sepolia rpc
-    provider,
+    chain: chain || selectedChain,
+    provider: getRpcProvider(),
     signer: address,
   })
+
   return (
     <SafeProvider config={safeConfig}>
       <App />
