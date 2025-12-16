@@ -44,6 +44,19 @@ export interface ProtocolExecution {
   transactionHash: string
 }
 
+// Transfer executed event data
+export interface TransferExecuted {
+  id: string
+  subAccount: string
+  token: string
+  recipient: string
+  amount: string
+  spendingCost: string
+  blockNumber: string
+  blockTimestamp: string
+  transactionHash: string
+}
+
 // Query definition
 export const ACQUIRED_BALANCES_QUERY = gql`
   query GetAcquiredBalances($subAccount: Bytes!) {
@@ -78,6 +91,27 @@ export const PROTOCOL_EXECUTION_QUERY = gql`
       amountsIn
       tokensOut
       amountsOut
+      spendingCost
+      blockNumber
+      blockTimestamp
+      transactionHash
+    }
+  }
+`
+
+export const TRANSFER_EXECUTED_QUERY = gql`
+  query GetTransferExecuted($subAccount: Bytes!, $fromTimestamp: BigInt!) {
+    transferExecuteds(
+      where: { subAccount: $subAccount, blockTimestamp_gte: $fromTimestamp }
+      orderBy: blockTimestamp
+      orderDirection: asc
+      first: 1000
+    ) {
+      id
+      subAccount
+      token
+      recipient
+      amount
       spendingCost
       blockNumber
       blockTimestamp
