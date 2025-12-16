@@ -230,12 +230,13 @@ export function ContractSetup() {
 
           <DialogFooter>
             <Button
-              variant="destructive"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 clearDefiInteractor()
                 setChangeModalOpen(false)
               }}
-              className="mr-auto"
+              className="mr-auto text-error hover:text-error"
             >
               Remove
             </Button>
