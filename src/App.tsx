@@ -10,6 +10,7 @@ import { StatsBar } from '@/components/StatsBar'
 import { SubAccountDashboard } from '@/components/SubAccountDashboard'
 import { SpendingAllowanceCard } from '@/components/SpendingAllowanceCard'
 import { AcquiredBalancesCard } from '@/components/AcquiredBalancesCard'
+import { DisconnectedDashboard } from '@/components/DisconnectedDashboard'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useViewMode } from '@/contexts/ViewModeContext'
 import { useUserRoles } from '@/hooks/useUserRoles'
@@ -40,7 +41,13 @@ function App() {
             <div>
               <h1 className="font-semibold text-primary text-base md:text-lg leading-tight">MultiSub</h1>
               <p className="-mt-0.5 text-caption text-tertiary hidden md:block">
-                {isDualRole ? 'Owner + Sub-Account' : isSafeOwner ? 'Safe Owner' : 'DeFi Delegated'}
+                {!isConnected
+                  ? 'DeFi, Delegated.'
+                  : isDualRole
+                    ? 'Owner + Sub-Account'
+                    : isSafeOwner
+                      ? 'Safe Owner'
+                      : 'DeFi Delegated'}
               </p>
             </div>
           </div>
@@ -81,6 +88,9 @@ function App() {
         {!isConfigured || showWelcome ? (
           /* Welcome Screen with DeFi Interactor Input */
           <WelcomeHero onNavigateAway={() => setShowWelcome(false)} />
+        ) : !isConnected ? (
+          /* Disconnected State */
+          <DisconnectedDashboard />
         ) : viewMode === 'owner' ? (
           /* Safe Owner View - Content First Layout */
           <div className="animate-fade-in space-y-6">
