@@ -159,42 +159,77 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   }, [selectedProtocols, allowedAddresses])
 
   const handleSavePermissions = async () => {
-    // Collect all selected contract addresses
-    const selectedAddresses: `0x${string}`[] = []
-
-    selectedProtocols.forEach((contractIds, protocolId) => {
-      const protocol = PROTOCOLS.find(p => p.id === protocolId)
-      if (protocol) {
-        // Add selected contract addresses
-        contractIds.forEach(contractId => {
-          const contract = protocol.contracts.find(c => c.id === contractId)
-          if (contract) {
-            selectedAddresses.push(contract.address)
-          }
-        })
-      }
-    })
-
-    if (selectedAddresses.length === 0) {
-      toast.warning('Select at least one protocol')
-      return
-    }
-
     if (!addresses.defiInteractor) {
       toast.warning('Contract not configured')
       return
     }
 
-    try {
-      const data = encodeContractCall(
-        addresses.defiInteractor,
-        DEFI_INTERACTOR_ABI as unknown as any[],
-        'setAllowedAddresses',
-        [subAccountAddress, selectedAddresses, true]
-      )
+    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
 
+    // Build set of currently selected addresses
+    const selectedAddressSet = new Set<string>()
+    selectedProtocols.forEach((contractIds, protocolId) => {
+      const protocol = PROTOCOLS.find(p => p.id === protocolId)
+      protocol?.contracts.forEach(c => {
+        if (contractIds.has(c.id)) {
+          selectedAddressSet.add(c.address)
+        }
+      })
+    })
+
+    // Addresses to ADD (selected but not yet allowed)
+    const addressesToAdd: `0x${string}`[] = []
+    selectedProtocols.forEach((contractIds, protocolId) => {
+      const protocol = PROTOCOLS.find(p => p.id === protocolId)
+      protocol?.contracts.forEach(c => {
+        if (contractIds.has(c.id) && !allowedAddresses.has(c.address)) {
+          addressesToAdd.push(c.address)
+        }
+      })
+    })
+
+    // Addresses to REMOVE (currently allowed but deselected)
+    const addressesToRemove: `0x${string}`[] = []
+    allowedAddresses.forEach(addr => {
+      if (!selectedAddressSet.has(addr)) {
+        addressesToRemove.push(addr)
+      }
+    })
+
+    // Build transaction to ADD addresses
+    if (addressesToAdd.length > 0) {
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(
+          addresses.defiInteractor,
+          DEFI_INTERACTOR_ABI as unknown as any[],
+          'setAllowedAddresses',
+          [subAccountAddress, addressesToAdd, true]
+        )
+      })
+    }
+
+    // Build transaction to REMOVE addresses
+    if (addressesToRemove.length > 0) {
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(
+          addresses.defiInteractor,
+          DEFI_INTERACTOR_ABI as unknown as any[],
+          'setAllowedAddresses',
+          [subAccountAddress, addressesToRemove, false]
+        )
+      })
+    }
+
+    if (transactions.length === 0) {
+      toast.warning('No changes to apply')
+      return
+    }
+
+    try {
       const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
+        transactions.length === 1 ? transactions[0] : transactions,
         { transactionType: TRANSACTION_TYPES.SET_ALLOWED_ADDRESSES }
       )
 
