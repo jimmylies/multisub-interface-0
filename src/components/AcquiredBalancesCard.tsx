@@ -57,26 +57,26 @@ function TokenRow({ token }: TokenRowProps) {
 }
 
 // Common tokens to track on Base mainnet
-const TOKENS_TO_TRACK = [
+const TOKENS_TO_TRACK: { symbol: string; address: `0x${string}`; decimals: number }[] = [
   {
     symbol: 'USDC',
-    address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
+    address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     decimals: 6,
   },
   {
     symbol: 'WETH',
-    address: '0x4200000000000000000000000000000000000006' as `0x${string}`,
+    address: '0x4200000000000000000000000000000000000006',
     decimals: 18,
   },
   {
     symbol: 'USDT',
-    address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2' as `0x${string}`,
+    address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
     decimals: 6,
   },
-  // { symbol: 'WBTC', address: '0x29f2D40B0605204364af54EC677bD022dA425d03' as `0x${string}`, decimals: 8 },
+  // { symbol: 'WBTC', address: '0x29f2D40B0605204364af54EC677bD022dA425d03', decimals: 8 },
   {
     symbol: 'DAI',
-    address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb' as `0x${string}`,
+    address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
     decimals: 18,
   },
 ]
@@ -86,7 +86,7 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
   const { data: balances = new Map(), isLoading } = useAcquiredBalances(address, tokenAddresses)
 
   // Extract token addresses from balances
-  const tokenAddressesFromBalances = Array.from(balances.keys()).map(addr => addr as `0x${string}`)
+  const tokenAddressesFromBalances = Array.from(balances.keys()).map(addr => addr)
 
   // Fetch metadata for all tokens with balances
   const { data: tokensMetadata = new Map(), isLoading: isLoadingMetadata } = useTokensMetadata(
@@ -115,7 +115,7 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
         decimals: 18,
       }
       return {
-        address: tokenAddress as `0x${string}`,
+        address: tokenAddress,
         balance: tokenData.balance,
         timestamp: tokenData.timestamp,
         ...metadata,
