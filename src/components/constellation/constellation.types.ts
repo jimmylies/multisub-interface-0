@@ -116,6 +116,8 @@ export interface EnhancedConstellationConfig extends ConstellationConfig {
   enableNodeBloom: boolean
   waveInterval: number // ms between waves
   trailLength: number
+  enableRipples: boolean
+  enableEnergyCurrents: boolean
 }
 
 export interface ConstellationState {
@@ -178,13 +180,15 @@ export const COLORS = {
 export const ENHANCED_DEFAULT_CONFIG: EnhancedConstellationConfig = {
   ...DEFAULT_CONFIG,
   starCount: 50,
-  enableParallax: false,      // Disabled - causes lag
-  enableMagneticField: false, // Disabled - causes lag
+  enableParallax: false,
+  enableMagneticField: false,
   enableEnergyWaves: true,
-  enableParticleTrails: true,
-  enableNodeBloom: false,     // Disabled - causes lag
+  enableParticleTrails: false,
+  enableNodeBloom: false,
   waveInterval: 3000,
   trailLength: 6,
+  enableRipples: true,
+  enableEnergyCurrents: true,
 }
 
 // Responsive configs for enhanced features
@@ -195,13 +199,17 @@ export const ENHANCED_RESPONSIVE_CONFIGS: Record<'desktop' | 'tablet' | 'mobile'
     enableParallax: false,
     enableMagneticField: false,
     enableEnergyWaves: true,
+    enableRipples: true,
+    enableEnergyCurrents: true,
   },
   tablet: {
     starCount: 30,
-    trailLength: 4,
+    trailLength: 5,
     enableParallax: false,
     enableMagneticField: false,
     enableEnergyWaves: true,
+    enableRipples: true,
+    enableEnergyCurrents: true,
   },
   mobile: {
     starCount: 15,
@@ -209,6 +217,8 @@ export const ENHANCED_RESPONSIVE_CONFIGS: Record<'desktop' | 'tablet' | 'mobile'
     enableParallax: false,
     enableMagneticField: false,
     enableEnergyWaves: false,
+    enableRipples: true,
+    enableEnergyCurrents: false,
   },
 }
 
