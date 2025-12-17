@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, RefObject } from 'react'
 import type { MouseState, Point } from './constellation.types'
 
 /**
- * Optimized mouse position hook using refs to avoid re-renders
- * The position is stored in a ref and only the `isInside` triggers re-renders
+ * Optimized mouse position hook that tracks mouse globally on the window
+ * Position is relative to the container for calculations
+ * Attraction works even when mouse is outside the container
  */
 export function useMousePosition(containerRef: RefObject<HTMLElement>): MouseState {
   // Use ref for position to avoid re-renders on every mouse move
@@ -25,8 +26,9 @@ export function useMousePosition(containerRef: RefObject<HTMLElement>): MouseSta
 
     // Use requestAnimationFrame for smooth updates
     const updatePosition = () => {
-      if (pendingPosition) {
+      if (pendingPosition && container) {
         const rect = container.getBoundingClientRect()
+        // Convert global mouse position to container-relative coordinates
         positionRef.current = {
           x: pendingPosition.x - rect.left,
           y: pendingPosition.y - rect.top,
@@ -37,6 +39,7 @@ export function useMousePosition(containerRef: RefObject<HTMLElement>): MouseSta
       rafId = null
     }
 
+    // Track mouse globally on window
     const handleMouseMove = (e: MouseEvent) => {
       pendingPosition = { x: e.clientX, y: e.clientY }
 
@@ -53,13 +56,14 @@ export function useMousePosition(containerRef: RefObject<HTMLElement>): MouseSta
 
     const handleMouseLeave = () => {
       setIsInside(false)
-      positionRef.current = null
-      stateRef.current.position = null
       stateRef.current.isInside = false
+      // Keep tracking position even when outside for global attraction
+      // Don't reset positionRef here
     }
 
-    // Use passive listeners for better scroll performance
-    container.addEventListener('mousemove', handleMouseMove, { passive: true })
+    // Track mouse on window for global attraction
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    // Track enter/leave on container for visual feedback
     container.addEventListener('mouseenter', handleMouseEnter, { passive: true })
     container.addEventListener('mouseleave', handleMouseLeave, { passive: true })
 
@@ -67,14 +71,13 @@ export function useMousePosition(containerRef: RefObject<HTMLElement>): MouseSta
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
       }
-      container.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mousemove', handleMouseMove)
       container.removeEventListener('mouseenter', handleMouseEnter)
       container.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [containerRef])
 
   // Return an object that reads from refs (doesn't cause re-renders on position change)
-  // Components using this will re-render on isInside change, but canvas uses RAF directly
   return {
     get position() {
       return positionRef.current
