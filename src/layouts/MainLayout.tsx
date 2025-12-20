@@ -1,0 +1,92 @@
+import { Outlet, Link } from 'react-router-dom'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { SkipLink, SkipLinkTarget } from '@/components/SkipLink'
+import { useUserRoles } from '@/hooks/useUserRoles'
+import { useAccount } from 'wagmi'
+import { ROUTES } from '@/router/routes'
+
+export function MainLayout() {
+  const { isConnected } = useAccount()
+  const { isSafeOwner, isDualRole } = useUserRoles()
+
+  return (
+    <div className="min-h-screen app-background">
+      {/* Skip Link for Accessibility */}
+      <SkipLink />
+
+      {/* Header */}
+      <header className="top-0 z-50 sticky border-subtle border-b glass" role="banner">
+        <div className="flex justify-between items-center mx-auto px-3 md:px-6 h-14 md:h-16 container">
+          {/* Logo */}
+          <Link
+            to={ROUTES.HOME}
+            className="flex items-center gap-2 md:gap-3 hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="/logo.png"
+              alt="MultiSub"
+              className="w-8 h-8 md:w-9 md:h-9 object-contain"
+            />
+            <div>
+              <h1 className="font-semibold text-primary text-base md:text-lg leading-tight">
+                MultiSub
+              </h1>
+              <p className="-mt-0.5 text-caption text-tertiary hidden md:block">
+                {!isConnected
+                  ? 'DeFi, Delegated.'
+                  : isDualRole
+                    ? 'Owner + Sub-Account'
+                    : isSafeOwner
+                      ? 'Safe Owner'
+                      : 'DeFi Delegated'}
+              </p>
+            </div>
+          </Link>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 md:gap-3">
+            <ThemeToggle />
+            {isConnected ? (
+              <ConnectButton
+                accountStatus="address"
+                chainStatus="icon"
+                showBalance={false}
+              />
+            ) : (
+              <ConnectButton.Custom>
+                {({ openConnectModal, mounted }) => {
+                  const ready = mounted
+                  if (!ready) return null
+
+                  return (
+                    <button
+                      onClick={openConnectModal}
+                      className="group inline-flex relative justify-center items-center bg-gradient-to-r shadow-glow hover:shadow-xl px-3 md:px-6 rounded-md h-9 md:h-10 overflow-hidden font-semibold text-black text-sm md:text-base hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 from-accent-primary to-accent-secondary"
+                    >
+                      <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform -translate-x-full group-hover:translate-x-full duration-700" />
+                      <span className="z-10 relative">Connect</span>
+                    </button>
+                  )
+                }}
+              </ConnectButton.Custom>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="mx-auto px-6 py-8 min-h-[calc(100dvh-130px)] container" role="main">
+        <SkipLinkTarget />
+        <Outlet />
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-auto border-subtle border-t" role="contentinfo">
+        <div className="mx-auto px-6 py-6 text-center container">
+          <p className="text-caption text-tertiary">Secured by Safe • Built for DeFi</p>
+        </div>
+      </footer>
+    </div>
+  )
+}
