@@ -1,0 +1,577 @@
+// DeFiInteractor contract ABI - Updated for new oracle-based architecture
+export const DEFI_INTERACTOR_ABI = [
+  // ============ Constants ============
+  {
+    type: 'function',
+    name: 'DEFI_EXECUTE_ROLE',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint16', internalType: 'uint16' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'DEFI_TRANSFER_ROLE',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint16', internalType: 'uint16' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'DEFAULT_MAX_SPENDING_BPS',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'DEFAULT_WINDOW_DURATION',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  // ============ Oracle Functions ============
+  {
+    type: 'function',
+    name: 'updateSafeValue',
+    inputs: [{ name: 'totalValueUSD', type: 'uint256', internalType: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'updateSpendingAllowance',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'newAllowance', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'updateAcquiredBalance',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'token', type: 'address', internalType: 'address' },
+      { name: 'newBalance', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'batchUpdate',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'newAllowance', type: 'uint256', internalType: 'uint256' },
+      { name: 'tokens', type: 'address[]', internalType: 'address[]' },
+      { name: 'balances', type: 'uint256[]', internalType: 'uint256[]' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // ============ View Functions ============
+  {
+    type: 'function',
+    name: 'getSafeValue',
+    inputs: [],
+    outputs: [
+      { name: 'totalValueUSD', type: 'uint256', internalType: 'uint256' },
+      { name: 'lastUpdated', type: 'uint256', internalType: 'uint256' },
+      { name: 'updateCount', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'safeValue',
+    inputs: [],
+    outputs: [
+      { name: 'totalValueUSD', type: 'uint256', internalType: 'uint256' },
+      { name: 'lastUpdated', type: 'uint256', internalType: 'uint256' },
+      { name: 'updateCount', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getSpendingAllowance',
+    inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getAcquiredBalance',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'token', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isValueStale',
+    inputs: [{ name: 'maxAge', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'avatar',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getTokenBalances',
+    inputs: [{ name: 'tokens', type: 'address[]', internalType: 'address[]' }],
+    outputs: [{ name: 'balances', type: 'uint256[]', internalType: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'absoluteMaxSpendingBps',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'subAccountLimits',
+    inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
+    outputs: [
+      { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
+      { name: 'isConfigured', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getSubAccountLimits',
+    inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
+    outputs: [
+      { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getSubaccountsByRole',
+    inputs: [{ name: 'roleId', type: 'uint16', internalType: 'uint16' }],
+    outputs: [{ name: '', type: 'address[]', internalType: 'address[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getSubaccountCount',
+    inputs: [{ name: 'roleId', type: 'uint16', internalType: 'uint16' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'hasRole',
+    inputs: [
+      { name: 'member', type: 'address', internalType: 'address' },
+      { name: 'roleId', type: 'uint16', internalType: 'uint16' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'allowedAddresses',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'target', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'paused',
+    inputs: [],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'authorizedOracle',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  // ============ Main Entry Points ============
+  {
+    type: 'function',
+    name: 'executeOnProtocol',
+    inputs: [
+      { name: 'target', type: 'address', internalType: 'address' },
+      { name: 'data', type: 'bytes', internalType: 'bytes' },
+    ],
+    outputs: [{ name: '', type: 'bytes', internalType: 'bytes' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'executeOnProtocolWithValue',
+    inputs: [
+      { name: 'target', type: 'address', internalType: 'address' },
+      { name: 'data', type: 'bytes', internalType: 'bytes' },
+    ],
+    outputs: [{ name: '', type: 'bytes', internalType: 'bytes' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'transferToken',
+    inputs: [
+      { name: 'token', type: 'address', internalType: 'address' },
+      { name: 'recipient', type: 'address', internalType: 'address' },
+      { name: 'amount', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // ============ Configuration Functions ============
+  {
+    type: 'function',
+    name: 'grantRole',
+    inputs: [
+      { name: 'member', type: 'address', internalType: 'address' },
+      { name: 'roleId', type: 'uint16', internalType: 'uint16' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'revokeRole',
+    inputs: [
+      { name: 'member', type: 'address', internalType: 'address' },
+      { name: 'roleId', type: 'uint16', internalType: 'uint16' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setSubAccountLimits',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setAllowedAddresses',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'targets', type: 'address[]', internalType: 'address[]' },
+      { name: 'allowed', type: 'bool', internalType: 'bool' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'registerSelector',
+    inputs: [
+      { name: 'selector', type: 'bytes4', internalType: 'bytes4' },
+      { name: 'opType', type: 'uint8', internalType: 'enum DeFiInteractorModule.OperationType' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'unregisterSelector',
+    inputs: [{ name: 'selector', type: 'bytes4', internalType: 'bytes4' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'registerParser',
+    inputs: [
+      { name: 'protocol', type: 'address', internalType: 'address' },
+      { name: 'parser', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setAuthorizedOracle',
+    inputs: [{ name: 'newOracle', type: 'address', internalType: 'address' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setTokenPriceFeed',
+    inputs: [
+      { name: 'token', type: 'address', internalType: 'address' },
+      { name: 'priceFeed', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'pause',
+    inputs: [],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'unpause',
+    inputs: [],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'transferOwnership',
+    inputs: [{ name: 'newOwner', type: 'address', internalType: 'address' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // ============ Events ============
+  {
+    type: 'event',
+    name: 'ProtocolExecution',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'target', type: 'address', indexed: true, internalType: 'address' },
+      {
+        name: 'opType',
+        type: 'uint8',
+        indexed: false,
+        internalType: 'enum DeFiInteractorModule.OperationType',
+      },
+      { name: 'tokenIn', type: 'address', indexed: false, internalType: 'address' },
+      { name: 'amountIn', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'tokenOut', type: 'address', indexed: false, internalType: 'address' },
+      { name: 'amountOut', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'spendingCost', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'TransferExecuted',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'token', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'recipient', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'amount', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'spendingCost', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'SafeValueUpdated',
+    inputs: [
+      { name: 'totalValueUSD', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'updateCount', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'SpendingAllowanceUpdated',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'newAllowance', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'AcquiredBalanceUpdated',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'token', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'newBalance', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'timestamp', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'RoleAssigned',
+    inputs: [
+      { name: 'member', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'roleId', type: 'uint16', indexed: true, internalType: 'uint16' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'RoleRevoked',
+    inputs: [
+      { name: 'member', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'roleId', type: 'uint16', indexed: true, internalType: 'uint16' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'SubAccountLimitsSet',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'maxSpendingBps', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'windowDuration', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'AllowedAddressesSet',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'targets', type: 'address[]', indexed: false, internalType: 'address[]' },
+      { name: 'allowed', type: 'bool', indexed: false, internalType: 'bool' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'EmergencyPaused',
+    inputs: [{ name: 'by', type: 'address', indexed: true, internalType: 'address' }],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'EmergencyUnpaused',
+    inputs: [{ name: 'by', type: 'address', indexed: true, internalType: 'address' }],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'OracleUpdated',
+    inputs: [
+      { name: 'oldOracle', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'newOracle', type: 'address', indexed: true, internalType: 'address' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'SelectorRegistered',
+    inputs: [
+      { name: 'selector', type: 'bytes4', indexed: true, internalType: 'bytes4' },
+      {
+        name: 'opType',
+        type: 'uint8',
+        indexed: false,
+        internalType: 'enum DeFiInteractorModule.OperationType',
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'SelectorUnregistered',
+    inputs: [{ name: 'selector', type: 'bytes4', indexed: true, internalType: 'bytes4' }],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'ParserRegistered',
+    inputs: [
+      { name: 'protocol', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'parser', type: 'address', indexed: false, internalType: 'address' },
+    ],
+    anonymous: false,
+  },
+  // ============ Errors ============
+  {
+    type: 'error',
+    name: 'UnknownSelector',
+    inputs: [{ name: 'selector', type: 'bytes4', internalType: 'bytes4' }],
+  },
+  { type: 'error', name: 'TransactionFailed', inputs: [] },
+  { type: 'error', name: 'ApprovalFailed', inputs: [] },
+  { type: 'error', name: 'InvalidLimitConfiguration', inputs: [] },
+  { type: 'error', name: 'AddressNotAllowed', inputs: [] },
+  { type: 'error', name: 'ExceedsSpendingLimit', inputs: [] },
+  { type: 'error', name: 'OnlyAuthorizedOracle', inputs: [] },
+  { type: 'error', name: 'InvalidOracleAddress', inputs: [] },
+  { type: 'error', name: 'StaleOracleData', inputs: [] },
+  { type: 'error', name: 'StalePortfolioValue', inputs: [] },
+  { type: 'error', name: 'InvalidPriceFeed', inputs: [] },
+  { type: 'error', name: 'StalePriceFeed', inputs: [] },
+  { type: 'error', name: 'InvalidPrice', inputs: [] },
+  { type: 'error', name: 'NoPriceFeedSet', inputs: [] },
+  { type: 'error', name: 'ApprovalExceedsLimit', inputs: [] },
+  { type: 'error', name: 'SpenderNotAllowed', inputs: [] },
+  {
+    type: 'error',
+    name: 'NoParserRegistered',
+    inputs: [{ name: 'target', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'ExceedsAbsoluteMaxSpending',
+    inputs: [
+      { name: 'requested', type: 'uint256', internalType: 'uint256' },
+      { name: 'maximum', type: 'uint256', internalType: 'uint256' },
+    ],
+  },
+  { type: 'error', name: 'CannotRegisterUnknown', inputs: [] },
+  { type: 'error', name: 'LengthMismatch', inputs: [] },
+  { type: 'error', name: 'ExceedsMaxBps', inputs: [] },
+  { type: 'error', name: 'Unauthorized', inputs: [] },
+  { type: 'error', name: 'InvalidAddress', inputs: [] },
+] as const
+
+// Operation type enum (matches contract)
+export enum OperationType {
+  UNKNOWN = 0,
+  SWAP = 1,
+  DEPOSIT = 2,
+  WITHDRAW = 3,
+  CLAIM = 4,
+  APPROVE = 5,
+}
+
+// Role constants
+export const ROLES = {
+  DEFI_EXECUTE_ROLE: 1,
+  DEFI_TRANSFER_ROLE: 2,
+} as const
+
+export const ROLE_NAMES = {
+  [ROLES.DEFI_EXECUTE_ROLE]: 'Execute',
+  [ROLES.DEFI_TRANSFER_ROLE]: 'Transfer',
+} as const
+
+export const ROLE_DESCRIPTIONS = {
+  [ROLES.DEFI_EXECUTE_ROLE]:
+    'Can execute protocol interactions (limited by spending allowance tracked by oracle)',
+  [ROLES.DEFI_TRANSFER_ROLE]: 'Can transfer tokens from Safe (costs spending allowance)',
+} as const
