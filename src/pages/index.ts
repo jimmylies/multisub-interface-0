@@ -1,0 +1,5 @@
+export { HomePage } from './HomePage'
+export { DashboardPage } from './DashboardPage'
+export { AccountsPage } from './AccountsPage'
+export { HistoryPage } from './HistoryPage'
+export { SettingsPage } from './SettingsPage'
