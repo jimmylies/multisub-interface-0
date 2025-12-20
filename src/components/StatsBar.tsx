@@ -3,6 +3,7 @@ import { useSafeAddress, useManagedAccounts, useSafeValue, useIsValueStale } fro
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { ViewSwitcher } from '@/components/ViewSwitcher'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatUSD, formatTimeAgo } from '@/lib/utils'
 
 const chainNames: Record<number, string> = {
@@ -59,8 +60,10 @@ function OracleStatusCompact() {
   if (isLoading || !safeValue) {
     return (
       <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-elevated border border-subtle">
-        <div className="w-2 h-2 rounded-full bg-tertiary animate-pulse" />
-        <span className="text-small text-tertiary">Oracle loading...</span>
+        <Skeleton className="w-2 h-2 rounded-full" />
+        <Skeleton className="h-3 w-12 rounded" />
+        <Skeleton className="h-5 w-14 rounded-full" />
+        <Skeleton className="h-4 w-20 rounded" />
       </div>
     )
   }

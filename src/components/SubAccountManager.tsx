@@ -407,7 +407,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   // Get necessary dependencies for handlers
   const { addresses } = useContractAddresses()
   const { toast } = useToast()
-  const { proposeTransaction } = useSafeProposal()
+  const { proposeTransaction, isPending: isUpdating } = useSafeProposal()
 
   // Compute if there are changes to show Update/Cancel buttons
   const hasChanges = useMemo(() => {
@@ -738,8 +738,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
                 disabled={isRevoking}
               >
                 <div className="flex items-center whitespace-nowrap">
-                  {isRevoking ? 'Updating...' : 'Update Roles'}
-                  {!isRevoking && <ChevronDown className="ml-1 w-3 h-3" />}
+                  Update Roles
+                  <ChevronDown className="ml-1 w-3 h-3" />
                 </div>
               </Button>
             </PopoverTrigger>
@@ -783,36 +783,33 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
                 </div>
 
                 {/* Actions */}
-                {hasChanges && !isRevoking && (
-                  <div className="flex gap-2 pt-2 border-t">
+                {hasChanges && (
+                  <div
+                    className={`flex gap-2 pt-2 border-t ${!localExecuteRole && !localTransferRole ? 'flex-col' : ''}`}
+                  >
                     <Button
                       size="sm"
-                      variant="default"
+                      variant={!localExecuteRole && !localTransferRole ? 'destructive' : 'default'}
                       onClick={handleUpdatePermissions}
-                      className="flex-1"
+                      className="flex-1 min-h-10"
+                      disabled={isRevoking || isUpdating}
                     >
-                      Update
+                      {!localExecuteRole && !localTransferRole
+                        ? 'Remove sub-account'
+                        : isUpdating
+                          ? 'Updating...'
+                          : 'Update'}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={handleCancel}
-                      className="flex-1"
+                      className="flex-1 min-h-10"
+                      disabled={isRevoking || isUpdating}
                     >
                       Cancel
                     </Button>
                   </div>
-                )}
-
-                {isRevoking && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    disabled
-                    className="w-full"
-                  >
-                    Updating...
-                  </Button>
                 )}
               </div>
             </PopoverContent>

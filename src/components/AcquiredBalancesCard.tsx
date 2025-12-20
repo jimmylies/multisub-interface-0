@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
+import { Skeleton, SkeletonBadge } from '@/components/ui/skeleton'
 import { useAcquiredBalances } from '@/hooks/useSafe'
 import { formatTokenAmount } from '@/lib/utils'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
@@ -96,11 +97,30 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
   if (isLoading || isLoadingMetadata) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Acquired Balances</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            Acquired Balances
+            <SkeletonBadge size="sm" />
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">Loading...</p>
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex justify-between items-center p-3 border border-subtle rounded-lg bg-elevated">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-12 rounded" />
+                    <Skeleton className="h-3 w-16 rounded" />
+                  </div>
+                </div>
+                <div className="text-right space-y-1.5">
+                  <Skeleton className="h-4 w-20 rounded ml-auto" />
+                  <Skeleton className="h-3 w-16 rounded ml-auto" />
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     )

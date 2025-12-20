@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
-import { PROTOCOLS, Protocol, ProtocolContract } from '@/lib/protocols'
+import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/lib/protocols'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { useAllowedAddresses } from '@/hooks/useSafe'
@@ -28,7 +28,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
     const allAddresses: `0x${string}`[] = []
     PROTOCOLS.forEach(protocol => {
       protocol.contracts.forEach(contract => {
-        allAddresses.push(contract.address)
+        getContractAddresses(contract).forEach(addr => allAddresses.push(addr))
       })
     })
     return allAddresses
@@ -48,9 +48,11 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
     PROTOCOLS.forEach(protocol => {
       const selectedContracts = new Set<string>()
 
-      // Check which contracts are allowed
+      // Check which contracts are allowed (all addresses must be allowed)
       protocol.contracts.forEach(contract => {
-        if (allowedAddresses.has(contract.address)) {
+        const addresses = getContractAddresses(contract)
+        const allAllowed = addresses.every(addr => allowedAddresses.has(addr))
+        if (allAllowed) {
           selectedContracts.add(contract.id)
         }
       })
@@ -73,7 +75,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         contractIds.forEach(contractId => {
           const contract = protocol.contracts.find(c => c.id === contractId)
           if (contract) {
-            selectedAddresses.add(contract.address)
+            getContractAddresses(contract).forEach(addr => selectedAddresses.add(addr))
           }
         })
       }
@@ -143,7 +145,9 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
     selectedProtocols.forEach((contractIds, protocolId) => {
       const protocol = PROTOCOLS.find(p => p.id === protocolId)
       protocol?.contracts.forEach(c => {
-        if (contractIds.has(c.id)) selectedAddressSet.add(c.address)
+        if (contractIds.has(c.id)) {
+          getContractAddresses(c).forEach(addr => selectedAddressSet.add(addr))
+        }
       })
     })
 
@@ -172,7 +176,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       const protocol = PROTOCOLS.find(p => p.id === protocolId)
       protocol?.contracts.forEach(c => {
         if (contractIds.has(c.id)) {
-          selectedAddressSet.add(c.address)
+          getContractAddresses(c).forEach(addr => selectedAddressSet.add(addr))
         }
       })
     })
@@ -182,8 +186,12 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
     selectedProtocols.forEach((contractIds, protocolId) => {
       const protocol = PROTOCOLS.find(p => p.id === protocolId)
       protocol?.contracts.forEach(c => {
-        if (contractIds.has(c.id) && !allowedAddresses.has(c.address)) {
-          addressesToAdd.push(c.address)
+        if (contractIds.has(c.id)) {
+          getContractAddresses(c).forEach(addr => {
+            if (!allowedAddresses.has(addr)) {
+              addressesToAdd.push(addr)
+            }
+          })
         }
       })
     })
@@ -205,7 +213,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
           DEFI_INTERACTOR_ABI as unknown as any[],
           'setAllowedAddresses',
           [subAccountAddress, addressesToAdd, true]
-        )
+        ),
       })
     }
 
@@ -218,7 +226,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
           DEFI_INTERACTOR_ABI as unknown as any[],
           'setAllowedAddresses',
           [subAccountAddress, addressesToRemove, false]
-        )
+        ),
       })
     }
 
@@ -271,14 +279,16 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
 
               // Check if any contract in protocol is currently allowed
               const isProtocolAllowed = protocol.contracts.some(c =>
-                allowedAddresses.has(c.address)
+                getContractAddresses(c).some(addr => allowedAddresses.has(addr))
               )
 
               // Check if there are newly selected contracts (not yet allowed)
               const hasNewSelections =
                 hasSelectedContracts &&
                 protocol.contracts.some(
-                  c => selectedContracts.has(c.id) && !allowedAddresses.has(c.address)
+                  c =>
+                    selectedContracts.has(c.id) &&
+                    getContractAddresses(c).some(addr => !allowedAddresses.has(addr))
                 )
 
               // Determine background color based on state
@@ -322,21 +332,19 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isExpanded && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            selectedContracts?.size === protocol.contracts.length
-                              ? deselectAllContracts(protocol)
-                              : selectAllContracts(protocol)
-                          }
-                        >
-                          {selectedContracts?.size === protocol.contracts.length
-                            ? 'Deselect All'
-                            : 'Select All'}
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          selectedContracts?.size === protocol.contracts.length
+                            ? deselectAllContracts(protocol)
+                            : selectAllContracts(protocol)
+                        }
+                      >
+                        {selectedContracts?.size === protocol.contracts.length
+                          ? 'Deselect All'
+                          : 'Select All'}
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -350,7 +358,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
                   {isExpanded && (
                     <div className="space-y-2 my-3 mr-4 ml-6 pl-3 border-muted border-l">
                       {protocol.contracts.map(contract => {
-                        const isContractAllowed = allowedAddresses.has(contract.address)
+                        const contractAddresses = getContractAddresses(contract)
+                        const isContractAllowed = contractAddresses.every(addr =>
+                          allowedAddresses.has(addr)
+                        )
                         return (
                           <ContractCheckbox
                             key={contract.id}
