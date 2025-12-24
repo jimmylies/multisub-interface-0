@@ -9,6 +9,7 @@ import { ContractAddressProvider } from './contexts/ContractAddressContext.tsx'
 import { ViewModeProvider } from './contexts/ViewModeContext.tsx'
 import { ThemeProvider } from './contexts/ThemeContext.tsx'
 import { ToastProvider } from './contexts/ToastContext.tsx'
+import { TransactionPreviewProvider } from './contexts/TransactionPreviewContext.tsx'
 import { ToastContainer } from './components/ui/toast.tsx'
 import { injected } from 'wagmi/connectors'
 
@@ -44,7 +45,9 @@ const SafeProviderWrapper = () => {
 
   return (
     <SafeProvider config={safeConfig}>
-      <App />
+      <TransactionPreviewProvider>
+        <App />
+      </TransactionPreviewProvider>
     </SafeProvider>
   )
 }
