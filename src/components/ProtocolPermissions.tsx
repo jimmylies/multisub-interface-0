@@ -9,8 +9,11 @@ import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/l
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { useAllowedAddresses } from '@/hooks/useSafe'
+import { useSubAccountFullState, mergeProtocolsWithChanges } from '@/hooks/useSubAccountFullState'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
+import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
+import type { TransactionPreviewData, ProtocolChange, ContractChange } from '@/types/transactionPreview'
 
 interface ProtocolPermissionsProps {
   subAccountAddress: `0x${string}`
@@ -21,8 +24,12 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   const [selectedProtocols, setSelectedProtocols] = useState<Map<string, Set<string>>>(new Map())
   const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null)
   const { toast } = useToast()
+  const { showPreview } = useTransactionPreviewContext()
 
   const { proposeTransaction, isPending } = useSafeProposal()
+
+  // Get full sub-account state for preview context
+  const { fullState: currentFullState } = useSubAccountFullState(subAccountAddress)
 
   const addressesToCheck = useMemo(() => {
     const allAddresses: `0x${string}`[] = []
@@ -168,8 +175,6 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       return
     }
 
-    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
-
     // Build set of currently selected addresses
     const selectedAddressSet = new Set<string>()
     selectedProtocols.forEach((contractIds, protocolId) => {
@@ -181,79 +186,129 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       })
     })
 
-    // Addresses to ADD (selected but not yet allowed)
-    const addressesToAdd: `0x${string}`[] = []
-    selectedProtocols.forEach((contractIds, protocolId) => {
-      const protocol = PROTOCOLS.find(p => p.id === protocolId)
-      protocol?.contracts.forEach(c => {
-        if (contractIds.has(c.id)) {
-          getContractAddresses(c).forEach(addr => {
-            if (!allowedAddresses.has(addr)) {
-              addressesToAdd.push(addr)
-            }
-          })
+    // Build protocol changes for preview
+    const protocolChanges: ProtocolChange[] = PROTOCOLS.map(protocol => {
+      const selectedContracts = selectedProtocols.get(protocol.id) || new Set<string>()
+
+      const contracts: ContractChange[] = protocol.contracts.map(contract => {
+        const contractAddresses = getContractAddresses(contract)
+        const isCurrentlyAllowed = contractAddresses.every(addr => allowedAddresses.has(addr))
+        const isSelected = selectedContracts.has(contract.id)
+
+        let action: 'add' | 'remove' | 'unchanged' = 'unchanged'
+        if (isSelected && !isCurrentlyAllowed) {
+          action = 'add'
+        } else if (!isSelected && isCurrentlyAllowed) {
+          action = 'remove'
+        }
+
+        return {
+          contractId: contract.id,
+          contractName: contract.name,
+          address: contract.address,
+          description: contract.description,
+          action,
         }
       })
-    })
 
-    // Addresses to REMOVE (currently allowed but deselected)
-    const addressesToRemove: `0x${string}`[] = []
-    allowedAddresses.forEach(addr => {
-      if (!selectedAddressSet.has(addr)) {
-        addressesToRemove.push(addr)
+      return {
+        protocolId: protocol.id,
+        protocolName: protocol.name,
+        contracts,
       }
-    })
+    }).filter(p => p.contracts.some(c => c.action !== 'unchanged'))
 
-    // Build transaction to ADD addresses
-    if (addressesToAdd.length > 0) {
-      transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(
-          addresses.defiInteractor,
-          DEFI_INTERACTOR_ABI as unknown as any[],
-          'setAllowedAddresses',
-          [subAccountAddress, addressesToAdd, true]
-        ),
-      })
-    }
-
-    // Build transaction to REMOVE addresses
-    if (addressesToRemove.length > 0) {
-      transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(
-          addresses.defiInteractor,
-          DEFI_INTERACTOR_ABI as unknown as any[],
-          'setAllowedAddresses',
-          [subAccountAddress, addressesToRemove, false]
-        ),
-      })
-    }
-
-    if (transactions.length === 0) {
+    if (protocolChanges.length === 0) {
       toast.warning('No changes to apply')
       return
     }
 
-    try {
-      const result = await proposeTransaction(
-        transactions.length === 1 ? transactions[0] : transactions,
-        { transactionType: TRANSACTION_TYPES.SET_ALLOWED_ADDRESSES }
-      )
-
-      if (result.success) {
-        toast.success('Protocol permissions updated')
-      } else if ('cancelled' in result && result.cancelled) {
-        // User cancelled - do nothing
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error proposing permissions:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      toast.error(`Transaction failed: ${errorMsg}`)
+    // Build full state with protocol changes applied
+    const fullStateWithChanges = {
+      roles: currentFullState.roles, // Unchanged
+      spendingLimits: currentFullState.spendingLimits, // Unchanged
+      protocols: mergeProtocolsWithChanges(currentFullState.protocols, protocolChanges),
     }
+
+    const previewData: TransactionPreviewData = {
+      type: 'update-protocols',
+      subAccountAddress,
+      protocols: protocolChanges,
+      fullState: fullStateWithChanges,
+    }
+
+    showPreview(previewData, async () => {
+      const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+
+      // Addresses to ADD (selected but not yet allowed)
+      const addressesToAdd: `0x${string}`[] = []
+      selectedProtocols.forEach((contractIds, protocolId) => {
+        const protocol = PROTOCOLS.find(p => p.id === protocolId)
+        protocol?.contracts.forEach(c => {
+          if (contractIds.has(c.id)) {
+            getContractAddresses(c).forEach(addr => {
+              if (!allowedAddresses.has(addr)) {
+                addressesToAdd.push(addr)
+              }
+            })
+          }
+        })
+      })
+
+      // Addresses to REMOVE (currently allowed but deselected)
+      const addressesToRemove: `0x${string}`[] = []
+      allowedAddresses.forEach(addr => {
+        if (!selectedAddressSet.has(addr)) {
+          addressesToRemove.push(addr)
+        }
+      })
+
+      // Build transaction to ADD addresses
+      if (addressesToAdd.length > 0) {
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(
+            addresses.defiInteractor,
+            DEFI_INTERACTOR_ABI as unknown as any[],
+            'setAllowedAddresses',
+            [subAccountAddress, addressesToAdd, true]
+          ),
+        })
+      }
+
+      // Build transaction to REMOVE addresses
+      if (addressesToRemove.length > 0) {
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(
+            addresses.defiInteractor,
+            DEFI_INTERACTOR_ABI as unknown as any[],
+            'setAllowedAddresses',
+            [subAccountAddress, addressesToRemove, false]
+          ),
+        })
+      }
+
+      try {
+        const result = await proposeTransaction(
+          transactions.length === 1 ? transactions[0] : transactions,
+          { transactionType: TRANSACTION_TYPES.SET_ALLOWED_ADDRESSES }
+        )
+
+        if (result.success) {
+          toast.success('Protocol permissions updated')
+        } else if ('cancelled' in result && result.cancelled) {
+          // User cancelled - do nothing
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        console.error('Error proposing permissions:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
   }
 
   return (
@@ -381,7 +436,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
             <div className="pt-4 border-subtle border-t">
               <Button
                 onClick={handleSavePermissions}
-                disabled={isPending || selectedProtocols.size === 0 || !hasChanges}
+                disabled={isPending || !hasChanges}
                 className="w-full"
               >
                 {isPending

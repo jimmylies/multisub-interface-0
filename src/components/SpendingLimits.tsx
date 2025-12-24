@@ -8,10 +8,13 @@ import { TooltipIcon } from '@/components/ui/tooltip'
 import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSubAccountLimits, useSafeValue } from '@/hooks/useSafe'
+import { useSubAccountFullState } from '@/hooks/useSubAccountFullState'
 import { formatUSD } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
+import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
+import type { TransactionPreviewData } from '@/types/transactionPreview'
 
 interface SpendingLimitsProps {
   subAccountAddress: `0x${string}`
@@ -22,6 +25,9 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
 
   // Read current limits using hook - NEW: returns only 2 values
   const { data: currentLimits } = useSubAccountLimits(subAccountAddress)
+
+  // Get full sub-account state for preview context
+  const { fullState: currentFullState } = useSubAccountFullState(subAccountAddress)
 
   // Get Safe portfolio value from oracle
   const { data: safeValue } = useSafeValue()
@@ -38,6 +44,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     : null
   const [windowHours, setWindowHours] = useState('24') // Default 24 hours
   const { toast } = useToast()
+  const { showPreview } = useTransactionPreviewContext()
 
   // Sync form values with contract data when available
   useEffect(() => {
@@ -76,8 +83,16 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   }
 
   const handleSaveLimits = async () => {
-    const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
-    const windowSeconds = Math.floor(parseFloat(windowHours) * 3600)
+    const parsedLimit = parseFloat(spendingLimit)
+    const parsedWindow = parseFloat(windowHours)
+
+    if (Number.isNaN(parsedLimit) || Number.isNaN(parsedWindow)) {
+      toast.warning('Invalid input values')
+      return
+    }
+
+    const spendingBps = Math.floor(parsedLimit * 100)
+    const windowSeconds = Math.floor(parsedWindow * 3600)
 
     if (spendingBps < 0 || spendingBps > 10000) {
       toast.warning('Limit must be 0-100%')
@@ -94,33 +109,64 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       return
     }
 
-    try {
-      // NEW signature: only 3 params (subAccount, maxSpendingBps, windowDuration)
-      const data = encodeContractCall(
-        addresses.defiInteractor,
-        DEFI_INTERACTOR_ABI as any[],
-        'setSubAccountLimits',
-        [subAccountAddress, BigInt(spendingBps), BigInt(windowSeconds)]
-      )
-
-      const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
-        { transactionType: TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS }
-      )
-
-      if (result.success) {
-        toast.success('Spending limits updated')
-      } else if ('cancelled' in result && result.cancelled) {
-        // User cancelled - do nothing
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error proposing limits:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      toast.error(`Transaction failed: ${errorMsg}`)
+    // Build spending limits change
+    const spendingLimitsChange = {
+      before: currentLimits
+        ? {
+            maxSpendingBps: Number(currentLimits[0]),
+            windowDuration: Number(currentLimits[1]),
+          }
+        : null,
+      after: {
+        maxSpendingBps: spendingBps,
+        windowDuration: windowSeconds,
+      },
     }
+
+    // Build full state with spending limits change applied
+    const fullStateWithChanges = {
+      roles: currentFullState.roles, // Unchanged
+      spendingLimits: spendingLimitsChange,
+      protocols: currentFullState.protocols, // Unchanged
+    }
+
+    // Build preview data
+    const previewData: TransactionPreviewData = {
+      type: 'update-limits',
+      subAccountAddress,
+      spendingLimits: spendingLimitsChange,
+      fullState: fullStateWithChanges,
+    }
+
+    showPreview(previewData, async () => {
+      try {
+        // NEW signature: only 3 params (subAccount, maxSpendingBps, windowDuration)
+        const data = encodeContractCall(
+          addresses.defiInteractor,
+          DEFI_INTERACTOR_ABI as any[],
+          'setSubAccountLimits',
+          [subAccountAddress, BigInt(spendingBps), BigInt(windowSeconds)]
+        )
+
+        const result = await proposeTransaction(
+          { to: addresses.defiInteractor, data },
+          { transactionType: TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS }
+        )
+
+        if (result.success) {
+          toast.success('Spending limits updated')
+        } else if ('cancelled' in result && result.cancelled) {
+          // User cancelled - do nothing
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        console.error('Error proposing limits:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
   }
 
   return (
@@ -177,7 +223,12 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                     max="100"
                     step="0.5"
                     value={spendingLimit}
-                    onChange={e => setSpendingLimit(e.target.value)}
+                    onChange={e => {
+                      const value = e.target.value
+                      if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+                        setSpendingLimit(value)
+                      }
+                    }}
                     placeholder="10"
                     className="pr-8"
                   />

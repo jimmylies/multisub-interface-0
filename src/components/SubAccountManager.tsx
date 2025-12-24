@@ -21,11 +21,14 @@ import {
   useSafeValue,
   useSubAccountLimits,
 } from '@/hooks/useSafe'
+import { useSubAccountFullState, mergeRolesWithChanges } from '@/hooks/useSubAccountFullState'
 import { formatUSD, cn } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { isAddress } from 'viem'
 import { useToast } from '@/contexts/ToastContext'
+import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
+import type { TransactionPreviewData, RoleChange } from '@/types/transactionPreview'
 
 export function SubAccountManager() {
   const { addresses } = useContractAddresses()
@@ -36,6 +39,7 @@ export function SubAccountManager() {
   const [setSpendingLimits, setSetSpendingLimits] = useState(false)
   const [spendingLimit, setSpendingLimit] = useState('5')
   const { toast } = useToast()
+  const { showPreview } = useTransactionPreviewContext()
 
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
@@ -77,77 +81,111 @@ export function SubAccountManager() {
       return
     }
 
-    try {
-      // Check if the subaccount already exists and filter roles already granted
-      const existingAccount = managedAccounts.find(
-        acc => acc.address.toLowerCase() === newSubAccount.toLowerCase()
-      )
+    // Check if the subaccount already exists and filter roles already granted
+    const existingAccount = managedAccounts.find(
+      acc => acc.address.toLowerCase() === newSubAccount.toLowerCase()
+    )
 
-      const rolesToGrant: number[] = []
-      if (grantExecute && !existingAccount?.hasExecuteRole) {
-        rolesToGrant.push(ROLES.DEFI_EXECUTE_ROLE)
-      }
-      if (grantTransfer && !existingAccount?.hasTransferRole) {
-        rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
-      }
-
-      if (rolesToGrant.length === 0) {
-        toast.info('This address already has the selected roles')
-        return
-      }
-
-      const transactions: any[] = []
-
-      // Add grantRole transactions
-      rolesToGrant.forEach(roleId => {
-        transactions.push({
-          to: addresses.defiInteractor,
-          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
-            newSubAccount,
-            roleId,
-          ]),
-        })
-      })
-
-      // Add setSubAccountLimits transaction if enabled
-      if (setSpendingLimits) {
-        const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
-        const windowSeconds = 24 * 3600 // 24 hours fixed
-
-        transactions.push({
-          to: addresses.defiInteractor,
-          data: encodeContractCall(
-            addresses.defiInteractor,
-            DEFI_INTERACTOR_ABI as unknown as any[],
-            'setSubAccountLimits',
-            [newSubAccount as `0x${string}`, BigInt(spendingBps), BigInt(windowSeconds)]
-          ),
-        })
-      }
-
-      const result = await proposeTransaction(
-        transactions.length === 1 ? transactions[0] : transactions,
-        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
-      )
-
-      if (result.success) {
-        setNewSubAccount('')
-        setGrantExecute(false)
-        setGrantTransfer(false)
-        setSetSpendingLimits(false)
-        setSpendingLimit('5')
-        toast.success('Transaction submitted')
-      } else if ('cancelled' in result && result.cancelled) {
-        // User cancelled - do nothing
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error proposing role grant:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
-      toast.error(`Transaction failed: ${errorMsg}`)
+    const rolesToGrant: number[] = []
+    if (grantExecute && !existingAccount?.hasExecuteRole) {
+      rolesToGrant.push(ROLES.DEFI_EXECUTE_ROLE)
     }
+    if (grantTransfer && !existingAccount?.hasTransferRole) {
+      rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
+    }
+
+    if (rolesToGrant.length === 0) {
+      toast.info('This address already has the selected roles')
+      return
+    }
+
+    // Build preview data
+    const roles: RoleChange[] = [
+      {
+        roleId: ROLES.DEFI_EXECUTE_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
+        action: rolesToGrant.includes(ROLES.DEFI_EXECUTE_ROLE) ? 'add' : 'unchanged',
+      },
+      {
+        roleId: ROLES.DEFI_TRANSFER_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
+        action: rolesToGrant.includes(ROLES.DEFI_TRANSFER_ROLE) ? 'add' : 'unchanged',
+      },
+    ].filter(r => r.action !== 'unchanged')
+
+    const previewData: TransactionPreviewData = {
+      type: 'add-subaccount',
+      subAccountAddress: newSubAccount as `0x${string}`,
+      roles,
+      spendingLimits: setSpendingLimits
+        ? {
+            before: null,
+            after: {
+              maxSpendingBps: Math.floor(parseFloat(spendingLimit) * 100),
+              windowDuration: 24 * 3600,
+            },
+          }
+        : undefined,
+    }
+
+    // Show preview modal and execute on confirm
+    showPreview(previewData, async () => {
+      try {
+        const transactions: any[] = []
+
+        // Add grantRole transactions
+        rolesToGrant.forEach(roleId => {
+          transactions.push({
+            to: addresses.defiInteractor,
+            data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
+              newSubAccount,
+              roleId,
+            ]),
+          })
+        })
+
+        // Add setSubAccountLimits transaction if enabled
+        if (setSpendingLimits) {
+          const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+          const windowSeconds = 24 * 3600 // 24 hours fixed
+
+          transactions.push({
+            to: addresses.defiInteractor,
+            data: encodeContractCall(
+              addresses.defiInteractor,
+              DEFI_INTERACTOR_ABI as unknown as any[],
+              'setSubAccountLimits',
+              [newSubAccount as `0x${string}`, BigInt(spendingBps), BigInt(windowSeconds)]
+            ),
+          })
+        }
+
+        const result = await proposeTransaction(
+          transactions.length === 1 ? transactions[0] : transactions,
+          { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
+        )
+
+        if (result.success) {
+          setNewSubAccount('')
+          setGrantExecute(false)
+          setGrantTransfer(false)
+          setSetSpendingLimits(false)
+          setSpendingLimit('5')
+          toast.success('Transaction submitted')
+        } else if ('cancelled' in result && result.cancelled) {
+          // User cancelled - do nothing
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        console.error('Error proposing role grant:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
   }
 
   if (!isSafeOwner) {
@@ -368,6 +406,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { data: hasExecuteRole } = useHasRole(account, ROLES.DEFI_EXECUTE_ROLE)
   const { data: hasTransferRole } = useHasRole(account, ROLES.DEFI_TRANSFER_ROLE)
   const { isSafeOwner } = useIsSafeOwner()
+
+  // Get full sub-account state for preview context
+  const { fullState: currentFullState } = useSubAccountFullState(account)
   const { getAccountName, setAccountName, removeAccountName } = useSubAccountNames()
   const accountName = getAccountName(account)
 
@@ -408,6 +449,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { addresses } = useContractAddresses()
   const { toast } = useToast()
   const { proposeTransaction, isPending: isUpdating } = useSafeProposal()
+  const { showPreview } = useTransactionPreviewContext()
 
   // Compute if there are changes to show Update/Cancel buttons
   const hasChanges = useMemo(() => {
@@ -430,61 +472,98 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   }
 
   const handleUpdatePermissions = async () => {
-    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
-
     if (!addresses.defiInteractor) {
       toast.warning('Contract not configured')
       return
     }
 
-    // Build transactions for Execute role if changed
+    // Build role changes for preview
+    const roles: RoleChange[] = []
+
     if (hasExecuteRole !== undefined && localExecuteRole !== hasExecuteRole) {
-      const functionName = localExecuteRole ? 'grantRole' : 'revokeRole'
-      transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
-          account,
-          ROLES.DEFI_EXECUTE_ROLE,
-        ]),
+      roles.push({
+        roleId: ROLES.DEFI_EXECUTE_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
+        action: localExecuteRole ? 'add' : 'remove',
       })
     }
 
-    // Build transactions for Transfer role if changed
     if (hasTransferRole !== undefined && localTransferRole !== hasTransferRole) {
-      const functionName = localTransferRole ? 'grantRole' : 'revokeRole'
-      transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
-          account,
-          ROLES.DEFI_TRANSFER_ROLE,
-        ]),
+      roles.push({
+        roleId: ROLES.DEFI_TRANSFER_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
+        action: localTransferRole ? 'add' : 'remove',
       })
     }
 
-    if (transactions.length === 0) {
+    if (roles.length === 0) {
       toast.warning('No changes to apply')
       return
     }
 
-    try {
-      const result = await proposeTransaction(
-        transactions.length === 1 ? transactions[0] : transactions,
-        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
-      )
-
-      if (result.success) {
-        toast.success('Permissions updated successfully')
-        setIsRolesPopoverOpen(false)
-      } else if ('cancelled' in result && result.cancelled) {
-        return
-      } else {
-        throw result.error || new Error('Transaction failed')
-      }
-    } catch (error) {
-      console.error('Error updating permissions:', error)
-      const errorMsg = error instanceof Error ? error.message : 'Failed to update permissions'
-      toast.error(`Transaction failed: ${errorMsg}`)
+    // Build full state with role changes applied
+    const fullStateWithChanges = {
+      roles: mergeRolesWithChanges(currentFullState.roles, roles),
+      spendingLimits: currentFullState.spendingLimits, // Unchanged
+      protocols: currentFullState.protocols, // Unchanged
     }
+
+    const previewData: TransactionPreviewData = {
+      type: 'update-roles',
+      subAccountAddress: account,
+      roles,
+      fullState: fullStateWithChanges,
+    }
+
+    showPreview(previewData, async () => {
+      const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+
+      // Build transactions for Execute role if changed
+      if (hasExecuteRole !== undefined && localExecuteRole !== hasExecuteRole) {
+        const functionName = localExecuteRole ? 'grantRole' : 'revokeRole'
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+            account,
+            ROLES.DEFI_EXECUTE_ROLE,
+          ]),
+        })
+      }
+
+      // Build transactions for Transfer role if changed
+      if (hasTransferRole !== undefined && localTransferRole !== hasTransferRole) {
+        const functionName = localTransferRole ? 'grantRole' : 'revokeRole'
+        transactions.push({
+          to: addresses.defiInteractor,
+          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+            account,
+            ROLES.DEFI_TRANSFER_ROLE,
+          ]),
+        })
+      }
+
+      try {
+        const result = await proposeTransaction(
+          transactions.length === 1 ? transactions[0] : transactions,
+          { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
+        )
+
+        if (result.success) {
+          toast.success('Permissions updated successfully')
+          setIsRolesPopoverOpen(false)
+        } else if ('cancelled' in result && result.cancelled) {
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        console.error('Error updating permissions:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to update permissions'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
   }
 
   const handleCancel = () => {
@@ -502,6 +581,69 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     setIsNamePopoverOpen(false)
     setNameInputValue('')
   }
+
+  const nameEditPopover = isSafeOwner && (
+    <Popover open={isNamePopoverOpen} onOpenChange={setIsNamePopoverOpen}>
+      <PopoverTrigger asChild>
+        <Button size="icon" variant="ghost" className="w-5 h-6">
+          <Pencil className="w-3 h-3" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-3 w-64" align="start">
+        <div className="space-y-3">
+          <div>
+            <label className="block mb-2 font-medium text-sm">Sub-Account Name</label>
+            <Input
+              type="text"
+              placeholder="Enter name..."
+              value={nameInputValue}
+              onChange={e => setNameInputValue(e.target.value)}
+              maxLength={32}
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveName()
+                else if (e.key === 'Escape') setIsNamePopoverOpen(false)
+              }}
+            />
+            <p className="mt-1 text-muted-foreground text-xs">{nameInputValue.length}/32</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleSaveName}
+              className="flex-1"
+              disabled={!!accountName && nameInputValue === accountName}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsNamePopoverOpen(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+          {accountName && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                removeAccountName(account)
+                setIsNamePopoverOpen(false)
+                setNameInputValue('')
+              }}
+              className="w-full text-destructive hover:text-destructive"
+            >
+              Remove Name
+            </Button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 
   return (
     <div
@@ -524,85 +666,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
                 </p>
                 <div className="flex items-center">
                   <CopyButton value={account} />
-                  {isSafeOwner && (
-                    <Popover
-                      open={isNamePopoverOpen}
-                      onOpenChange={setIsNamePopoverOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="w-5 h-6"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="p-3 w-64"
-                        align="start"
-                      >
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block mb-2 font-medium text-sm">
-                              Sub-Account Name
-                            </label>
-                            <Input
-                              type="text"
-                              placeholder="Enter name..."
-                              value={nameInputValue}
-                              onChange={e => setNameInputValue(e.target.value)}
-                              maxLength={32}
-                              autoFocus
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  handleSaveName()
-                                } else if (e.key === 'Escape') {
-                                  setIsNamePopoverOpen(false)
-                                }
-                              }}
-                            />
-                            <p className="mt-1 text-muted-foreground text-xs">
-                              {nameInputValue.length}/32
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={handleSaveName}
-                              className="flex-1"
-                              disabled={nameInputValue === accountName}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setIsNamePopoverOpen(false)}
-                              className="flex-1"
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                          {accountName && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                removeAccountName(account)
-                                setIsNamePopoverOpen(false)
-                                setNameInputValue('')
-                              }}
-                              className="w-full text-destructive hover:text-destructive"
-                            >
-                              Remove Name
-                            </Button>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
+                  {nameEditPopover}
                 </div>
               </div>
             </div>
@@ -613,82 +677,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
               </p>
               <div className="flex items-center">
                 <CopyButton value={account} />
-                {isSafeOwner && (
-                  <Popover
-                    open={isNamePopoverOpen}
-                    onOpenChange={setIsNamePopoverOpen}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="w-5 h-6"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="p-3 w-64"
-                      align="start"
-                    >
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block mb-2 font-medium text-sm">Sub-Account Name</label>
-                          <Input
-                            type="text"
-                            placeholder="Enter name..."
-                            value={nameInputValue}
-                            onChange={e => setNameInputValue(e.target.value)}
-                            maxLength={32}
-                            autoFocus
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                handleSaveName()
-                              } else if (e.key === 'Escape') {
-                                setIsNamePopoverOpen(false)
-                              }
-                            }}
-                          />
-                          <p className="mt-1 text-muted-foreground text-xs">
-                            {nameInputValue.length}/32
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={handleSaveName}
-                            className="flex-1"
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setIsNamePopoverOpen(false)}
-                            className="flex-1"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                        {accountName && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              removeAccountName(account)
-                              setIsNamePopoverOpen(false)
-                              setNameInputValue('')
-                            }}
-                            className="w-full text-destructive hover:text-destructive"
-                          >
-                            Remove Name
-                          </Button>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
+                {nameEditPopover}
               </div>
             </div>
           )}
