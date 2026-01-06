@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useManagedAccounts } from '@/hooks/useSafe'
-import { ROLE_NAMES, ROLES } from '@/lib/contracts'
+import { ROLE_NAMES, ALL_ROLES } from '@/lib/contracts'
+import { IS_CLAIM_ONLY_MODE } from '@/lib/config'
 
 /**
  * Example component demonstrating how to fetch and display managed accounts
@@ -71,15 +72,25 @@ export function ManagedAccountsList() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {account.hasExecuteRole && (
-                    <Badge variant="secondary" className="text-xs">
-                      {ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE]}
-                    </Badge>
-                  )}
-                  {account.hasTransferRole && (
-                    <Badge variant="secondary" className="text-xs">
-                      {ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE]}
-                    </Badge>
+                  {IS_CLAIM_ONLY_MODE ? (
+                    account.hasExecuteRole && (
+                      <Badge variant="secondary" className="text-xs">
+                        {ROLE_NAMES[ALL_ROLES.CLAIM_ROLE]}
+                      </Badge>
+                    )
+                  ) : (
+                    <>
+                      {account.hasExecuteRole && (
+                        <Badge variant="secondary" className="text-xs">
+                          {ROLE_NAMES[ALL_ROLES.DEFI_EXECUTE_ROLE]}
+                        </Badge>
+                      )}
+                      {account.hasTransferRole && (
+                        <Badge variant="secondary" className="text-xs">
+                          {ROLE_NAMES[ALL_ROLES.DEFI_TRANSFER_ROLE]}
+                        </Badge>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
