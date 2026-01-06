@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import type { TransactionPreviewData, RoleChange, ChangeAction } from '@/types/transactionPreview'
-import { ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { ALL_ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { IS_CLAIM_ONLY_MODE } from '@/lib/config'
 import { CenterNode } from './nodes/CenterNode'
 import { RoleNode } from './nodes/RoleNode'
 import { SpendingNode } from './nodes/SpendingNode'
@@ -11,21 +12,30 @@ interface PreviewRadialSchemaProps {
   data: TransactionPreviewData
 }
 
-// Default roles for display when not available
-const DEFAULT_ROLES: RoleChange[] = [
-  {
-    roleId: ROLES.DEFI_EXECUTE_ROLE,
-    roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
-    description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
-    action: 'unchanged',
-  },
-  {
-    roleId: ROLES.DEFI_TRANSFER_ROLE,
-    roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
-    description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
-    action: 'unchanged',
-  },
-]
+// Default roles for display when not available - varies based on mode
+const DEFAULT_ROLES: RoleChange[] = IS_CLAIM_ONLY_MODE
+  ? [
+      {
+        roleId: ALL_ROLES.CLAIM_ROLE,
+        roleName: ROLE_NAMES[ALL_ROLES.CLAIM_ROLE],
+        description: ROLE_DESCRIPTIONS[ALL_ROLES.CLAIM_ROLE],
+        action: 'unchanged',
+      },
+    ]
+  : [
+      {
+        roleId: ALL_ROLES.DEFI_EXECUTE_ROLE,
+        roleName: ROLE_NAMES[ALL_ROLES.DEFI_EXECUTE_ROLE],
+        description: ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_EXECUTE_ROLE],
+        action: 'unchanged',
+      },
+      {
+        roleId: ALL_ROLES.DEFI_TRANSFER_ROLE,
+        roleName: ROLE_NAMES[ALL_ROLES.DEFI_TRANSFER_ROLE],
+        description: ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_TRANSFER_ROLE],
+        action: 'unchanged',
+      },
+    ]
 
 // Layout configuration
 const LAYOUT = {
