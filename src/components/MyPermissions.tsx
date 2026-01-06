@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
-import { ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { ALL_ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { IS_CLAIM_ONLY_MODE } from '@/lib/config'
 import { PROTOCOLS, Protocol } from '@/lib/protocols'
 import { SubAccountDashboard } from '@/components/SubAccountDashboard'
 import { SpendingAllowanceCard } from '@/components/SpendingAllowanceCard'
@@ -16,8 +17,10 @@ export function MyPermissions() {
   const { address, isConnected } = useAccount()
   const [showProtocols, setShowProtocols] = useState(false)
 
-  const { data: hasExecuteRole } = useHasRole(address, ROLES.DEFI_EXECUTE_ROLE)
-  const { data: hasTransferRole } = useHasRole(address, ROLES.DEFI_TRANSFER_ROLE)
+  const { data: hasExecuteRole } = useHasRole(address, ALL_ROLES.DEFI_EXECUTE_ROLE)
+  const { data: hasTransferRole } = useHasRole(address, ALL_ROLES.DEFI_TRANSFER_ROLE)
+  // In claim-only mode, hasClaimRole is same as hasExecuteRole (same ID)
+  const hasClaimRole = hasExecuteRole
 
   if (!isConnected) {
     return (
@@ -30,7 +33,7 @@ export function MyPermissions() {
     )
   }
 
-  const hasAnyRole = hasExecuteRole || hasTransferRole
+  const hasAnyRole = IS_CLAIM_ONLY_MODE ? hasClaimRole : hasExecuteRole || hasTransferRole
 
   return (
     <div className="space-y-6">
@@ -48,11 +51,19 @@ export function MyPermissions() {
               </p>
               {hasAnyRole ? (
                 <div className="flex flex-wrap gap-2">
-                  {hasExecuteRole && (
-                    <Badge variant="info">{ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE]}</Badge>
-                  )}
-                  {hasTransferRole && (
-                    <Badge variant="success">{ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE]}</Badge>
+                  {IS_CLAIM_ONLY_MODE ? (
+                    hasClaimRole && (
+                      <Badge variant="info">{ROLE_NAMES[ALL_ROLES.CLAIM_ROLE]}</Badge>
+                    )
+                  ) : (
+                    <>
+                      {hasExecuteRole && (
+                        <Badge variant="info">{ROLE_NAMES[ALL_ROLES.DEFI_EXECUTE_ROLE]}</Badge>
+                      )}
+                      {hasTransferRole && (
+                        <Badge variant="success">{ROLE_NAMES[ALL_ROLES.DEFI_TRANSFER_ROLE]}</Badge>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (
@@ -64,40 +75,62 @@ export function MyPermissions() {
               <div className="space-y-4">
                 <p className="text-caption text-tertiary uppercase tracking-wider">Capabilities</p>
 
-                {hasExecuteRole && (
-                  <div className="bg-info-muted p-4 border border-info/20 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="flex flex-shrink-0 justify-center items-center bg-info/20 rounded-lg w-8 h-8">
-                        <span className="text-info">⚡</span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-primary text-small">
-                          {ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE]}
-                        </p>
-                        <p className="mt-1 text-caption text-tertiary">
-                          {ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE]}
-                        </p>
+                {IS_CLAIM_ONLY_MODE ? (
+                  hasClaimRole && (
+                    <div className="bg-info-muted p-4 border border-info/20 rounded-xl">
+                      <div className="flex items-start gap-3">
+                        <div className="flex flex-shrink-0 justify-center items-center bg-info/20 rounded-lg w-8 h-8">
+                          <span className="text-info">🎁</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-primary text-small">
+                            {ROLE_NAMES[ALL_ROLES.CLAIM_ROLE]}
+                          </p>
+                          <p className="mt-1 text-caption text-tertiary">
+                            {ROLE_DESCRIPTIONS[ALL_ROLES.CLAIM_ROLE]}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                ) : (
+                  <>
+                    {hasExecuteRole && (
+                      <div className="bg-info-muted p-4 border border-info/20 rounded-xl">
+                        <div className="flex items-start gap-3">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-info/20 rounded-lg w-8 h-8">
+                            <span className="text-info">⚡</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-primary text-small">
+                              {ROLE_NAMES[ALL_ROLES.DEFI_EXECUTE_ROLE]}
+                            </p>
+                            <p className="mt-1 text-caption text-tertiary">
+                              {ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_EXECUTE_ROLE]}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                {hasTransferRole && (
-                  <div className="bg-success-muted p-4 border border-success/20 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="flex flex-shrink-0 justify-center items-center bg-success/20 rounded-lg w-8 h-8">
-                        <span className="text-success">💸</span>
+                    {hasTransferRole && (
+                      <div className="bg-success-muted p-4 border border-success/20 rounded-xl">
+                        <div className="flex items-start gap-3">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-success/20 rounded-lg w-8 h-8">
+                            <span className="text-success">💸</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-primary text-small">
+                              {ROLE_NAMES[ALL_ROLES.DEFI_TRANSFER_ROLE]}
+                            </p>
+                            <p className="mt-1 text-caption text-tertiary">
+                              {ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_TRANSFER_ROLE]}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-primary text-small">
-                          {ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE]}
-                        </p>
-                        <p className="mt-1 text-caption text-tertiary">
-                          {ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE]}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                    )}
+                  </>
                 )}
 
                 <div className="pt-2">
@@ -146,9 +179,10 @@ export function MyPermissions() {
         </CardContent>
       </Card>
 
-      {hasAnyRole && <SubAccountDashboard />}
+      {!IS_CLAIM_ONLY_MODE && hasAnyRole && <SubAccountDashboard />}
 
-      {hasExecuteRole && address && (
+      {/* Spending cards only in full mode */}
+      {!IS_CLAIM_ONLY_MODE && hasExecuteRole && address && (
         <>
           <SpendingAllowanceCard address={address} />
           <AcquiredBalancesCard address={address} />

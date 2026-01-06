@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
-import { ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { ALL_ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { IS_CLAIM_ONLY_MODE } from '@/lib/config'
 import { PROTOCOLS, type Protocol } from '@/lib/protocols'
 import { useHasRole, useIsAddressAllowed, useAllowedAddresses } from '@/hooks/useSafe'
 
@@ -16,8 +17,10 @@ export function MyPermissionsCard() {
   const { address, isConnected } = useAccount()
   const [showProtocols, setShowProtocols] = useState(false)
 
-  const { data: hasExecuteRole } = useHasRole(address, ROLES.DEFI_EXECUTE_ROLE)
-  const { data: hasTransferRole } = useHasRole(address, ROLES.DEFI_TRANSFER_ROLE)
+  const { data: hasExecuteRole } = useHasRole(address, ALL_ROLES.DEFI_EXECUTE_ROLE)
+  const { data: hasTransferRole } = useHasRole(address, ALL_ROLES.DEFI_TRANSFER_ROLE)
+  // In claim-only mode, hasClaimRole is same as hasExecuteRole (same ID)
+  const hasClaimRole = hasExecuteRole
   const { data: allowedAddresses } = useAllowedAddresses(address, ALL_PROTOCOL_ADDRESSES)
 
   const hasAnyAllowedProtocol = allowedAddresses && allowedAddresses.size > 0
@@ -35,7 +38,7 @@ export function MyPermissionsCard() {
     )
   }
 
-  const hasAnyRole = hasExecuteRole || hasTransferRole
+  const hasAnyRole = IS_CLAIM_ONLY_MODE ? hasClaimRole : hasExecuteRole || hasTransferRole
 
   return (
     <Card className="h-full">
@@ -47,9 +50,17 @@ export function MyPermissionsCard() {
         <div>
           <p className="mb-2 text-caption text-tertiary uppercase tracking-wider">Active Roles</p>
           <div className="flex flex-wrap gap-2">
-            {hasExecuteRole && <Badge variant="info">{ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE]}</Badge>}
-            {hasTransferRole && (
-              <Badge variant="success">{ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE]}</Badge>
+            {IS_CLAIM_ONLY_MODE ? (
+              hasClaimRole && <Badge variant="info">{ROLE_NAMES[ALL_ROLES.CLAIM_ROLE]}</Badge>
+            ) : (
+              <>
+                {hasExecuteRole && (
+                  <Badge variant="info">{ROLE_NAMES[ALL_ROLES.DEFI_EXECUTE_ROLE]}</Badge>
+                )}
+                {hasTransferRole && (
+                  <Badge variant="success">{ROLE_NAMES[ALL_ROLES.DEFI_TRANSFER_ROLE]}</Badge>
+                )}
+              </>
             )}
             {!hasAnyRole && <Badge variant="outline">No Roles</Badge>}
           </div>
@@ -60,18 +71,33 @@ export function MyPermissionsCard() {
           <div className="space-y-3">
             <p className="text-caption text-tertiary uppercase tracking-wider">Capabilities</p>
 
-            {hasExecuteRole && (
-              <div className="flex items-center gap-2 text-small">
-                <span className="text-info">⚡</span>
-                <span className="text-primary">{ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE]}</span>
-              </div>
-            )}
+            {IS_CLAIM_ONLY_MODE ? (
+              hasClaimRole && (
+                <div className="flex items-center gap-2 text-small">
+                  <span className="text-info">🎁</span>
+                  <span className="text-primary">{ROLE_DESCRIPTIONS[ALL_ROLES.CLAIM_ROLE]}</span>
+                </div>
+              )
+            ) : (
+              <>
+                {hasExecuteRole && (
+                  <div className="flex items-center gap-2 text-small">
+                    <span className="text-info">⚡</span>
+                    <span className="text-primary">
+                      {ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_EXECUTE_ROLE]}
+                    </span>
+                  </div>
+                )}
 
-            {hasTransferRole && (
-              <div className="flex items-center gap-2 text-small">
-                <span className="text-success">💸</span>
-                <span className="text-primary">{ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE]}</span>
-              </div>
+                {hasTransferRole && (
+                  <div className="flex items-center gap-2 text-small">
+                    <span className="text-success">💸</span>
+                    <span className="text-primary">
+                      {ROLE_DESCRIPTIONS[ALL_ROLES.DEFI_TRANSFER_ROLE]}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
             {hasAnyAllowedProtocol ? (
