@@ -1,11 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { isAddress } from 'viem'
+import { isAddress, type Address } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/router/routes'
+import { AGENT_VAULT_FACTORY_ABI } from '@/lib/contracts'
+
+// Preset IDs match PresetRegistry on-chain (1-indexed)
+const PRESET_IDS: Record<string, number> = {
+  'defi-trader': 1,
+  'yield-farmer': 2,
+  'payment-agent': 3,
+}
 
 // Preset definitions
 const PRESETS = [
@@ -55,10 +63,115 @@ export function WizardPage() {
   const [step, setStep] = useState<Step>('preset')
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [agentAddress, setAgentAddress] = useState('')
+  const [oracleAddress, setOracleAddress] = useState('')
   const [spendingBps, setSpendingBps] = useState(500)
   const [safeAddress, setSafeAddress] = useState('')
+  const [factoryAddress, setFactoryAddress] = useState(
+    import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS || ''
+  )
+  const [deployedModule, setDeployedModule] = useState<string | null>(null)
+  const [deployError, setDeployError] = useState<string | null>(null)
+
+  const { writeContract, data: txHash, isPending: isWriting } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: {
+      enabled: Boolean(txHash),
+    },
+  })
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
+  const isDeploying = isWriting || isConfirming
+
+  async function handleDeploy() {
+    if (
+      !preset ||
+      !isAddress(safeAddress) ||
+      !isAddress(agentAddress) ||
+      !isAddress(factoryAddress)
+    )
+      return
+
+    setDeployError(null)
+    setDeployedModule(null)
+
+    const presetId = PRESET_IDS[preset.id]
+
+    try {
+      if (presetId) {
+        // Deploy from preset (standard presets)
+        writeContract(
+          {
+            address: factoryAddress as Address,
+            abi: AGENT_VAULT_FACTORY_ABI,
+            functionName: 'deployVaultFromPreset',
+            args: [
+              safeAddress as Address,
+              (oracleAddress || safeAddress) as Address, // Fallback to Safe as placeholder
+              agentAddress as Address,
+              BigInt(presetId),
+              [], // priceFeedTokens — configure after deployment
+              [], // priceFeedAddresses
+            ],
+          },
+          {
+            onSuccess(hash) {
+              // Module address will be extracted from receipt event logs
+              // For now, show the tx hash and navigate after confirmation
+              console.log('Vault deployment tx:', hash)
+            },
+            onError(error) {
+              setDeployError(error.message)
+            },
+          }
+        )
+      } else {
+        // Custom preset — deploy with full config
+        writeContract(
+          {
+            address: factoryAddress as Address,
+            abi: AGENT_VAULT_FACTORY_ABI,
+            functionName: 'deployVault',
+            args: [
+              {
+                safe: safeAddress as Address,
+                oracle: (oracleAddress || safeAddress) as Address,
+                agentAddress: agentAddress as Address,
+                roleId: 1, // EXECUTE by default for custom
+                maxSpendingBps: BigInt(spendingBps),
+                maxSpendingUSD: 0n,
+                windowDuration: 86400n, // 24h
+                allowedProtocols: [],
+                parserProtocols: [],
+                parserAddresses: [],
+                selectors: [],
+                selectorTypes: [],
+                priceFeedTokens: [],
+                priceFeedAddresses: [],
+              },
+            ],
+          },
+          {
+            onSuccess(hash) {
+              console.log('Custom vault deployment tx:', hash)
+            },
+            onError(error) {
+              setDeployError(error.message)
+            },
+          }
+        )
+      }
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : 'Deployment failed')
+    }
+  }
+
+  // When tx is confirmed, extract module address and navigate
+  if (isSuccess && txHash && !deployedModule) {
+    // Try to parse AgentVaultCreated event from receipt
+    // This is a simplified approach — in production you'd use useWaitForTransactionReceipt's data
+    setDeployedModule('pending') // Placeholder until we can parse
+  }
 
   if (!isConnected) {
     return (
@@ -165,6 +278,24 @@ export function WizardPage() {
 
           <div className="space-y-6">
             <div>
+              <label className="block text-sm font-medium text-primary mb-2">
+                AgentVaultFactory Address
+              </label>
+              <Input
+                value={factoryAddress}
+                onChange={e => setFactoryAddress(e.target.value)}
+                placeholder="0x... (deployed AgentVaultFactory contract)"
+                className="bg-elevated-1 border-subtle"
+              />
+              {factoryAddress && !isAddress(factoryAddress) && (
+                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+              )}
+              <p className="text-xs text-tertiary mt-1">
+                Set via VITE_AGENT_VAULT_FACTORY_ADDRESS env var or enter manually.
+              </p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-primary mb-2">Safe Address</label>
               <Input
                 value={safeAddress}
@@ -190,6 +321,22 @@ export function WizardPage() {
               {agentAddress && !isAddress(agentAddress) && (
                 <p className="text-red-400 text-xs mt-1">Invalid address</p>
               )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-primary mb-2">Oracle Address</label>
+              <Input
+                value={oracleAddress}
+                onChange={e => setOracleAddress(e.target.value)}
+                placeholder="0x... (oracle wallet that updates spending state)"
+                className="bg-elevated-1 border-subtle"
+              />
+              {oracleAddress && !isAddress(oracleAddress) && (
+                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+              )}
+              <p className="text-xs text-tertiary mt-1">
+                The oracle monitors spending and updates allowances. See oracle/ for setup.
+              </p>
             </div>
 
             <div>
@@ -222,7 +369,9 @@ export function WizardPage() {
             </Button>
             <Button
               onClick={() => setStep('review')}
-              disabled={!isAddress(agentAddress) || !isAddress(safeAddress)}
+              disabled={
+                !isAddress(agentAddress) || !isAddress(safeAddress) || !isAddress(factoryAddress)
+              }
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
               Next: Review
@@ -246,6 +395,12 @@ export function WizardPage() {
               <span className="text-primary font-medium">{preset.name}</span>
             </div>
             <div className="flex justify-between">
+              <span className="text-secondary">Factory</span>
+              <span className="text-primary font-mono text-sm">
+                {factoryAddress.slice(0, 6)}...{factoryAddress.slice(-4)}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-secondary">Safe</span>
               <span className="text-primary font-mono text-sm">
                 {safeAddress.slice(0, 6)}...{safeAddress.slice(-4)}
@@ -257,6 +412,14 @@ export function WizardPage() {
                 {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
               </span>
             </div>
+            {oracleAddress && (
+              <div className="flex justify-between">
+                <span className="text-secondary">Oracle</span>
+                <span className="text-primary font-mono text-sm">
+                  {oracleAddress.slice(0, 6)}...{oracleAddress.slice(-4)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-secondary">Role</span>
               <span className="text-primary">{preset.roleLabel}</span>
@@ -278,24 +441,47 @@ export function WizardPage() {
             </p>
           </div>
 
+          {deployError && (
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-sm text-red-400">{deployError}</p>
+            </div>
+          )}
+
+          {isSuccess && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <p className="text-sm text-green-400">
+                Vault deployed successfully! Tx: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-2"
+                onClick={() => navigate(ROUTES.AGENTS)}
+              >
+                Go to Dashboard
+              </Button>
+            </div>
+          )}
+
           <div className="flex justify-between mt-8">
             <Button
               variant="outline"
               onClick={() => setStep('configure')}
+              disabled={isDeploying}
             >
               Back
             </Button>
             <Button
-              onClick={() => {
-                // TODO: Call AgentVaultFactory.deployVault() via wagmi
-                alert(
-                  'Deployment will be connected after Base deployment. Module address will appear here.'
-                )
-                navigate(ROUTES.AGENTS)
-              }}
-              className="bg-accent-primary text-black hover:bg-accent-primary/90"
+              onClick={handleDeploy}
+              disabled={isDeploying || isSuccess}
+              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
-              Deploy Vault
+              {isWriting
+                ? 'Confirm in Wallet...'
+                : isConfirming
+                  ? 'Deploying...'
+                  : isSuccess
+                    ? 'Deployed!'
+                    : 'Deploy Vault'}
             </Button>
           </div>
         </div>
