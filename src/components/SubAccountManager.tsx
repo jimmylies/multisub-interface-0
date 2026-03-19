@@ -157,7 +157,7 @@ export function SubAccountManager() {
               addresses.defiInteractor,
               DEFI_INTERACTOR_ABI as unknown as any[],
               'setSubAccountLimits',
-              [newSubAccount as `0x${string}`, BigInt(spendingBps), BigInt(windowSeconds)]
+              [newSubAccount as `0x${string}`, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
             ),
           })
         }
@@ -583,13 +583,23 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   }
 
   const nameEditPopover = isSafeOwner && (
-    <Popover open={isNamePopoverOpen} onOpenChange={setIsNamePopoverOpen}>
+    <Popover
+      open={isNamePopoverOpen}
+      onOpenChange={setIsNamePopoverOpen}
+    >
       <PopoverTrigger asChild>
-        <Button size="icon" variant="ghost" className="w-5 h-6">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="w-5 h-6"
+        >
           <Pencil className="w-3 h-3" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-3 w-64" align="start">
+      <PopoverContent
+        className="p-3 w-64"
+        align="start"
+      >
         <div className="space-y-3">
           <div>
             <label className="block mb-2 font-medium text-sm">Sub-Account Name</label>

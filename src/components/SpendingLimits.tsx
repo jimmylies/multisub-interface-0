@@ -145,7 +145,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
           addresses.defiInteractor,
           DEFI_INTERACTOR_ABI as any[],
           'setSubAccountLimits',
-          [subAccountAddress, BigInt(spendingBps), BigInt(windowSeconds)]
+          [subAccountAddress, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
         )
 
         const result = await proposeTransaction(
