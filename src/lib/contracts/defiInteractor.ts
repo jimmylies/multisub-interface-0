@@ -110,13 +110,7 @@ export const DEFI_INTERACTOR_ABI = [
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
     stateMutability: 'view',
   },
-  {
-    type: 'function',
-    name: 'isValueStale',
-    inputs: [{ name: 'maxAge', type: 'uint256', internalType: 'uint256' }],
-    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-    stateMutability: 'view',
-  },
+  // isValueStale is computed client-side from getSafeValue().lastUpdated
   {
     type: 'function',
     name: 'avatar',
@@ -144,6 +138,7 @@ export const DEFI_INTERACTOR_ABI = [
     inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
     outputs: [
       { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'maxSpendingUSD', type: 'uint256', internalType: 'uint256' },
       { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
       { name: 'isConfigured', type: 'bool', internalType: 'bool' },
     ],
@@ -155,6 +150,7 @@ export const DEFI_INTERACTOR_ABI = [
     inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
     outputs: [
       { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'maxSpendingUSD', type: 'uint256', internalType: 'uint256' },
       { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
     ],
     stateMutability: 'view',
@@ -273,6 +269,7 @@ export const DEFI_INTERACTOR_ABI = [
     inputs: [
       { name: 'subAccount', type: 'address', internalType: 'address' },
       { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+      { name: 'maxSpendingUSD', type: 'uint256', internalType: 'uint256' },
       { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
     ],
     outputs: [],
@@ -444,6 +441,7 @@ export const DEFI_INTERACTOR_ABI = [
     inputs: [
       { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
       { name: 'maxSpendingBps', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'maxSpendingUSD', type: 'uint256', indexed: false, internalType: 'uint256' },
       { name: 'windowDuration', type: 'uint256', indexed: false, internalType: 'uint256' },
     ],
     anonymous: false,

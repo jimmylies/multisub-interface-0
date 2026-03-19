@@ -12,3 +12,5 @@ export { SAFE_ABI } from './safe'
 export { AAVE_V3_POOL_ABI } from './aave'
 
 export { ERC20_ABI } from './erc20'
+
+export { AGENT_VAULT_FACTORY_ABI } from './agentVaultFactory'
