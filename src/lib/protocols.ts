@@ -15,7 +15,7 @@ export interface Protocol {
   contracts: ProtocolContract[]
 }
 
-// Uniswap Protocol Configuration (Sepolia)
+// Uniswap Protocol Configuration (Base)
 export const UNISWAP_PROTOCOL: Protocol = {
   id: 'uniswap',
   name: 'Uniswap',
@@ -24,32 +24,31 @@ export const UNISWAP_PROTOCOL: Protocol = {
     {
       id: 'uniswap-swap-router-v3',
       name: 'SwapRouter02 (V3)',
-      address: '0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E',
+      address: '0x2626664c2603336E57B271c5C0b26F421741e481',
       description: 'Uniswap V3 swap router for token swaps',
     },
     {
       id: 'uniswap-position-manager-v3',
       name: 'NonfungiblePositionManager (V3)',
-      address: '0x1238536071E1c677A632429e3655c799b22cDA52',
+      address: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1',
       description: 'Manage Uniswap V3 liquidity positions',
     },
     {
       id: 'uniswap-universal-router',
       name: 'Universal Router',
-      address: '0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD',
-      additionalAddresses: ['0x3A9D48AB9751398BbFa63ad67599Bb04e4BdF98b'],
+      address: '0x6fF5693b99212Da76ad316178A184AB56D299b43',
       description: 'Universal router for swaps and liquidity',
     },
     {
       id: 'uniswap-position-manager-v4',
       name: 'PositionManager (V4)',
-      address: '0x429ba70129df741b2ca2a85bc3a2a3328e5c09b4',
+      address: '0x7C5f5A4bBd8fD63184577525326123B519429bDc',
       description: 'Manage Uniswap V4 liquidity positions',
     },
   ],
 }
 
-// Aave Protocol Configuration (Sepolia)
+// Aave Protocol Configuration (Base)
 export const AAVE_PROTOCOL: Protocol = {
   id: 'aave',
   name: 'Aave V3',
@@ -58,19 +57,19 @@ export const AAVE_PROTOCOL: Protocol = {
     {
       id: 'aave-pool',
       name: 'Pool',
-      address: '0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951',
+      address: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5',
       description: 'Main Aave V3 lending pool',
     },
     {
       id: 'aave-rewards-controller',
       name: 'RewardsController',
-      address: '0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb',
+      address: '0xf9cc4F0D883F1a1eb2c253bdb46c254Ca51E1F44',
       description: 'Claim Aave protocol rewards',
     },
   ],
 }
 
-// Merkl Protocol Configuration (Sepolia)
+// Merkl Protocol Configuration (Base)
 export const MERKL_PROTOCOL: Protocol = {
   id: 'merkl',
   name: 'Merkl',
