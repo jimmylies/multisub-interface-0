@@ -2,17 +2,17 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { isAddress, type Address } from 'viem'
+import { isAddress, decodeEventLog, type Address } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/router/routes'
 import { AGENT_VAULT_FACTORY_ABI } from '@/lib/contracts'
 
-// Preset IDs match PresetRegistry on-chain (1-indexed)
+// Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
 const PRESET_IDS: Record<string, number> = {
-  'defi-trader': 1,
-  'yield-farmer': 2,
-  'payment-agent': 3,
+  'defi-trader': 0,
+  'yield-farmer': 1,
+  'payment-agent': 2,
 }
 
 // Preset definitions
@@ -69,11 +69,16 @@ export function WizardPage() {
   const [factoryAddress, setFactoryAddress] = useState(
     import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS || ''
   )
+  const [priceFeedEntries, setPriceFeedEntries] = useState<{ token: string; feed: string }[]>([])
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
 
   const { writeContract, data: txHash, isPending: isWriting } = useWriteContract()
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess,
+  } = useWaitForTransactionReceipt({
     hash: txHash,
     query: {
       enabled: Boolean(txHash),
@@ -88,17 +93,26 @@ export function WizardPage() {
       !preset ||
       !isAddress(safeAddress) ||
       !isAddress(agentAddress) ||
-      !isAddress(factoryAddress)
+      !isAddress(factoryAddress) ||
+      !isAddress(oracleAddress)
     )
       return
+
+    if (oracleAddress.toLowerCase() === safeAddress.toLowerCase()) {
+      setDeployError('Oracle address cannot be the same as the Safe address (rejected by contract)')
+      return
+    }
 
     setDeployError(null)
     setDeployedModule(null)
 
     const presetId = PRESET_IDS[preset.id]
+    const validFeeds = priceFeedEntries.filter(e => isAddress(e.token) && isAddress(e.feed))
+    const feedTokens = validFeeds.map(e => e.token as Address)
+    const feedAddresses = validFeeds.map(e => e.feed as Address)
 
     try {
-      if (presetId) {
+      if (presetId !== undefined) {
         // Deploy from preset (standard presets)
         writeContract(
           {
@@ -107,11 +121,11 @@ export function WizardPage() {
             functionName: 'deployVaultFromPreset',
             args: [
               safeAddress as Address,
-              (oracleAddress || safeAddress) as Address, // Fallback to Safe as placeholder
+              oracleAddress as Address,
               agentAddress as Address,
               BigInt(presetId),
-              [], // priceFeedTokens — configure after deployment
-              [], // priceFeedAddresses
+              feedTokens,
+              feedAddresses,
             ],
           },
           {
@@ -135,7 +149,7 @@ export function WizardPage() {
             args: [
               {
                 safe: safeAddress as Address,
-                oracle: (oracleAddress || safeAddress) as Address,
+                oracle: oracleAddress as Address,
                 agentAddress: agentAddress as Address,
                 roleId: 1, // EXECUTE by default for custom
                 maxSpendingBps: BigInt(spendingBps),
@@ -146,8 +160,8 @@ export function WizardPage() {
                 parserAddresses: [],
                 selectors: [],
                 selectorTypes: [],
-                priceFeedTokens: [],
-                priceFeedAddresses: [],
+                priceFeedTokens: feedTokens,
+                priceFeedAddresses: feedAddresses,
               },
             ],
           },
@@ -166,11 +180,25 @@ export function WizardPage() {
     }
   }
 
-  // When tx is confirmed, extract module address and navigate
-  if (isSuccess && txHash && !deployedModule) {
-    // Try to parse AgentVaultCreated event from receipt
-    // This is a simplified approach — in production you'd use useWaitForTransactionReceipt's data
-    setDeployedModule('pending') // Placeholder until we can parse
+  // When tx is confirmed, extract module address from AgentVaultCreated event
+  if (isSuccess && receipt && !deployedModule) {
+    let moduleAddress: string | null = null
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({
+          abi: AGENT_VAULT_FACTORY_ABI,
+          data: log.data,
+          topics: log.topics,
+        })
+        if (decoded.eventName === 'AgentVaultCreated') {
+          moduleAddress = (decoded.args as { module: Address }).module
+          break
+        }
+      } catch {
+        // Not an AgentVaultCreated event, skip
+      }
+    }
+    setDeployedModule(moduleAddress ?? 'unknown')
   }
 
   if (!isConnected) {
@@ -324,7 +352,9 @@ export function WizardPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-primary mb-2">Oracle Address</label>
+              <label className="block text-sm font-medium text-primary mb-2">
+                Oracle Address <span className="text-red-400">*</span>
+              </label>
               <Input
                 value={oracleAddress}
                 onChange={e => setOracleAddress(e.target.value)}
@@ -334,8 +364,18 @@ export function WizardPage() {
               {oracleAddress && !isAddress(oracleAddress) && (
                 <p className="text-red-400 text-xs mt-1">Invalid address</p>
               )}
+              {oracleAddress &&
+                isAddress(oracleAddress) &&
+                safeAddress &&
+                isAddress(safeAddress) &&
+                oracleAddress.toLowerCase() === safeAddress.toLowerCase() && (
+                  <p className="text-red-400 text-xs mt-1">
+                    Oracle cannot be the same as the Safe address
+                  </p>
+                )}
               <p className="text-xs text-tertiary mt-1">
-                The oracle monitors spending and updates allowances. See oracle/ for setup.
+                Required. The oracle monitors spending and updates allowances. See oracle/ for
+                setup.
               </p>
             </div>
 
@@ -358,6 +398,67 @@ export function WizardPage() {
                 Max: 2000 bps (20%). Hard cap enforced on-chain.
               </p>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-primary mb-2">
+                Price Feeds (Chainlink)
+              </label>
+              <p className="text-xs text-tertiary mb-3">
+                Map each token to its Chainlink price feed on Base. Without price feeds, the module
+                cannot estimate USD values and spending checks will revert.
+              </p>
+              {priceFeedEntries.map((entry, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 mb-2"
+                >
+                  <Input
+                    value={entry.token}
+                    onChange={e => {
+                      const updated = [...priceFeedEntries]
+                      updated[i] = { ...entry, token: e.target.value }
+                      setPriceFeedEntries(updated)
+                    }}
+                    placeholder="Token address (0x...)"
+                    className="bg-elevated-1 border-subtle flex-1"
+                  />
+                  <Input
+                    value={entry.feed}
+                    onChange={e => {
+                      const updated = [...priceFeedEntries]
+                      updated[i] = { ...entry, feed: e.target.value }
+                      setPriceFeedEntries(updated)
+                    }}
+                    placeholder="Chainlink feed address (0x...)"
+                    className="bg-elevated-1 border-subtle flex-1"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPriceFeedEntries(priceFeedEntries.filter((_, j) => j !== i))}
+                    className="shrink-0"
+                  >
+                    X
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPriceFeedEntries([...priceFeedEntries, { token: '', feed: '' }])}
+              >
+                + Add Price Feed
+              </Button>
+              {priceFeedEntries.length === 0 && (
+                <div className="mt-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-xs text-yellow-400">
+                    No price feeds configured. The module will revert on any operation that requires
+                    USD value estimation. You can add price feeds after deployment via
+                    setTokenPriceFeeds().
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-between mt-8">
@@ -370,7 +471,13 @@ export function WizardPage() {
             <Button
               onClick={() => setStep('review')}
               disabled={
-                !isAddress(agentAddress) || !isAddress(safeAddress) || !isAddress(factoryAddress)
+                !isAddress(agentAddress) ||
+                !isAddress(safeAddress) ||
+                !isAddress(factoryAddress) ||
+                !isAddress(oracleAddress) ||
+                (isAddress(oracleAddress) &&
+                  isAddress(safeAddress) &&
+                  oracleAddress.toLowerCase() === safeAddress.toLowerCase())
               }
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
@@ -412,14 +519,12 @@ export function WizardPage() {
                 {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
               </span>
             </div>
-            {oracleAddress && (
-              <div className="flex justify-between">
-                <span className="text-secondary">Oracle</span>
-                <span className="text-primary font-mono text-sm">
-                  {oracleAddress.slice(0, 6)}...{oracleAddress.slice(-4)}
-                </span>
-              </div>
-            )}
+            <div className="flex justify-between">
+              <span className="text-secondary">Oracle</span>
+              <span className="text-primary font-mono text-sm">
+                {oracleAddress.slice(0, 6)}...{oracleAddress.slice(-4)}
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="text-secondary">Role</span>
               <span className="text-primary">{preset.roleLabel}</span>
@@ -441,6 +546,20 @@ export function WizardPage() {
             </p>
           </div>
 
+          {selectedPreset === 'custom' && (
+            <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <p className="text-sm font-medium text-yellow-400">
+                Custom preset: additional setup required
+              </p>
+              <p className="text-xs text-yellow-400/80 mt-1">
+                The custom preset deploys with no allowed protocols, parsers, or selectors. After
+                deployment, you must configure these via the module owner functions
+                (addAllowedProtocol, addParser, addSelector) before the agent can execute any
+                transactions.
+              </p>
+            </div>
+          )}
+
           {deployError && (
             <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-sm text-red-400">{deployError}</p>
@@ -452,6 +571,11 @@ export function WizardPage() {
               <p className="text-sm text-green-400">
                 Vault deployed successfully! Tx: {txHash.slice(0, 10)}...{txHash.slice(-8)}
               </p>
+              {deployedModule && deployedModule !== 'unknown' && (
+                <p className="text-sm text-green-400 mt-1">
+                  Module address: <span className="font-mono">{deployedModule}</span>
+                </p>
+              )}
               <Button
                 variant="outline"
                 className="mt-2"
