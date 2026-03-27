@@ -1,13 +1,28 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { isAddress, decodeEventLog, parseUnits, type Address } from 'viem'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CopyButton } from '@/components/ui/copy-button'
 import { ROUTES } from '@/router/routes'
 import { AGENT_VAULT_FACTORY_ABI } from '@/lib/contracts'
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
+
+function getExplorerBase(chainId: number): string {
+  const explorers: Record<number, string> = {
+    1: 'https://etherscan.io',
+    11155111: 'https://sepolia.etherscan.io',
+    137: 'https://polygonscan.com',
+    42161: 'https://arbiscan.io',
+    10: 'https://optimistic.etherscan.io',
+    8453: 'https://basescan.org',
+    84532: 'https://sepolia.basescan.org',
+  }
+  return explorers[chainId] || 'https://etherscan.io'
+}
 
 // Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
 const PRESET_IDS: Record<string, number> = {
@@ -71,6 +86,7 @@ const PRICE_FEED_ADDRESSES = (import.meta.env.VITE_PRICE_FEED_ADDRESSES || '')
 export function WizardPage() {
   const navigate = useNavigate()
   const { isConnected } = useAccount()
+  const chainId = useChainId()
   const [step, setStep] = useState<Step>('preset')
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [agentAddress, setAgentAddress] = useState('')
@@ -85,12 +101,20 @@ export function WizardPage() {
     data: receipt,
     isLoading: isConfirming,
     isSuccess,
+    isError: isReceiptError,
+    error: receiptError,
   } = useWaitForTransactionReceipt({
     hash: txHash,
     query: {
       enabled: Boolean(txHash),
     },
   })
+
+  const txReverted = isSuccess && receipt?.status === 'reverted'
+  const txFailed = isReceiptError || txReverted
+  const txFailMessage = txReverted
+    ? 'Transaction reverted on-chain.'
+    : receiptError?.message ?? null
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
   const isDeploying = isWriting || isConfirming
@@ -472,17 +496,41 @@ export function WizardPage() {
               <span className="text-secondary">Preset</span>
               <span className="text-primary font-medium">{preset.name}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-secondary">Safe</span>
-              <span className="text-primary font-mono text-sm">
-                {safeAddress.slice(0, 6)}...{safeAddress.slice(-4)}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-primary font-mono text-sm">
+                  {safeAddress.slice(0, 6)}...{safeAddress.slice(-4)}
+                </span>
+                <CopyButton value={safeAddress} />
+                <a
+                  href={`${getExplorerBase(chainId)}/address/${safeAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-secondary">Agent Signer</span>
-              <span className="text-primary font-mono text-sm">
-                {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-primary font-mono text-sm">
+                  {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
+                </span>
+                <CopyButton value={agentAddress} />
+                <a
+                  href={`${getExplorerBase(chainId)}/address/${agentAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
             <div className="flex justify-between">
               <span className="text-secondary">Role</span>
@@ -533,23 +581,108 @@ export function WizardPage() {
             </div>
           )}
 
-          {isSuccess && txHash && (
-            <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-              <p className="text-sm text-green-400">
-                Vault deployed successfully! Tx: {txHash.slice(0, 10)}...{txHash.slice(-8)}
-              </p>
-              {deployedModule && deployedModule !== 'unknown' && (
-                <p className="text-sm text-green-400 mt-1">
-                  Module address: <span className="font-mono">{deployedModule}</span>
-                </p>
+          {isWriting && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+              <p className="text-sm text-blue-400">Waiting for wallet confirmation...</p>
+            </div>
+          )}
+
+          {isConfirming && !txFailed && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="flex items-center gap-3 mb-2">
+                <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                <p className="text-sm text-blue-400 font-medium">Transaction submitted — waiting for confirmation...</p>
+              </div>
+              <div className="flex items-center gap-1.5 ml-7">
+                <span className="text-xs text-blue-400/70 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                <CopyButton value={txHash} />
+                <a
+                  href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-blue-400/70 hover:text-blue-400 transition-colors"
+                  title="View transaction"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {txFailed && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
+              <p className="text-sm font-medium text-red-400">Transaction failed</p>
+              {txFailMessage && (
+                <p className="text-xs text-red-400/80 break-words">{txFailMessage}</p>
               )}
-              <Button
-                variant="outline"
-                className="mt-2"
-                onClick={() => navigate(ROUTES.AGENTS)}
-              >
-                Go to Dashboard
-              </Button>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-red-400/70 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                <CopyButton value={txHash} />
+                <a
+                  href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 transition-colors"
+                  title="View transaction"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {isSuccess && !txReverted && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
+              <p className="text-sm font-medium text-green-400">Vault deployed successfully!</p>
+
+              <div>
+                <p className="text-xs text-green-400/70 mb-1">Transaction</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-green-400 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                  <CopyButton value={txHash} />
+                  <a
+                    href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                    title="View transaction"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {deployedModule && deployedModule !== 'unknown' && (
+                <div>
+                  <p className="text-xs text-green-400/70 mb-1">Module address</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-green-400 font-mono">{deployedModule}</span>
+                    <CopyButton value={deployedModule} />
+                    <a
+                      href={`${getExplorerBase(chainId)}/address/${deployedModule}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                      title="View on explorer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <p className="text-xs text-green-400/70 mb-2">
+                  Next: enable this module in your Safe to activate the agent.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(ROUTES.AGENTS)}
+                >
+                  Go to Dashboard
+                </Button>
+              </div>
             </div>
           )}
 
@@ -563,16 +696,18 @@ export function WizardPage() {
             </Button>
             <Button
               onClick={handleDeploy}
-              disabled={isDeploying || isSuccess}
+              disabled={isDeploying || (isSuccess && !txReverted)}
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
               {isWriting
                 ? 'Confirm in Wallet...'
-                : isConfirming
+                : isConfirming && !txFailed
                   ? 'Deploying...'
-                  : isSuccess
+                  : isSuccess && !txReverted
                     ? 'Deployed!'
-                    : 'Deploy Vault'}
+                    : txFailed
+                      ? 'Retry Deploy'
+                      : 'Deploy Vault'}
             </Button>
           </div>
         </div>

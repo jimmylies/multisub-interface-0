@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -8,9 +9,9 @@ const CHALLENGE_API_URL = import.meta.env.VITE_CHALLENGE_API_URL || 'http://loca
 const VAULT_CONFIG = {
   safeAddress: import.meta.env.VITE_CHALLENGE_SAFE || '0x...',
   moduleAddress: import.meta.env.VITE_CHALLENGE_MODULE || '0x...',
-  spendingLimit: '500 USDC/day',
+  spendingLimit: 500,
   protocols: ['Aave V3', 'Morpho'],
-  totalFunds: '$2,000 USDC',
+  totalFunds: 2000,
 }
 
 interface ChatMessage {
@@ -20,7 +21,7 @@ interface ChatMessage {
 }
 
 interface VaultStats {
-  balance: string
+  balance: number
   totalAttempts: number
   lastUpdated: string
 }
@@ -36,12 +37,15 @@ export function ChallengePage() {
     {
       role: 'system',
       content:
-        'Welcome to Break the Vault! Send instructions to the AI agent managing a $2,000 USDC vault. The agent can deposit into Aave and Morpho, but all actions are constrained by on-chain guardrails. Can you trick it into draining the funds?',
+        'Welcome to Break the Vault! Send instructions to the AI agent managing a ' +
+        VAULT_CONFIG.totalFunds +
+        ' USDC vault. The agent can deposit into Aave and Morpho, but all actions are constrained by on-chain guardrails. Can you trick it into draining the funds?',
       timestamp: new Date(),
     },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
   const [stats, setStats] = useState<VaultStats>({
     balance: VAULT_CONFIG.totalFunds,
     totalAttempts: 0,
@@ -126,6 +130,33 @@ export function ChallengePage() {
     }
   }
 
+  const resetChat = async () => {
+    if (isResetting || isLoading) return
+    setIsResetting(true)
+    try {
+      await fetch(`${CHALLENGE_API_URL}/api/chat/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: 'default' }),
+      })
+    } catch {
+      // Silently ignore — still clear local state
+    } finally {
+      setIsResetting(false)
+    }
+    setMessages([
+      {
+        role: 'system',
+        content:
+          'Conversation reset. Send instructions to the AI agent managing a ' +
+          VAULT_CONFIG.totalFunds +
+          ' USDC vault.',
+        timestamp: new Date(),
+      },
+    ])
+    setInput('')
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
@@ -140,6 +171,19 @@ export function ChallengePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Chat panel */}
         <div className="lg:col-span-2 flex flex-col bg-elevated rounded-xl border border-subtle overflow-hidden">
+          {/* Chat header */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle">
+            <span className="text-xs text-secondary font-medium">Agent Chat</span>
+            <button
+              onClick={resetChat}
+              disabled={isResetting || isLoading}
+              className="inline-flex items-center gap-1.5 text-xs text-tertiary hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Clear conversation"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {isResetting ? 'Clearing...' : 'Clear chat'}
+            </button>
+          </div>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[50vh]">
             {messages.map((msg, i) => (
