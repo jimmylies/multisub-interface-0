@@ -1,10 +1,15 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
+import { isAddress } from 'viem'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/router/routes'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useManagedAccounts, useSafeValue } from '@/hooks/useSafe'
+import { useModulesForEOA } from '@/hooks/useModulesForEOA'
+import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
 
 /**
  * AgentsPage — Dashboard view of all agents (sub-accounts) for a vault.
@@ -13,9 +18,14 @@ import { useManagedAccounts, useSafeValue } from '@/hooks/useSafe'
 export function AgentsPage() {
   const navigate = useNavigate()
   const { isConnected } = useAccount()
-  const { addresses } = useContractAddresses()
+  const { addresses, setDefiInteractor } = useContractAddresses()
   const { data: managedAccounts, isLoading } = useManagedAccounts()
   const { data: safeValue } = useSafeValue()
+  const { data: discoveredModules, isLoading: isDiscovering } = useModulesForEOA()
+  const publicClient = usePublicClient()
+  const [manualAddress, setManualAddress] = useState('')
+  const [manualError, setManualError] = useState('')
+  const [isLoadingManual, setIsLoadingManual] = useState(false)
 
   if (!isConnected) {
     return (
@@ -29,27 +39,97 @@ export function AgentsPage() {
     )
   }
 
+  const handleManualLoad = async () => {
+    if (!isAddress(manualAddress)) {
+      setManualError('Invalid address')
+      return
+    }
+    setIsLoadingManual(true)
+    setManualError('')
+    try {
+      await publicClient?.readContract({
+        address: manualAddress as `0x${string}`,
+        abi: DEFI_INTERACTOR_ABI,
+        functionName: 'avatar',
+      })
+      setDefiInteractor(manualAddress as `0x${string}`)
+    } catch {
+      setManualError('Not a valid DeFi Interactor module address')
+    } finally {
+      setIsLoadingManual(false)
+    }
+  }
+
   if (!addresses.defiInteractor) {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-20">
-        <h1 className="text-2xl font-semibold text-primary">Agent Dashboard</h1>
-        <p className="text-secondary text-center max-w-md">
-          No module address configured. Deploy a vault first or enter a module address.
-        </p>
-        <div className="flex gap-3">
-          <Button
-            onClick={() => navigate(ROUTES.WIZARD)}
-            className="bg-accent-primary text-black"
-          >
-            Deploy New Vault
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => navigate(ROUTES.HOME)}
-          >
-            Enter Module Address
-          </Button>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-primary">Agent Dashboard</h1>
+          <p className="text-secondary mt-1">No module selected.</p>
         </div>
+
+        {isDiscovering ? (
+          <div className="space-y-3">
+            {[1, 2].map(i => (
+              <div key={i} className="h-16 rounded-xl bg-elevated-1 animate-pulse" />
+            ))}
+          </div>
+        ) : discoveredModules && discoveredModules.length > 0 ? (
+          <div className="space-y-4">
+            <p className="text-sm text-secondary">
+              Found {discoveredModules.length} vault{discoveredModules.length > 1 ? 's' : ''} associated with your address:
+            </p>
+            {discoveredModules.map(({ module, safe }) => (
+              <div
+                key={module}
+                className="flex items-center justify-between bg-elevated-1 rounded-xl border border-subtle p-4 hover:border-accent-primary/20 transition-colors"
+              >
+                <div className="space-y-0.5">
+                  <div className="text-xs text-tertiary">Module</div>
+                  <div className="font-mono text-sm text-primary">{module}</div>
+                  <div className="text-xs text-tertiary mt-1">Safe: <span className="font-mono">{safe.slice(0, 8)}...{safe.slice(-6)}</span></div>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-accent-primary text-black ml-4 shrink-0"
+                  onClick={() => setDefiInteractor(module)}
+                >
+                  Load
+                </Button>
+              </div>
+            ))}
+            <div className="flex gap-3 pt-2">
+              <Button onClick={() => navigate(ROUTES.WIZARD)} className="bg-accent-primary text-black">
+                + Deploy New Vault
+              </Button>
+            </div>
+            <ManualAddressInput
+              value={manualAddress}
+              onChange={(v: string) => { setManualAddress(v); setManualError('') }}
+              onLoad={handleManualLoad}
+              isLoading={isLoadingManual}
+              error={manualError}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-6 py-8 bg-elevated-1 rounded-xl border border-subtle px-6">
+            <p className="text-secondary text-center">
+              No vaults found for your address. Deploy one or enter a module address manually.
+            </p>
+            <div className="flex justify-center">
+              <Button onClick={() => navigate(ROUTES.WIZARD)} className="bg-accent-primary text-black">
+                Deploy New Vault
+              </Button>
+            </div>
+            <ManualAddressInput
+              value={manualAddress}
+              onChange={(v: string) => { setManualAddress(v); setManualError('') }}
+              onLoad={handleManualLoad}
+              isLoading={isLoadingManual}
+              error={manualError}
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -119,6 +199,39 @@ interface AgentCardProps {
   address: string
   roles: string[]
   safeValueUSD: number
+}
+
+interface ManualAddressInputProps {
+  value: string
+  onChange: (v: string) => void
+  onLoad: () => void
+  isLoading: boolean
+  error: string
+}
+
+function ManualAddressInput({ value, onChange, onLoad, isLoading, error }: ManualAddressInputProps) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-tertiary text-center">Or enter a module address manually</p>
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="0x... module address"
+          className="bg-elevated-2 border-subtle font-mono text-sm"
+          onKeyDown={e => e.key === 'Enter' && onLoad()}
+        />
+        <Button
+          onClick={onLoad}
+          disabled={!value || isLoading}
+          className="shrink-0 bg-accent-primary text-black disabled:opacity-50"
+        >
+          {isLoading ? 'Loading...' : 'Load'}
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
+  )
 }
 
 function AgentCard({ address, roles, safeValueUSD }: AgentCardProps) {

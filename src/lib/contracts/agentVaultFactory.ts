@@ -48,7 +48,6 @@ export const AGENT_VAULT_FACTORY_ABI = [
     name: 'computeModuleAddress',
     inputs: [
       { name: 'safe', type: 'address', internalType: 'address' },
-      { name: 'oracle', type: 'address', internalType: 'address' },
     ],
     outputs: [{ name: 'predicted', type: 'address', internalType: 'address' }],
     stateMutability: 'view',
@@ -75,6 +74,7 @@ export const AGENT_VAULT_FACTORY_ABI = [
   { type: 'error', name: 'InvalidConfig', inputs: [] },
   { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
   { type: 'error', name: 'PresetRegistryNotSet', inputs: [] },
+  { type: 'error', name: 'ImplementationNotSet', inputs: [] },
   {
     type: 'error',
     name: 'SafeAlreadyHasModule',
