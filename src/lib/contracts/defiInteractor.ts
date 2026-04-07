@@ -217,6 +217,20 @@ export const DEFI_INTERACTOR_ABI = [
     outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'cumulativeSpent',
+    inputs: [{ name: '', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'windowStart',
+    inputs: [{ name: '', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
   // ============ Main Entry Points ============
   {
     type: 'function',

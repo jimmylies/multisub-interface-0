@@ -47,6 +47,50 @@ export function useSafeOwners() {
 }
 
 /**
+ * Hook to read the on-chain cumulative USD spent by a sub-account in the current window.
+ * Used in oracleless mode where spending is governed solely by this counter against maxSpendingUSD.
+ */
+export function useCumulativeSpent(subAccountAddress?: `0x${string}`) {
+  const { addresses } = useContractAddresses()
+  const { chainId } = useAccount()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'cumulativeSpent',
+    args: subAccountAddress ? [subAccountAddress] : undefined,
+    chainId,
+    query: {
+      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — changes after each spending op
+      gcTime: 2 * 60 * 1000,
+    },
+  })
+}
+
+/**
+ * Hook to read the start timestamp of a sub-account's current spending window.
+ * Used to detect window expiry (when block.timestamp > windowStart + windowDuration).
+ */
+export function useWindowStart(subAccountAddress?: `0x${string}`) {
+  const { addresses } = useContractAddresses()
+  const { chainId } = useAccount()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'windowStart',
+    args: subAccountAddress ? [subAccountAddress] : undefined,
+    chainId,
+    query: {
+      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000,
+      gcTime: 2 * 60 * 1000,
+    },
+  })
+}
+
+/**
  * Hook to check if the module is in oracleless mode (authorizedOracle == address(0)).
  * In oracleless mode: no oracle freshness checks, USD-only spending limits,
  * spending governed solely by on-chain cumulativeSpent.

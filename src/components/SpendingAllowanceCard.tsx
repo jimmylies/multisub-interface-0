@@ -8,6 +8,8 @@ import {
   useSafeValue,
   useIsValueStale,
   useIsOracleless,
+  useCumulativeSpent,
+  useWindowStart,
 } from '@/hooks/useSafe'
 import { formatUSD } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
@@ -22,8 +24,19 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   const { data: safeValue, isLoading: valueLoading } = useSafeValue()
   const { data: isStale } = useIsValueStale(3600) // 1 hour threshold
   const { data: isOracleless } = useIsOracleless()
+  const { data: cumulativeSpent, isLoading: spentLoading } = useCumulativeSpent(
+    isOracleless ? address : undefined
+  )
+  const { data: windowStart, isLoading: windowLoading } = useWindowStart(
+    isOracleless ? address : undefined
+  )
 
-  if (allowanceLoading || limitsLoading || (valueLoading && !isOracleless)) {
+  if (
+    allowanceLoading ||
+    limitsLoading ||
+    (valueLoading && !isOracleless) ||
+    (isOracleless && (spentLoading || windowLoading))
+  ) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -60,15 +73,19 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
 
   // Calculate max allowance based on mode
   // Oracle mode: BPS or USD limit, tracked via spendingAllowance
-  // Oracleless mode: USD-only limit; spendingAllowance is unused (returns 0)
-  const [maxSpendingBps, maxSpendingUSD] = limits
+  // Oracleless mode: USD-only limit; remaining = maxSpendingUSD - cumulativeSpent
+  const [maxSpendingBps, maxSpendingUSD, windowDuration] = limits
   let maxAllowance: bigint
   let remainingAllowance: bigint
 
   if (isOracleless) {
-    // Oracleless: max = configured maxSpendingUSD (cumulativeSpent not tracked here yet)
     maxAllowance = maxSpendingUSD
-    remainingAllowance = maxSpendingUSD
+    // Compute effective spent: 0 if window has expired (next op will reset on-chain)
+    const nowSec = BigInt(Math.floor(Date.now() / 1000))
+    const ws = windowStart ?? 0n
+    const isWindowExpired = ws !== 0n && nowSec > ws + windowDuration
+    const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
+    remainingAllowance = maxSpendingUSD > effectiveSpent ? maxSpendingUSD - effectiveSpent : 0n
   } else {
     const [totalValueUSD] = safeValue!
     maxAllowance =
@@ -131,7 +148,7 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
           <div>
             <p className="font-bold text-2xl">${formatUSD(remainingAllowance)}</p>
             <p className="text-muted-foreground text-xs">
-              {isOracleless ? 'USD limit per window' : 'Remaining allowance'}
+              {isOracleless ? 'Remaining this window' : 'Remaining allowance'}
             </p>
           </div>
           <Badge variant={statusVariant}>{percentRemaining.toFixed(1)}% left</Badge>
