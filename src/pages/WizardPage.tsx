@@ -1,0 +1,800 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { isAddress, decodeEventLog, parseUnits, zeroAddress, type Address } from 'viem'
+import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { CopyButton } from '@/components/ui/copy-button'
+import { ROUTES } from '@/router/routes'
+import { AGENT_VAULT_FACTORY_ABI } from '@/lib/contracts'
+import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
+
+function getExplorerBase(chainId: number): string {
+  const explorers: Record<number, string> = {
+    1: 'https://etherscan.io',
+    11155111: 'https://sepolia.etherscan.io',
+    137: 'https://polygonscan.com',
+    42161: 'https://arbiscan.io',
+    10: 'https://optimistic.etherscan.io',
+    8453: 'https://basescan.org',
+    84532: 'https://sepolia.basescan.org',
+  }
+  return explorers[chainId] || 'https://etherscan.io'
+}
+
+// Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
+const PRESET_IDS: Record<string, number> = {
+  'defi-trader': 0,
+  'yield-farmer': 1,
+  'payment-agent': 2,
+}
+
+// Preset definitions
+const PRESETS = [
+  {
+    id: 'defi-trader',
+    name: 'DeFi Trader',
+    description: 'Swap tokens on Uniswap, 1inch, and Paraswap. Supply to Aave V3.',
+    protocols: ['Uniswap V3/V4', 'Universal Router', 'Aave V3', '1inch'],
+    defaultBps: 500,
+    roleLabel: 'EXECUTE',
+    icon: '~',
+  },
+  {
+    id: 'yield-farmer',
+    name: 'Yield Farmer',
+    description: 'Deposit into Morpho vaults and Aave V3. Maximize yield safely.',
+    protocols: ['Aave V3', 'Morpho Vault', 'Morpho Blue'],
+    defaultBps: 1000,
+    roleLabel: 'EXECUTE',
+    icon: '+',
+  },
+  {
+    id: 'payment-agent',
+    name: 'Payment Agent',
+    description: 'Transfer tokens to specified recipients. No DeFi interactions.',
+    protocols: ['Transfer only'],
+    defaultBps: 100,
+    roleLabel: 'TRANSFER',
+    icon: '>',
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    description: 'Define your own guardrails. Full control over protocols, limits, and roles.',
+    protocols: ['You decide'],
+    defaultBps: 500,
+    roleLabel: 'Custom',
+    icon: '*',
+  },
+] as const
+
+type Step = 'preset' | 'configure' | 'review'
+
+// Fixed deployment config — set via environment variables
+const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
+const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefined
+const PRICE_FEED_TOKENS = (import.meta.env.VITE_PRICE_FEED_TOKENS || '')
+  .split(',')
+  .filter(Boolean) as Address[]
+const PRICE_FEED_ADDRESSES = (import.meta.env.VITE_PRICE_FEED_ADDRESSES || '')
+  .split(',')
+  .filter(Boolean) as Address[]
+
+export function WizardPage() {
+  const navigate = useNavigate()
+  const { isConnected } = useAccount()
+  const chainId = useChainId()
+  const [step, setStep] = useState<Step>('preset')
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
+  const [agentAddress, setAgentAddress] = useState('')
+  const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
+  const [safeAddress, setSafeAddress] = useState('')
+  const [selectedProtocols, setSelectedProtocols] = useState<string[]>([])
+  const [oracleless, setOracleless] = useState(false)
+  const [deployedModule, setDeployedModule] = useState<string | null>(null)
+  const [deployError, setDeployError] = useState<string | null>(null)
+
+  // Effective oracle: real address in oracle mode, zeroAddress in oracleless mode
+  const effectiveOracle: Address | undefined = oracleless ? zeroAddress : ORACLE_ADDRESS
+  // In oracleless mode, oracle address can be missing (we use zeroAddress)
+  const oracleConfigOk = oracleless || !!ORACLE_ADDRESS
+
+  const { writeContract, data: txHash, isPending: isWriting } = useWriteContract()
+  const {
+    data: receipt,
+    isLoading: isConfirming,
+    isSuccess,
+    isError: isReceiptError,
+    error: receiptError,
+  } = useWaitForTransactionReceipt({
+    hash: txHash,
+    query: {
+      enabled: Boolean(txHash),
+    },
+  })
+
+  const txReverted = isSuccess && receipt?.status === 'reverted'
+  const txFailed = isReceiptError || txReverted
+  const txFailMessage = txReverted
+    ? 'Transaction reverted on-chain.'
+    : (receiptError?.message ?? null)
+
+  const preset = PRESETS.find(p => p.id === selectedPreset)
+  const isDeploying = isWriting || isConfirming
+
+  async function handleDeploy() {
+    if (
+      !preset ||
+      !isAddress(safeAddress) ||
+      !isAddress(agentAddress) ||
+      !FACTORY_ADDRESS ||
+      !effectiveOracle
+    )
+      return
+
+    // Oracleless mode requires a USD spending limit
+    if (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) {
+      setDeployError('Oracleless mode requires a USD spending limit')
+      return
+    }
+
+    setDeployError(null)
+    setDeployedModule(null)
+
+    const presetId = PRESET_IDS[preset.id]
+    // In oracleless mode, price feeds are not strictly needed for spending tracking
+    // but we still pass them for token decimal lookups in approve/transfer paths
+    const priceFeedTokens = PRICE_FEED_TOKENS
+    const priceFeedAddresses = PRICE_FEED_ADDRESSES
+
+    try {
+      if (presetId !== undefined) {
+        // Deploy from preset (standard presets)
+        writeContract(
+          {
+            address: FACTORY_ADDRESS,
+            abi: AGENT_VAULT_FACTORY_ABI,
+            functionName: 'deployVaultFromPreset',
+            args: [
+              safeAddress as Address,
+              effectiveOracle,
+              agentAddress as Address,
+              BigInt(presetId),
+              priceFeedTokens,
+              priceFeedAddresses,
+            ],
+          },
+          {
+            onSuccess(hash) {
+              console.log('Vault deployment tx:', hash)
+            },
+            onError(error) {
+              setDeployError(error.message)
+            },
+          }
+        )
+      } else {
+        // Custom preset — deploy with full config
+        // Oracleless mode requires USD-only spending limits (BPS not allowed)
+        const maxSpendingBps = oracleless ? 0n : 10000n
+        writeContract(
+          {
+            address: FACTORY_ADDRESS,
+            abi: AGENT_VAULT_FACTORY_ABI,
+            functionName: 'deployVault',
+            args: [
+              {
+                safe: safeAddress as Address,
+                oracle: effectiveOracle,
+                agentAddress: agentAddress as Address,
+                roleId: 1, // EXECUTE by default for custom
+                maxSpendingBps,
+                maxSpendingUSD: parseUnits(spendingLimitUSD || '0', 18),
+                windowDuration: 86400n, // 24h
+                allowedProtocols: selectedProtocols.flatMap(
+                  id => getProtocolContractAddresses(id) as Address[]
+                ),
+                parserProtocols: [],
+                parserAddresses: [],
+                selectors: [],
+                selectorTypes: [],
+                priceFeedTokens,
+                priceFeedAddresses,
+              },
+            ],
+          },
+          {
+            onSuccess(hash) {
+              console.log('Custom vault deployment tx:', hash)
+            },
+            onError(error) {
+              setDeployError(error.message)
+            },
+          }
+        )
+      }
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : 'Deployment failed')
+    }
+  }
+
+  // When tx is confirmed, extract module address from AgentVaultCreated event
+  if (isSuccess && receipt && !deployedModule) {
+    let moduleAddress: string | null = null
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({
+          abi: AGENT_VAULT_FACTORY_ABI,
+          data: log.data,
+          topics: log.topics,
+        })
+        if (decoded.eventName === 'AgentVaultCreated') {
+          moduleAddress = (decoded.args as { module: Address }).module
+          break
+        }
+      } catch {
+        // Not an AgentVaultCreated event, skip
+      }
+    }
+    setDeployedModule(moduleAddress ?? 'unknown')
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-6 py-20">
+        <h1 className="text-2xl font-semibold text-primary">Deploy an Agent Vault</h1>
+        <p className="text-secondary text-center max-w-md">
+          Connect your wallet to deploy a new vault with on-chain guardrails for your AI agent.
+        </p>
+        <ConnectButton />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      {/* Progress indicator */}
+      <div className="flex items-center gap-2 mb-8">
+        {(['preset', 'configure', 'review'] as Step[]).map((s, i) => (
+          <div
+            key={s}
+            className="flex items-center gap-2"
+          >
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === s
+                  ? 'bg-accent-primary text-black'
+                  : i < ['preset', 'configure', 'review'].indexOf(step)
+                    ? 'bg-accent-primary/20 text-accent-primary'
+                    : 'bg-elevated-2 text-tertiary'
+              }`}
+            >
+              {i + 1}
+            </div>
+            {i < 2 && <div className="w-12 h-px bg-elevated-2" />}
+          </div>
+        ))}
+        <span className="ml-3 text-sm text-secondary capitalize">{step}</span>
+      </div>
+
+      {/* Step 1: Pick Preset */}
+      {step === 'preset' && (
+        <div>
+          <h1 className="text-2xl font-semibold text-primary mb-2">Choose a Preset</h1>
+          <p className="text-secondary mb-8">
+            Select a template that matches your agent's use case. You can customize everything in
+            the next step.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {PRESETS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setSelectedPreset(p.id)
+                }}
+                className={`text-left p-5 rounded-xl border transition-all ${
+                  selectedPreset === p.id
+                    ? 'border-accent-primary bg-accent-primary/5 shadow-glow'
+                    : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl w-10 h-10 rounded-lg bg-elevated-2 flex items-center justify-center font-mono text-accent-primary">
+                    {p.icon}
+                  </span>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-primary">{p.name}</h3>
+                    <p className="text-sm text-secondary mt-1">{p.description}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {p.protocols.map(proto => (
+                        <span
+                          key={proto}
+                          className="text-xs px-2 py-0.5 rounded-full bg-elevated-2 text-tertiary"
+                        >
+                          {proto}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-tertiary">Role: {p.roleLabel}</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-end mt-8">
+            <Button
+              onClick={() => setStep('configure')}
+              disabled={!selectedPreset}
+              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+            >
+              Next: Configure
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Configure */}
+      {step === 'configure' && preset && (
+        <div>
+          <h1 className="text-2xl font-semibold text-primary mb-2">Configure: {preset.name}</h1>
+          <p className="text-secondary mb-8">
+            Set the Safe address, agent signer, and spending limit.
+          </p>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">Safe Address</label>
+              <Input
+                value={safeAddress}
+                onChange={e => setSafeAddress(e.target.value)}
+                placeholder="0x... (your Safe multisig)"
+                className="bg-elevated-2 border-subtle"
+              />
+              {safeAddress && !isAddress(safeAddress) && (
+                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Agent Signer Address
+              </label>
+              <Input
+                value={agentAddress}
+                onChange={e => setAgentAddress(e.target.value)}
+                placeholder="0x... (the AI agent's EOA)"
+                className="bg-elevated-2 border-subtle"
+              />
+              {agentAddress && !isAddress(agentAddress) && (
+                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Max spending per 24h (USD)
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-secondary text-lg">$</span>
+                <Input
+                  type="number"
+                  value={spendingLimitUSD}
+                  onChange={e => setSpendingLimitUSD(e.target.value)}
+                  min={1}
+                  step={100}
+                  placeholder="5000"
+                  className="bg-elevated-2 border-subtle w-40"
+                />
+                <span className="text-secondary text-sm">USD per 24h window</span>
+              </div>
+              <p className="text-xs text-tertiary mt-1.5">
+                The agent cannot spend more than this amount in any rolling 24-hour period. Enforced
+                on-chain via price feed oracles.
+              </p>
+            </div>
+
+            {/* Oracleless mode toggle */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">Trust Mode</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOracleless(false)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    !oracleless
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="text-sm font-medium text-primary">Oracle-managed</span>
+                  </div>
+                  <p className="text-xs text-tertiary">
+                    Off-chain oracle tracks portfolio value &amp; spending. Supports both BPS and
+                    USD limits. Worst-case oracle compromise: ~40% per window.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOracleless(true)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    oracleless
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="text-sm font-medium text-primary">Oracleless</span>
+                  </div>
+                  <p className="text-xs text-tertiary">
+                    Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
+                    counter. Worst-case damage = your USD limit.
+                  </p>
+                </button>
+              </div>
+              {oracleless && (
+                <p className="text-xs text-accent-primary mt-2">
+                  Oracleless mode requires a USD spending limit. BPS mode is unavailable (no
+                  portfolio valuation).
+                </p>
+              )}
+            </div>
+          </div>
+
+          {selectedPreset === 'custom' && (
+            <div className="mt-8 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-primary mb-1.5">
+                  Allowed Protocols
+                </label>
+                <p className="text-xs text-tertiary mb-3">
+                  Select which protocols the agent is allowed to interact with. All contract
+                  addresses for each protocol will be whitelisted.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {PROTOCOLS.map(protocol => {
+                  const isSelected = selectedProtocols.includes(protocol.id)
+                  return (
+                    <button
+                      key={protocol.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedProtocols(prev =>
+                          isSelected
+                            ? prev.filter(id => id !== protocol.id)
+                            : [...prev, protocol.id]
+                        )
+                      }
+                      className={`w-full text-left p-3 rounded-lg border transition-all ${
+                        isSelected
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-medium text-primary">{protocol.name}</span>
+                          <span className="text-xs text-tertiary ml-2">{protocol.description}</span>
+                        </div>
+                        <div
+                          className={`w-5 h-5 rounded border flex items-center justify-center text-xs ${
+                            isSelected
+                              ? 'border-accent-primary bg-accent-primary text-black'
+                              : 'border-subtle'
+                          }`}
+                        >
+                          {isSelected && '✓'}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {protocol.contracts.map(c => (
+                          <span
+                            key={c.id}
+                            className="text-xs px-1.5 py-0.5 rounded bg-elevated-2 text-tertiary"
+                          >
+                            {c.name}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedProtocols.length === 0 && (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-xs text-yellow-400">
+                    No protocols selected. The agent will not be able to interact with any DeFi
+                    protocol. You can add protocols after deployment via addAllowedProtocol().
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(!FACTORY_ADDRESS || !oracleConfigOk) && (
+            <div className="mt-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-xs text-red-400">
+                Missing deployment config. Set VITE_AGENT_VAULT_FACTORY_ADDRESS
+                {!oracleless && ' and VITE_ORACLE_ADDRESS'} in your environment.
+                {!oracleless && ' Or enable Oracleless mode above.'}
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-between mt-10">
+            <Button
+              variant="outline"
+              onClick={() => setStep('preset')}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={() => setStep('review')}
+              disabled={
+                !isAddress(agentAddress) ||
+                !isAddress(safeAddress) ||
+                !FACTORY_ADDRESS ||
+                !oracleConfigOk ||
+                (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0))
+              }
+              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+            >
+              Next: Review
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Review & Deploy */}
+      {step === 'review' && preset && (
+        <div>
+          <h1 className="text-2xl font-semibold text-primary mb-2">Review & Deploy</h1>
+          <p className="text-secondary mb-8">
+            Confirm your vault configuration. This will deploy a DeFiInteractorModule configured for
+            your agent.
+          </p>
+
+          <div className="bg-elevated rounded-xl border border-subtle p-6 space-y-4">
+            <div className="flex justify-between">
+              <span className="text-secondary">Preset</span>
+              <span className="text-primary font-medium">{preset.name}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-secondary">Safe</span>
+              <div className="flex items-center gap-1">
+                <span className="text-primary font-mono text-sm">
+                  {safeAddress.slice(0, 6)}...{safeAddress.slice(-4)}
+                </span>
+                <CopyButton value={safeAddress} />
+                <a
+                  href={`${getExplorerBase(chainId)}/address/${safeAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-secondary">Agent Signer</span>
+              <div className="flex items-center gap-1">
+                <span className="text-primary font-mono text-sm">
+                  {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
+                </span>
+                <CopyButton value={agentAddress} />
+                <a
+                  href={`${getExplorerBase(chainId)}/address/${agentAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  title="View on explorer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-secondary">Role</span>
+              <span className="text-primary">{preset.roleLabel}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-secondary">Trust Mode</span>
+              <span className="text-primary">
+                {oracleless ? 'Oracleless (zero off-chain trust)' : 'Oracle-managed'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-secondary">Spending Limit</span>
+              <span className="text-primary">
+                ${Number(spendingLimitUSD || 0).toLocaleString()} per 24h
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-secondary">Protocols</span>
+              <span className="text-primary text-right">
+                {selectedPreset === 'custom'
+                  ? selectedProtocols
+                      .map(id => PROTOCOLS.find(p => p.id === id)?.name)
+                      .filter(Boolean)
+                      .join(', ') || 'None'
+                  : preset.protocols.join(', ')}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 rounded-lg bg-accent-primary/5 border border-accent-primary/20">
+            <p className="text-sm text-secondary">
+              After deployment, you will need to enable the module on your Safe (1 multisig
+              transaction). The agent cannot operate until the module is enabled.
+            </p>
+          </div>
+
+          {selectedPreset === 'custom' && (
+            <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <p className="text-sm font-medium text-yellow-400">
+                Custom preset: additional setup required
+              </p>
+              <p className="text-xs text-yellow-400/80 mt-1">
+                The custom preset deploys without calldata parsers or function selectors. After
+                deployment, you may need to configure these via the module owner functions
+                (addParser, addSelector) to enable specific operations.
+              </p>
+            </div>
+          )}
+
+          {deployError && (
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-sm text-red-400">{deployError}</p>
+            </div>
+          )}
+
+          {isWriting && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+              <p className="text-sm text-blue-400">Waiting for wallet confirmation...</p>
+            </div>
+          )}
+
+          {isConfirming && !txFailed && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="flex items-center gap-3 mb-2">
+                <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                <p className="text-sm text-blue-400 font-medium">
+                  Transaction submitted — waiting for confirmation...
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 ml-7">
+                <span className="text-xs text-blue-400/70 font-mono">
+                  {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                </span>
+                <CopyButton value={txHash} />
+                <a
+                  href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-blue-400/70 hover:text-blue-400 transition-colors"
+                  title="View transaction"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {txFailed && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
+              <p className="text-sm font-medium text-red-400">Transaction failed</p>
+              {txFailMessage && (
+                <p className="text-xs text-red-400/80 break-words">{txFailMessage}</p>
+              )}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-red-400/70 font-mono">
+                  {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                </span>
+                <CopyButton value={txHash} />
+                <a
+                  href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 transition-colors"
+                  title="View transaction"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {isSuccess && !txReverted && txHash && (
+            <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
+              <p className="text-sm font-medium text-green-400">Vault deployed successfully!</p>
+
+              <div>
+                <p className="text-xs text-green-400/70 mb-1">Transaction</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-green-400 font-mono">
+                    {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                  </span>
+                  <CopyButton value={txHash} />
+                  <a
+                    href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                    title="View transaction"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {deployedModule && deployedModule !== 'unknown' && (
+                <div>
+                  <p className="text-xs text-green-400/70 mb-1">Module address</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-green-400 font-mono">{deployedModule}</span>
+                    <CopyButton value={deployedModule} />
+                    <a
+                      href={`${getExplorerBase(chainId)}/address/${deployedModule}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                      title="View on explorer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <p className="text-xs text-green-400/70 mb-2">
+                  Next: enable this module in your Safe to activate the agent.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(ROUTES.AGENTS)}
+                >
+                  Go to Dashboard
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between mt-8">
+            <Button
+              variant="outline"
+              onClick={() => setStep('configure')}
+              disabled={isDeploying}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleDeploy}
+              disabled={isDeploying || (isSuccess && !txReverted)}
+              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+            >
+              {isWriting
+                ? 'Confirm in Wallet...'
+                : isConfirming && !txFailed
+                  ? 'Deploying...'
+                  : isSuccess && !txReverted
+                    ? 'Deployed!'
+                    : txFailed
+                      ? 'Retry Deploy'
+                      : 'Deploy Vault'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

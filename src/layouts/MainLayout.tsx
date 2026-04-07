@@ -16,7 +16,10 @@ export function MainLayout() {
       <SkipLink />
 
       {/* Header */}
-      <header className="top-0 z-50 sticky border-subtle border-b glass" role="banner">
+      <header
+        className="top-0 z-50 sticky border-subtle border-b glass"
+        role="banner"
+      >
         <div className="flex justify-between items-center mx-auto px-3 md:px-6 h-14 md:h-16 container">
           {/* Logo */}
           <Link
@@ -25,12 +28,12 @@ export function MainLayout() {
           >
             <img
               src="/logo.png"
-              alt="MultiSub"
+              alt="MultiClaw"
               className="w-8 h-8 md:w-9 md:h-9 object-contain"
             />
             <div>
               <h1 className="font-semibold text-primary text-base md:text-lg leading-tight">
-                MultiSub
+                MultiClaw
               </h1>
               <p className="-mt-0.5 text-caption text-tertiary hidden md:block">
                 {!isConnected
@@ -43,6 +46,37 @@ export function MainLayout() {
               </p>
             </div>
           </Link>
+
+          {/* Navigation */}
+          <nav
+            className="items-center gap-1 hidden md:flex"
+            role="navigation"
+          >
+            <Link
+              to={ROUTES.WIZARD}
+              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+            >
+              Deploy
+            </Link>
+            <Link
+              to={ROUTES.AGENTS}
+              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+            >
+              Agents
+            </Link>
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+            >
+              Advanced
+            </Link>
+            <Link
+              to={ROUTES.CHALLENGE}
+              className="px-3 py-1.5 rounded-md font-medium text-sm text-accent-primary hover:bg-accent-primary/10 transition-colors"
+            >
+              Break the Vault
+            </Link>
+          </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-2 md:gap-3">
@@ -76,13 +110,19 @@ export function MainLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto px-6 py-8 min-h-[calc(100dvh-130px)] container" role="main">
+      <main
+        className="mx-auto px-6 py-8 min-h-[calc(100dvh-130px)] container"
+        role="main"
+      >
         <SkipLinkTarget />
         <Outlet />
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto border-subtle border-t" role="contentinfo">
+      <footer
+        className="mt-auto border-subtle border-t"
+        role="contentinfo"
+      >
         <div className="mx-auto px-6 py-6 text-center container">
           <p className="text-caption text-tertiary">Secured by Safe • Built for DeFi</p>
         </div>

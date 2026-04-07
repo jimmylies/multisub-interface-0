@@ -8,10 +8,8 @@ export function DisconnectedDashboard() {
       {/* Main Card */}
       <Card className="mx-auto max-w-2xl">
         <CardHeader className="text-center pb-2">
-          <CardTitle className="text-h2">MultiSub Dashboard</CardTitle>
-          <p className="text-secondary">
-            Connect your wallet to access your features
-          </p>
+          <CardTitle className="text-h2">MultiClaw Dashboard</CardTitle>
+          <p className="text-secondary">Connect your wallet to access your features</p>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Features Grid */}

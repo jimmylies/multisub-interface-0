@@ -1,0 +1,86 @@
+// AgentVaultFactory ABI — permissionless vault deployment
+export const AGENT_VAULT_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'deployVaultFromPreset',
+    inputs: [
+      { name: 'safe', type: 'address', internalType: 'address' },
+      { name: 'oracle', type: 'address', internalType: 'address' },
+      { name: 'agentAddress', type: 'address', internalType: 'address' },
+      { name: 'presetId', type: 'uint256', internalType: 'uint256' },
+      { name: 'priceFeedTokens', type: 'address[]', internalType: 'address[]' },
+      { name: 'priceFeedAddresses', type: 'address[]', internalType: 'address[]' },
+    ],
+    outputs: [{ name: 'module', type: 'address', internalType: 'address' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'deployVault',
+    inputs: [
+      {
+        name: 'config',
+        type: 'tuple',
+        internalType: 'struct AgentVaultFactory.VaultConfig',
+        components: [
+          { name: 'safe', type: 'address', internalType: 'address' },
+          { name: 'oracle', type: 'address', internalType: 'address' },
+          { name: 'agentAddress', type: 'address', internalType: 'address' },
+          { name: 'roleId', type: 'uint16', internalType: 'uint16' },
+          { name: 'maxSpendingBps', type: 'uint256', internalType: 'uint256' },
+          { name: 'maxSpendingUSD', type: 'uint256', internalType: 'uint256' },
+          { name: 'windowDuration', type: 'uint256', internalType: 'uint256' },
+          { name: 'allowedProtocols', type: 'address[]', internalType: 'address[]' },
+          { name: 'parserProtocols', type: 'address[]', internalType: 'address[]' },
+          { name: 'parserAddresses', type: 'address[]', internalType: 'address[]' },
+          { name: 'selectors', type: 'bytes4[]', internalType: 'bytes4[]' },
+          { name: 'selectorTypes', type: 'uint8[]', internalType: 'uint8[]' },
+          { name: 'priceFeedTokens', type: 'address[]', internalType: 'address[]' },
+          { name: 'priceFeedAddresses', type: 'address[]', internalType: 'address[]' },
+        ],
+      },
+    ],
+    outputs: [{ name: 'module', type: 'address', internalType: 'address' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'computeModuleAddress',
+    inputs: [
+      { name: 'safe', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: 'predicted', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getDeployedModules',
+    inputs: [{ name: 'safe', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'address[]', internalType: 'address[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'event',
+    name: 'AgentVaultCreated',
+    inputs: [
+      { name: 'safe', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'agentAddress', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'module', type: 'address', indexed: false, internalType: 'address' },
+      { name: 'presetId', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  { type: 'error', name: 'InvalidAddress', inputs: [] },
+  { type: 'error', name: 'InvalidConfig', inputs: [] },
+  { type: 'error', name: 'ArrayLengthMismatch', inputs: [] },
+  { type: 'error', name: 'PresetRegistryNotSet', inputs: [] },
+  { type: 'error', name: 'ImplementationNotSet', inputs: [] },
+  {
+    type: 'error',
+    name: 'SafeAlreadyHasModule',
+    inputs: [
+      { name: 'safe', type: 'address', internalType: 'address' },
+      { name: 'existingModule', type: 'address', internalType: 'address' },
+    ],
+  },
+] as const

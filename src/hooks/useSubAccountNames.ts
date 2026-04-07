@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { isAddress } from 'viem'
 
-const STORAGE_KEY = 'multisub-account-names'
+const STORAGE_KEY = 'multiclaw-account-names'
 const MAX_NAME_LENGTH = 32
 
 interface UseSubAccountNamesReturn {
@@ -62,11 +62,10 @@ export function useSubAccountNames(): UseSubAccountNamesReturn {
       }
 
       // Truncate if too long
-      const validName = trimmed.length > MAX_NAME_LENGTH
-        ? trimmed.slice(0, MAX_NAME_LENGTH)
-        : trimmed
+      const validName =
+        trimmed.length > MAX_NAME_LENGTH ? trimmed.slice(0, MAX_NAME_LENGTH) : trimmed
 
-      setAccountNames((prev) => {
+      setAccountNames(prev => {
         const updated = {
           ...prev,
           [address.toLowerCase()]: validName,
@@ -80,7 +79,7 @@ export function useSubAccountNames(): UseSubAccountNamesReturn {
 
   const removeAccountName = useCallback(
     (address: `0x${string}`) => {
-      setAccountNames((prev) => {
+      setAccountNames(prev => {
         const updated = { ...prev }
         delete updated[address.toLowerCase()]
         saveToStorage(updated)

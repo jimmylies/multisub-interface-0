@@ -19,6 +19,10 @@ export function useSafeAddress() {
     abi: DEFI_INTERACTOR_ABI,
     functionName: 'avatar',
     chainId,
+    query: {
+      staleTime: 5 * 60 * 1000, // 5 minutes — avatar rarely changes
+      gcTime: 10 * 60 * 1000,
+    },
   })
 }
 
@@ -33,8 +37,98 @@ export function useSafeOwners() {
     address: safeAddress,
     abi: SAFE_ABI,
     functionName: 'getOwners',
-    query: { enabled: Boolean(safeAddress) },
+    query: {
+      enabled: Boolean(safeAddress),
+      staleTime: 5 * 60 * 1000, // 5 minutes — owners rarely change
+      gcTime: 10 * 60 * 1000,
+    },
     chainId,
+  })
+}
+
+/**
+ * Hook to read the on-chain cumulative USD spent by a sub-account in the current window.
+ * Used in oracleless mode where spending is governed solely by this counter against maxSpendingUSD.
+ */
+export function useCumulativeSpent(subAccountAddress?: `0x${string}`) {
+  const { addresses } = useContractAddresses()
+  const { chainId } = useAccount()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'cumulativeSpent',
+    args: subAccountAddress ? [subAccountAddress] : undefined,
+    chainId,
+    query: {
+      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — changes after each spending op
+      gcTime: 2 * 60 * 1000,
+    },
+  })
+}
+
+/**
+ * Hook to read the start timestamp of a sub-account's current spending window.
+ * Used to detect window expiry (when block.timestamp > windowStart + windowDuration).
+ */
+export function useWindowStart(subAccountAddress?: `0x${string}`) {
+  const { addresses } = useContractAddresses()
+  const { chainId } = useAccount()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'windowStart',
+    args: subAccountAddress ? [subAccountAddress] : undefined,
+    chainId,
+    query: {
+      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000,
+      gcTime: 2 * 60 * 1000,
+    },
+  })
+}
+
+/**
+ * Hook to check if the module is in oracleless mode (authorizedOracle == address(0)).
+ * In oracleless mode: no oracle freshness checks, USD-only spending limits,
+ * spending governed solely by on-chain cumulativeSpent.
+ */
+export function useIsOracleless() {
+  const { chainId } = useAccount()
+  const { addresses } = useContractAddresses()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'isOracleless',
+    chainId,
+    query: {
+      enabled: Boolean(addresses.defiInteractor),
+      staleTime: 5 * 60 * 1000, // 5 minutes — mode changes are rare admin actions
+      gcTime: 10 * 60 * 1000,
+    },
+  })
+}
+
+/**
+ * Hook to check if the contract is paused (emergency stop)
+ */
+export function useIsPaused() {
+  const { chainId } = useAccount()
+  const { addresses } = useContractAddresses()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'paused',
+    chainId,
+    query: {
+      enabled: Boolean(addresses.defiInteractor),
+      staleTime: 60 * 1000, // 1 minute — check pause status periodically
+      gcTime: 5 * 60 * 1000,
+    },
   })
 }
 
@@ -245,6 +339,8 @@ export function useSpendingAllowance(subAccountAddress?: `0x${string}`) {
     args: subAccountAddress ? [subAccountAddress] : undefined,
     query: {
       enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — changes after each spending op
+      gcTime: 2 * 60 * 1000,
     },
     chainId,
   })
@@ -287,29 +383,30 @@ export function useSafeValue() {
     functionName: 'getSafeValue',
     query: {
       enabled: Boolean(addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — oracle updates portfolio value periodically
+      gcTime: 5 * 60 * 1000,
     },
     chainId,
   })
 }
 
 /**
- * Hook to check if the Safe value data is stale (oracle hasn't updated recently)
+ * Hook to check if the Safe value data is stale (oracle hasn't updated recently).
+ * Computes staleness client-side from getSafeValue() lastUpdated timestamp.
  * @param maxAge Maximum age in seconds (default: 3600 = 1 hour)
  */
 export function useIsValueStale(maxAge: number = 3600) {
-  const { chainId } = useAccount()
-  const { addresses } = useContractAddresses()
+  const { data: safeValue } = useSafeValue()
 
-  return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
-    functionName: 'isValueStale',
-    args: [BigInt(maxAge)],
-    query: {
-      enabled: Boolean(addresses.defiInteractor),
-    },
-    chainId,
-  })
+  const isStale = React.useMemo(() => {
+    if (!safeValue) return undefined
+    const [, lastUpdated] = safeValue
+    if (lastUpdated === 0n) return true
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    return now - lastUpdated > BigInt(maxAge)
+  }, [safeValue, maxAge])
+
+  return { data: isStale, isLoading: !safeValue }
 }
 
 /**
@@ -366,10 +463,10 @@ function useAcquiredBalancesFromContract(
       options?.enabled !== false &&
       Boolean(
         addresses.defiInteractor &&
-          publicClient &&
-          subAccountAddress &&
-          tokenAddresses &&
-          tokenAddresses.length > 0
+        publicClient &&
+        subAccountAddress &&
+        tokenAddresses &&
+        tokenAddresses.length > 0
       ),
   })
 }

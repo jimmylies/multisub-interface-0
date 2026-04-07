@@ -4,6 +4,7 @@ import { SubAccountManager } from '@/components/SubAccountManager'
 import { EmergencyControls } from '@/components/EmergencyControls'
 import { MyPermissionsCard } from '@/components/MyPermissionsCard'
 import { ContractSetup } from '@/components/ContractSetup'
+import { TransactionHistory } from '@/components/TransactionHistory'
 import { StatsBar } from '@/components/StatsBar'
 import { SubAccountDashboard } from '@/components/SubAccountDashboard'
 import { SpendingAllowanceCard } from '@/components/SpendingAllowanceCard'
@@ -46,7 +47,7 @@ export function DashboardPage() {
           </div>
           <ContractSetup />
         </div>
-        {/* <TransactionHistory /> */}
+        <TransactionHistory />
       </FadeInUp>
     )
   }
@@ -64,7 +65,7 @@ export function DashboardPage() {
         <SubAccountDashboard />
         <AcquiredBalancesCard address={address!} />
       </div>
-      {/* <TransactionHistory subAccount={address} /> */}
+      <TransactionHistory subAccount={address as `0x${string}` | undefined} />
     </FadeInUp>
   )
 }

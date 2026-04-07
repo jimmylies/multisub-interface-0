@@ -9,4 +9,5 @@ export {
   SAFE_ABI,
   AAVE_V3_POOL_ABI,
   ERC20_ABI,
+  AGENT_VAULT_FACTORY_ABI,
 } from './contracts/index'

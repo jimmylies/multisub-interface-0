@@ -3,7 +3,8 @@ import { gql } from 'graphql-request'
 
 // Client configuration
 export const createSubgraphClient = () => {
-  const url = 'https://api.studio.thegraph.com/query/36309/multisub-sepolia/version/latest'
+  const url = import.meta.env.VITE_SUBGRAPH_URL
+    || 'https://api.studio.thegraph.com/query/36309/multiclaw-sepolia/version/latest'
   const token = import.meta.env.VITE_SUBGRAPH_AUTH_TOKEN
 
   return new GraphQLClient(url, {
@@ -116,6 +117,31 @@ export const TRANSFER_EXECUTED_QUERY = gql`
       blockNumber
       blockTimestamp
       transactionHash
+    }
+  }
+`
+
+export interface AgentVaultCreatedEvent {
+  id: string
+  safe: string
+  agentAddress: string
+  module: string
+  presetId: string
+}
+
+export const AGENT_VAULT_CREATED_QUERY = gql`
+  query GetAgentVaultsForEOA($agentAddress: Bytes!) {
+    agentVaultCreateds(
+      where: { agentAddress: $agentAddress }
+      orderBy: blockTimestamp
+      orderDirection: desc
+      first: 100
+    ) {
+      id
+      safe
+      agentAddress
+      module
+      presetId
     }
   }
 `

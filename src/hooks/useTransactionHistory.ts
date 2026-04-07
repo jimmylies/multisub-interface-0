@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import {
   createSubgraphClient,
@@ -69,9 +70,9 @@ function mapProtocolExecution(exec: ProtocolExecution): Transaction {
     target: exec.target,
     opType: Number(exec.opType) as OpType,
     tokensIn: exec.tokensIn,
-    amountsIn: exec.amountsIn.map((a) => BigInt(a)),
+    amountsIn: exec.amountsIn.map(a => BigInt(a)),
     tokensOut: exec.tokensOut,
-    amountsOut: exec.amountsOut.map((a) => BigInt(a)),
+    amountsOut: exec.amountsOut.map(a => BigInt(a)),
     spendingCost: BigInt(exec.spendingCost),
   }
 }
@@ -113,26 +114,24 @@ function applyFilters(transactions: Transaction[], filter: TransactionFilter): T
 
   // Type filter
   if (filter.type && filter.type !== 'all') {
-    filtered = filtered.filter((tx) => tx.type === filter.type)
+    filtered = filtered.filter(tx => tx.type === filter.type)
   }
 
   // OpType filter (only for protocol transactions)
   if (filter.opType && filter.opType !== 'all') {
-    filtered = filtered.filter(
-      (tx) => tx.type !== 'protocol' || tx.opType === filter.opType
-    )
+    filtered = filtered.filter(tx => tx.type !== 'protocol' || tx.opType === filter.opType)
   }
 
   // Token filter
   if (filter.token && filter.token !== 'all') {
     const tokenLower = filter.token.toLowerCase()
-    filtered = filtered.filter((tx) => {
+    filtered = filtered.filter(tx => {
       if (tx.type === 'transfer') {
         return tx.token?.toLowerCase() === tokenLower
       }
       if (tx.type === 'protocol') {
-        const hasTokenIn = tx.tokensIn?.some((t) => t.toLowerCase() === tokenLower)
-        const hasTokenOut = tx.tokensOut?.some((t) => t.toLowerCase() === tokenLower)
+        const hasTokenIn = tx.tokensIn?.some(t => t.toLowerCase() === tokenLower)
+        const hasTokenOut = tx.tokensOut?.some(t => t.toLowerCase() === tokenLower)
         return hasTokenIn || hasTokenOut
       }
       return true
@@ -179,20 +178,17 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
       // Fetch based on type filter
       const [protocolResult, transferResult] = await Promise.all([
         shouldFetchProtocol
-          ? client.request<{ protocolExecutions: ProtocolExecution[] }>(
-              PROTOCOL_EXECUTION_QUERY,
-              {
-                subAccount: subAccount.toLowerCase(),
-                fromTimestamp: fromTimestamp.toString(),
-                opTypes: opTypeFilter,
-              }
-            )
+          ? client.request<{ protocolExecutions: ProtocolExecution[] }>(PROTOCOL_EXECUTION_QUERY, {
+              subAccount: subAccount.toLowerCase(),
+              fromTimestamp: fromTimestamp.toString(),
+              opTypes: opTypeFilter,
+            })
           : Promise.resolve({ protocolExecutions: [] }),
         shouldFetchTransfers
-          ? client.request<{ transferExecuteds: TransferExecuted[] }>(
-              TRANSFER_EXECUTED_QUERY,
-              { subAccount: subAccount.toLowerCase(), fromTimestamp: fromTimestamp.toString() }
-            )
+          ? client.request<{ transferExecuteds: TransferExecuted[] }>(TRANSFER_EXECUTED_QUERY, {
+              subAccount: subAccount.toLowerCase(),
+              fromTimestamp: fromTimestamp.toString(),
+            })
           : Promise.resolve({ transferExecuteds: [] }),
       ])
 
@@ -209,8 +205,104 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
     },
     enabled,
     staleTime: 60_000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: true, // Refetch when user returns to tab
   })
+}
+
+interface UseMultipleTransactionHistoriesOptions {
+  subAccounts?: `0x${string}`[]
+  filter?: TransactionFilter
+  enabled?: boolean
+}
+
+/**
+ * Fetches transaction history for multiple sub-accounts in parallel.
+ * Useful for owner views that need to show all activity across all agents.
+ */
+export function useMultipleTransactionHistories(
+  options: UseMultipleTransactionHistoriesOptions = {}
+) {
+  const { defiInteractor } = useContractAddresses()
+  const subAccounts = options.subAccounts || []
+  const filter = options.filter || {}
+  const enabled = options.enabled !== false && !!defiInteractor && subAccounts.length > 0
+  const fromTimestamp = getTimestampForRange(filter.dateRange)
+
+  const queries = useQueries({
+    queries: subAccounts.map(subAccount => ({
+      queryKey: [
+        'transactionHistory',
+        subAccount,
+        defiInteractor,
+        fromTimestamp,
+        filter.type,
+        filter.opType,
+      ],
+      queryFn: async () => {
+        const client = createSubgraphClient()
+        const shouldFetchProtocol = filter.type !== 'transfer'
+        const shouldFetchTransfers = filter.type !== 'protocol'
+        const opTypeFilter =
+          shouldFetchProtocol && filter.opType && filter.opType !== 'all'
+            ? [filter.opType]
+            : undefined
+
+        const [protocolResult, transferResult] = await Promise.all([
+          shouldFetchProtocol
+            ? client.request<{ protocolExecutions: ProtocolExecution[] }>(
+                PROTOCOL_EXECUTION_QUERY,
+                {
+                  subAccount: subAccount.toLowerCase(),
+                  fromTimestamp: fromTimestamp.toString(),
+                  opTypes: opTypeFilter,
+                }
+              )
+            : Promise.resolve({ protocolExecutions: [] }),
+          shouldFetchTransfers
+            ? client.request<{ transferExecuteds: TransferExecuted[] }>(TRANSFER_EXECUTED_QUERY, {
+                subAccount: subAccount.toLowerCase(),
+                fromTimestamp: fromTimestamp.toString(),
+              })
+            : Promise.resolve({ transferExecuteds: [] }),
+        ])
+
+        const protocolTxs = protocolResult.protocolExecutions.map(mapProtocolExecution)
+        const transferTxs = transferResult.transferExecuteds.map(mapTransferExecuted)
+        return [...protocolTxs, ...transferTxs]
+      },
+      enabled: enabled && !!subAccount,
+      staleTime: 60_000,
+      gcTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: true,
+    })),
+  })
+
+  // Merge and deduplicate by tx id, sort newest first
+  const data = useMemo(() => {
+    const allTransactions: Transaction[] = []
+    const seenIds = new Set<string>()
+    for (const query of queries) {
+      if (query.data) {
+        for (const tx of query.data) {
+          if (!seenIds.has(tx.id)) {
+            allTransactions.push(tx)
+            seenIds.add(tx.id)
+          }
+        }
+      }
+    }
+    return allTransactions.sort((a, b) => b.timestamp - a.timestamp)
+  }, [queries])
+
+  const isLoading = queries.some(q => q.isLoading) || (enabled && queries.length === 0)
+  const isError = queries.length > 0 && queries.every(q => q.isError)
+  const isFetching = queries.some(q => q.isFetching)
+  const refetch = () => {
+    queries.forEach(q => q.refetch())
+  }
+
+  return { data, isLoading, isError, isFetching, refetch }
 }
 
 // Hook to get filtered transactions
@@ -226,13 +318,13 @@ export function useFilteredTransactions(
 export function getUniqueTokens(transactions: Transaction[]): string[] {
   const tokens = new Set<string>()
 
-  transactions.forEach((tx) => {
+  transactions.forEach(tx => {
     if (tx.type === 'transfer' && tx.token) {
       tokens.add(tx.token.toLowerCase())
     }
     if (tx.type === 'protocol') {
-      tx.tokensIn?.forEach((t) => tokens.add(t.toLowerCase()))
-      tx.tokensOut?.forEach((t) => tokens.add(t.toLowerCase()))
+      tx.tokensIn?.forEach(t => tokens.add(t.toLowerCase()))
+      tx.tokensOut?.forEach(t => tokens.add(t.toLowerCase()))
     }
   })
 
