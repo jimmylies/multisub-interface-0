@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAccount, usePublicClient } from 'wagmi'
 import { isAddress } from 'viem'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/router/routes'
@@ -10,6 +11,7 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useManagedAccounts, useSafeValue } from '@/hooks/useSafe'
 import { useModulesForEOA } from '@/hooks/useModulesForEOA'
 import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { TransactionHistory } from '@/components/TransactionHistory'
 
 /**
  * AgentsPage — Dashboard view of all agents (sub-accounts) for a vault.
@@ -175,21 +177,29 @@ export function AgentsPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {managedAccounts.map(account => {
-            const roles: string[] = []
-            if (account.hasExecuteRole) roles.push('EXECUTE')
-            if (account.hasTransferRole) roles.push('TRANSFER')
-            return (
-              <AgentCard
-                key={account.address}
-                address={account.address}
-                roles={roles}
-                safeValueUSD={safeValueUSD}
-              />
-            )
-          })}
-        </div>
+        <>
+          <div className="space-y-4">
+            {managedAccounts.map(account => {
+              const roles: string[] = []
+              if (account.hasExecuteRole) roles.push('EXECUTE')
+              if (account.hasTransferRole) roles.push('TRANSFER')
+              return (
+                <AgentCard
+                  key={account.address}
+                  address={account.address}
+                  roles={roles}
+                  safeValueUSD={safeValueUSD}
+                />
+              )
+            })}
+          </div>
+
+          {/* Global transaction history across all agents */}
+          <div className="mt-10">
+            <h2 className="text-lg font-semibold text-primary mb-4">All Vault Activity</h2>
+            <TransactionHistory />
+          </div>
+        </>
       )}
     </div>
   )
@@ -236,6 +246,7 @@ function ManualAddressInput({ value, onChange, onLoad, isLoading, error }: Manua
 
 function AgentCard({ address, roles, safeValueUSD }: AgentCardProps) {
   const isActive = roles.length > 0
+  const [showHistory, setShowHistory] = useState(false)
 
   return (
     <div className="bg-elevated-1 rounded-xl border border-subtle p-5 hover:border-accent-primary/20 transition-colors">
@@ -261,11 +272,24 @@ function AgentCard({ address, roles, safeValueUSD }: AgentCardProps) {
         </span>
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-tertiary">
+      <div className="flex items-center justify-between text-xs text-tertiary">
         <span>
           Safe value: ${safeValueUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="flex items-center gap-1 text-accent-primary hover:underline"
+        >
+          {showHistory ? 'Hide' : 'View'} history
+          {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
       </div>
+
+      {showHistory && (
+        <div className="mt-4 pt-4 border-t border-subtle">
+          <TransactionHistory subAccount={address as `0x${string}`} />
+        </div>
+      )}
     </div>
   )
 }
