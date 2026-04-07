@@ -19,6 +19,10 @@ export function useSafeAddress() {
     abi: DEFI_INTERACTOR_ABI,
     functionName: 'avatar',
     chainId,
+    query: {
+      staleTime: 5 * 60 * 1000, // 5 minutes — avatar rarely changes
+      gcTime: 10 * 60 * 1000,
+    },
   })
 }
 
@@ -33,8 +37,32 @@ export function useSafeOwners() {
     address: safeAddress,
     abi: SAFE_ABI,
     functionName: 'getOwners',
-    query: { enabled: Boolean(safeAddress) },
+    query: {
+      enabled: Boolean(safeAddress),
+      staleTime: 5 * 60 * 1000, // 5 minutes — owners rarely change
+      gcTime: 10 * 60 * 1000,
+    },
     chainId,
+  })
+}
+
+/**
+ * Hook to check if the contract is paused (emergency stop)
+ */
+export function useIsPaused() {
+  const { chainId } = useAccount()
+  const { addresses } = useContractAddresses()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'paused',
+    chainId,
+    query: {
+      enabled: Boolean(addresses.defiInteractor),
+      staleTime: 60 * 1000, // 1 minute — check pause status periodically
+      gcTime: 5 * 60 * 1000,
+    },
   })
 }
 
@@ -245,6 +273,8 @@ export function useSpendingAllowance(subAccountAddress?: `0x${string}`) {
     args: subAccountAddress ? [subAccountAddress] : undefined,
     query: {
       enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — changes after each spending op
+      gcTime: 2 * 60 * 1000,
     },
     chainId,
   })
@@ -287,6 +317,8 @@ export function useSafeValue() {
     functionName: 'getSafeValue',
     query: {
       enabled: Boolean(addresses.defiInteractor),
+      staleTime: 30 * 1000, // 30s — oracle updates portfolio value periodically
+      gcTime: 5 * 60 * 1000,
     },
     chainId,
   })

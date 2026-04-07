@@ -73,13 +73,17 @@ export function AgentsPage() {
         {isDiscovering ? (
           <div className="space-y-3">
             {[1, 2].map(i => (
-              <div key={i} className="h-16 rounded-xl bg-elevated-1 animate-pulse" />
+              <div
+                key={i}
+                className="h-16 rounded-xl bg-elevated-1 animate-pulse"
+              />
             ))}
           </div>
         ) : discoveredModules && discoveredModules.length > 0 ? (
           <div className="space-y-4">
             <p className="text-sm text-secondary">
-              Found {discoveredModules.length} vault{discoveredModules.length > 1 ? 's' : ''} associated with your address:
+              Found {discoveredModules.length} vault{discoveredModules.length > 1 ? 's' : ''}{' '}
+              associated with your address:
             </p>
             {discoveredModules.map(({ module, safe }) => (
               <div
@@ -89,7 +93,12 @@ export function AgentsPage() {
                 <div className="space-y-0.5">
                   <div className="text-xs text-tertiary">Module</div>
                   <div className="font-mono text-sm text-primary">{module}</div>
-                  <div className="text-xs text-tertiary mt-1">Safe: <span className="font-mono">{safe.slice(0, 8)}...{safe.slice(-6)}</span></div>
+                  <div className="text-xs text-tertiary mt-1">
+                    Safe:{' '}
+                    <span className="font-mono">
+                      {safe.slice(0, 8)}...{safe.slice(-6)}
+                    </span>
+                  </div>
                 </div>
                 <Button
                   size="sm"
@@ -101,13 +110,19 @@ export function AgentsPage() {
               </div>
             ))}
             <div className="flex gap-3 pt-2">
-              <Button onClick={() => navigate(ROUTES.WIZARD)} className="bg-accent-primary text-black">
+              <Button
+                onClick={() => navigate(ROUTES.WIZARD)}
+                className="bg-accent-primary text-black"
+              >
                 + Deploy New Vault
               </Button>
             </div>
             <ManualAddressInput
               value={manualAddress}
-              onChange={(v: string) => { setManualAddress(v); setManualError('') }}
+              onChange={(v: string) => {
+                setManualAddress(v)
+                setManualError('')
+              }}
               onLoad={handleManualLoad}
               isLoading={isLoadingManual}
               error={manualError}
@@ -119,13 +134,19 @@ export function AgentsPage() {
               No vaults found for your address. Deploy one or enter a module address manually.
             </p>
             <div className="flex justify-center">
-              <Button onClick={() => navigate(ROUTES.WIZARD)} className="bg-accent-primary text-black">
+              <Button
+                onClick={() => navigate(ROUTES.WIZARD)}
+                className="bg-accent-primary text-black"
+              >
                 Deploy New Vault
               </Button>
             </div>
             <ManualAddressInput
               value={manualAddress}
-              onChange={(v: string) => { setManualAddress(v); setManualError('') }}
+              onChange={(v: string) => {
+                setManualAddress(v)
+                setManualError('')
+              }}
               onLoad={handleManualLoad}
               isLoading={isLoadingManual}
               error={manualError}
@@ -197,7 +218,7 @@ export function AgentsPage() {
           {/* Global transaction history across all agents */}
           <div className="mt-10">
             <h2 className="text-lg font-semibold text-primary mb-4">All Vault Activity</h2>
-            <TransactionHistory />
+            <TransactionHistory subAccounts={managedAccounts.map(a => a.address)} />
           </div>
         </>
       )}
@@ -219,7 +240,13 @@ interface ManualAddressInputProps {
   error: string
 }
 
-function ManualAddressInput({ value, onChange, onLoad, isLoading, error }: ManualAddressInputProps) {
+function ManualAddressInput({
+  value,
+  onChange,
+  onLoad,
+  isLoading,
+  error,
+}: ManualAddressInputProps) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-tertiary text-center">Or enter a module address manually</p>

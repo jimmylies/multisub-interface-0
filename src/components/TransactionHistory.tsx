@@ -1,18 +1,23 @@
 import { useState, useMemo } from 'react'
-import { History, Download, FileText, FileJson, ClipboardCopy, RefreshCw, Inbox } from 'lucide-react'
+import {
+  History,
+  Download,
+  FileText,
+  FileJson,
+  ClipboardCopy,
+  RefreshCw,
+  Inbox,
+} from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip } from '@/components/ui/tooltip'
-import {
-  SkeletonCard,
-  SkeletonText,
-  SkeletonBadge,
-} from '@/components/ui/skeleton'
+import { SkeletonCard, SkeletonText, SkeletonBadge } from '@/components/ui/skeleton'
 import { FadeInUp, StaggerList, StaggerItem } from '@/components/ui/motion'
 import { TransactionRow } from '@/components/TransactionRow'
 import { TransactionFilters } from '@/components/TransactionFilters'
 import {
   useTransactionHistory,
+  useMultipleTransactionHistories,
   useFilteredTransactions,
   getUniqueTokens,
   type TransactionFilter,
@@ -23,6 +28,8 @@ import { cn } from '@/lib/utils'
 
 interface TransactionHistoryProps {
   subAccount?: `0x${string}`
+  /** When provided, fetches and merges history for multiple sub-accounts (used for owner views). Takes precedence over `subAccount`. */
+  subAccounts?: `0x${string}`[]
   className?: string
 }
 
@@ -103,7 +110,10 @@ function ExportMenu({
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setIsOpen(false)}
+          />
           <div className="absolute top-full right-0 mt-1 w-48 py-1 bg-elevated border border-subtle rounded-lg shadow-lg z-20 animate-fade-in">
             <button
               onClick={() => {
@@ -143,7 +153,11 @@ function ExportMenu({
   )
 }
 
-export function TransactionHistory({ subAccount, className }: TransactionHistoryProps) {
+export function TransactionHistory({
+  subAccount,
+  subAccounts,
+  className,
+}: TransactionHistoryProps) {
   // Filter state
   const [filter, setFilter] = useState<TransactionFilter>({
     type: 'all',
@@ -152,11 +166,24 @@ export function TransactionHistory({ subAccount, className }: TransactionHistory
     token: 'all',
   })
 
-  // Fetch transaction history
-  const { data: transactions, isLoading, isError, refetch, isFetching } = useTransactionHistory({
+  // Fetch transaction history — multi-account when subAccounts is provided, single otherwise
+  const isMultiAccount = !!subAccounts && subAccounts.length > 0
+  const singleQuery = useTransactionHistory({
     subAccount,
-    filter: { dateRange: filter.dateRange }, // Pass date range to query
+    filter: { dateRange: filter.dateRange },
+    enabled: !isMultiAccount,
   })
+  const multiQuery = useMultipleTransactionHistories({
+    subAccounts,
+    filter: { dateRange: filter.dateRange },
+    enabled: isMultiAccount,
+  })
+
+  const transactions = isMultiAccount ? multiQuery.data : singleQuery.data
+  const isLoading = isMultiAccount ? multiQuery.isLoading : singleQuery.isLoading
+  const isError = isMultiAccount ? multiQuery.isError : singleQuery.isError
+  const isFetching = isMultiAccount ? multiQuery.isFetching : singleQuery.isFetching
+  const refetch = isMultiAccount ? multiQuery.refetch : singleQuery.refetch
 
   // Apply client-side filters
   const filteredTransactions = useFilteredTransactions(transactions, filter)
@@ -173,7 +200,7 @@ export function TransactionHistory({ subAccount, className }: TransactionHistory
   // Map tokens to filter options
   const availableTokens = useMemo(() => {
     if (!tokenMetadata) return []
-    return uniqueTokenAddresses.map((address) => ({
+    return uniqueTokenAddresses.map(address => ({
       address,
       symbol: tokenMetadata.get(address)?.symbol || `${address.slice(0, 6)}...`,
     }))
@@ -215,7 +242,10 @@ export function TransactionHistory({ subAccount, className }: TransactionHistory
               <div className="p-2 rounded-lg bg-elevated-2">
                 <div className="w-5 h-5 rounded bg-elevated animate-pulse" />
               </div>
-              <SkeletonText width="w-40" height="h-6" />
+              <SkeletonText
+                width="w-40"
+                height="h-6"
+              />
             </div>
           </div>
         </CardHeader>
@@ -264,7 +294,10 @@ export function TransactionHistory({ subAccount, className }: TransactionHistory
             </div>
             <div className="flex items-center gap-2">
               <CardTitle>Transaction History</CardTitle>
-              <Badge variant="default" className="text-xs">
+              <Badge
+                variant="default"
+                className="text-xs"
+              >
                 {filteredTransactions.length}
                 {transactions && filteredTransactions.length !== transactions.length && (
                   <span className="text-tertiary"> / {transactions.length}</span>
@@ -314,7 +347,10 @@ export function TransactionHistory({ subAccount, className }: TransactionHistory
           <StaggerList className="space-y-2">
             {filteredTransactions.map((tx, index) => (
               <StaggerItem key={tx.id}>
-                <TransactionRow transaction={tx} index={index} />
+                <TransactionRow
+                  transaction={tx}
+                  index={index}
+                />
               </StaggerItem>
             ))}
           </StaggerList>
