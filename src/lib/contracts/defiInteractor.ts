@@ -210,6 +210,13 @@ export const DEFI_INTERACTOR_ABI = [
     outputs: [{ name: '', type: 'address', internalType: 'address' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'isOracleless',
+    inputs: [],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
   // ============ Main Entry Points ============
   {
     type: 'function',

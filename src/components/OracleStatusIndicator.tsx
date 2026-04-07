@@ -1,11 +1,23 @@
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
-import { useSafeValue, useIsValueStale } from '@/hooks/useSafe'
+import { useSafeValue, useIsValueStale, useIsOracleless } from '@/hooks/useSafe'
 import { formatUSD, formatTimeAgo } from '@/lib/utils'
 
 export function OracleStatusIndicator() {
   const { data: safeValue, isLoading } = useSafeValue()
   const { data: isStale } = useIsValueStale(3600) // 1 hour threshold
+  const { data: isOracleless } = useIsOracleless()
+
+  // In oracleless mode, there's no oracle to display status for
+  if (isOracleless) {
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        <div className="bg-accent-primary rounded-full w-2 h-2" />
+        <span className="text-secondary">Oracleless mode</span>
+        <TooltipIcon content="This vault has no oracle dependency. Spending is enforced solely by on-chain cumulative limits against a fixed USD cap." />
+      </div>
+    )
+  }
 
   if (isLoading || !safeValue) {
     return (
@@ -53,11 +65,17 @@ export function OracleStatusIndicator() {
         />
         <span className="font-medium text-sm text-primary">Oracle</span>
         <TooltipIcon content="The Chainlink oracle updates portfolio value and spending allowance data. Fresh data ensures accurate spending limits." />
-        <Badge variant={statusVariant} className="text-xs">
+        <Badge
+          variant={statusVariant}
+          className="text-xs"
+        >
           {statusText}
         </Badge>
         {isStale && (
-          <Badge variant="outline" className="text-warning text-xs">
+          <Badge
+            variant="outline"
+            className="text-warning text-xs"
+          >
             ⚠️ Outdated
           </Badge>
         )}

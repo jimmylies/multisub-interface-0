@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { isAddress, decodeEventLog, parseUnits, type Address } from 'viem'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { isAddress, decodeEventLog, parseUnits, zeroAddress, type Address } from 'viem'
+import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -93,8 +93,14 @@ export function WizardPage() {
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
   const [safeAddress, setSafeAddress] = useState('')
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([])
+  const [oracleless, setOracleless] = useState(false)
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
+
+  // Effective oracle: real address in oracle mode, zeroAddress in oracleless mode
+  const effectiveOracle: Address | undefined = oracleless ? zeroAddress : ORACLE_ADDRESS
+  // In oracleless mode, oracle address can be missing (we use zeroAddress)
+  const oracleConfigOk = oracleless || !!ORACLE_ADDRESS
 
   const { writeContract, data: txHash, isPending: isWriting } = useWriteContract()
   const {
@@ -114,7 +120,7 @@ export function WizardPage() {
   const txFailed = isReceiptError || txReverted
   const txFailMessage = txReverted
     ? 'Transaction reverted on-chain.'
-    : receiptError?.message ?? null
+    : (receiptError?.message ?? null)
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
   const isDeploying = isWriting || isConfirming
@@ -125,14 +131,24 @@ export function WizardPage() {
       !isAddress(safeAddress) ||
       !isAddress(agentAddress) ||
       !FACTORY_ADDRESS ||
-      !ORACLE_ADDRESS
+      !effectiveOracle
     )
       return
+
+    // Oracleless mode requires a USD spending limit
+    if (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) {
+      setDeployError('Oracleless mode requires a USD spending limit')
+      return
+    }
 
     setDeployError(null)
     setDeployedModule(null)
 
     const presetId = PRESET_IDS[preset.id]
+    // In oracleless mode, price feeds are not strictly needed for spending tracking
+    // but we still pass them for token decimal lookups in approve/transfer paths
+    const priceFeedTokens = PRICE_FEED_TOKENS
+    const priceFeedAddresses = PRICE_FEED_ADDRESSES
 
     try {
       if (presetId !== undefined) {
@@ -144,11 +160,11 @@ export function WizardPage() {
             functionName: 'deployVaultFromPreset',
             args: [
               safeAddress as Address,
-              ORACLE_ADDRESS,
+              effectiveOracle,
               agentAddress as Address,
               BigInt(presetId),
-              PRICE_FEED_TOKENS,
-              PRICE_FEED_ADDRESSES,
+              priceFeedTokens,
+              priceFeedAddresses,
             ],
           },
           {
@@ -162,6 +178,8 @@ export function WizardPage() {
         )
       } else {
         // Custom preset — deploy with full config
+        // Oracleless mode requires USD-only spending limits (BPS not allowed)
+        const maxSpendingBps = oracleless ? 0n : 10000n
         writeContract(
           {
             address: FACTORY_ADDRESS,
@@ -170,10 +188,10 @@ export function WizardPage() {
             args: [
               {
                 safe: safeAddress as Address,
-                oracle: ORACLE_ADDRESS,
+                oracle: effectiveOracle,
                 agentAddress: agentAddress as Address,
                 roleId: 1, // EXECUTE by default for custom
-                maxSpendingBps: 10000n, // 100% — uncapped on bps side, USD is the real cap
+                maxSpendingBps,
                 maxSpendingUSD: parseUnits(spendingLimitUSD || '0', 18),
                 windowDuration: 86400n, // 24h
                 allowedProtocols: selectedProtocols.flatMap(
@@ -183,8 +201,8 @@ export function WizardPage() {
                 parserAddresses: [],
                 selectors: [],
                 selectorTypes: [],
-                priceFeedTokens: PRICE_FEED_TOKENS,
-                priceFeedAddresses: PRICE_FEED_ADDRESSES,
+                priceFeedTokens,
+                priceFeedAddresses,
               },
             ],
           },
@@ -377,6 +395,55 @@ export function WizardPage() {
                 on-chain via price feed oracles.
               </p>
             </div>
+
+            {/* Oracleless mode toggle */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">Trust Mode</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOracleless(false)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    !oracleless
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="text-sm font-medium text-primary">Oracle-managed</span>
+                  </div>
+                  <p className="text-xs text-tertiary">
+                    Off-chain oracle tracks portfolio value &amp; spending. Supports both BPS and
+                    USD limits. Worst-case oracle compromise: ~40% per window.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOracleless(true)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    oracleless
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="text-sm font-medium text-primary">Oracleless</span>
+                  </div>
+                  <p className="text-xs text-tertiary">
+                    Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
+                    counter. Worst-case damage = your USD limit.
+                  </p>
+                </button>
+              </div>
+              {oracleless && (
+                <p className="text-xs text-accent-primary mt-2">
+                  Oracleless mode requires a USD spending limit. BPS mode is unavailable (no
+                  portfolio valuation).
+                </p>
+              )}
+            </div>
           </div>
 
           {selectedPreset === 'custom' && (
@@ -450,11 +517,12 @@ export function WizardPage() {
             </div>
           )}
 
-          {(!FACTORY_ADDRESS || !ORACLE_ADDRESS) && (
+          {(!FACTORY_ADDRESS || !oracleConfigOk) && (
             <div className="mt-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-xs text-red-400">
-                Missing deployment config. Set VITE_AGENT_VAULT_FACTORY_ADDRESS and
-                VITE_ORACLE_ADDRESS in your environment.
+                Missing deployment config. Set VITE_AGENT_VAULT_FACTORY_ADDRESS
+                {!oracleless && ' and VITE_ORACLE_ADDRESS'} in your environment.
+                {!oracleless && ' Or enable Oracleless mode above.'}
               </p>
             </div>
           )}
@@ -472,7 +540,8 @@ export function WizardPage() {
                 !isAddress(agentAddress) ||
                 !isAddress(safeAddress) ||
                 !FACTORY_ADDRESS ||
-                !ORACLE_ADDRESS
+                !oracleConfigOk ||
+                (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0))
               }
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
@@ -537,6 +606,12 @@ export function WizardPage() {
               <span className="text-primary">{preset.roleLabel}</span>
             </div>
             <div className="flex justify-between">
+              <span className="text-secondary">Trust Mode</span>
+              <span className="text-primary">
+                {oracleless ? 'Oracleless (zero off-chain trust)' : 'Oracle-managed'}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-secondary">Spending Limit</span>
               <span className="text-primary">
                 ${Number(spendingLimitUSD || 0).toLocaleString()} per 24h
@@ -592,10 +667,14 @@ export function WizardPage() {
             <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <div className="flex items-center gap-3 mb-2">
                 <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-                <p className="text-sm text-blue-400 font-medium">Transaction submitted — waiting for confirmation...</p>
+                <p className="text-sm text-blue-400 font-medium">
+                  Transaction submitted — waiting for confirmation...
+                </p>
               </div>
               <div className="flex items-center gap-1.5 ml-7">
-                <span className="text-xs text-blue-400/70 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                <span className="text-xs text-blue-400/70 font-mono">
+                  {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                </span>
                 <CopyButton value={txHash} />
                 <a
                   href={`${getExplorerBase(chainId)}/tx/${txHash}`}
@@ -617,7 +696,9 @@ export function WizardPage() {
                 <p className="text-xs text-red-400/80 break-words">{txFailMessage}</p>
               )}
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-red-400/70 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                <span className="text-xs text-red-400/70 font-mono">
+                  {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                </span>
                 <CopyButton value={txHash} />
                 <a
                   href={`${getExplorerBase(chainId)}/tx/${txHash}`}
@@ -639,7 +720,9 @@ export function WizardPage() {
               <div>
                 <p className="text-xs text-green-400/70 mb-1">Transaction</p>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-green-400 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</span>
+                  <span className="text-sm text-green-400 font-mono">
+                    {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                  </span>
                   <CopyButton value={txHash} />
                   <a
                     href={`${getExplorerBase(chainId)}/tx/${txHash}`}

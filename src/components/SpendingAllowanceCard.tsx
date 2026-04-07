@@ -7,6 +7,7 @@ import {
   useSubAccountLimits,
   useSafeValue,
   useIsValueStale,
+  useIsOracleless,
 } from '@/hooks/useSafe'
 import { formatUSD } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
@@ -20,8 +21,9 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   const { data: limits, isLoading: limitsLoading } = useSubAccountLimits(address)
   const { data: safeValue, isLoading: valueLoading } = useSafeValue()
   const { data: isStale } = useIsValueStale(3600) // 1 hour threshold
+  const { data: isOracleless } = useIsOracleless()
 
-  if (allowanceLoading || limitsLoading || valueLoading) {
+  if (allowanceLoading || limitsLoading || (valueLoading && !isOracleless)) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -52,18 +54,33 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
     )
   }
 
-  if (!allowance || !limits || !safeValue) {
+  if (!limits || (!isOracleless && (!allowance || !safeValue))) {
     return null
   }
 
-  // Calculate max allowance from limit percentage
-  const [maxSpendingBps] = limits
-  const [totalValueUSD] = safeValue
-  const maxAllowance = (totalValueUSD * BigInt(maxSpendingBps)) / 10000n
+  // Calculate max allowance based on mode
+  // Oracle mode: BPS or USD limit, tracked via spendingAllowance
+  // Oracleless mode: USD-only limit; spendingAllowance is unused (returns 0)
+  const [maxSpendingBps, maxSpendingUSD] = limits
+  let maxAllowance: bigint
+  let remainingAllowance: bigint
+
+  if (isOracleless) {
+    // Oracleless: max = configured maxSpendingUSD (cumulativeSpent not tracked here yet)
+    maxAllowance = maxSpendingUSD
+    remainingAllowance = maxSpendingUSD
+  } else {
+    const [totalValueUSD] = safeValue!
+    maxAllowance =
+      maxSpendingUSD > 0n ? maxSpendingUSD : (totalValueUSD * BigInt(maxSpendingBps)) / 10000n
+    remainingAllowance = allowance!
+  }
 
   // Calculate percent used
   const percentUsed =
-    maxAllowance > 0n ? Number(((maxAllowance - allowance) * 10000n) / maxAllowance) / 100 : 0
+    maxAllowance > 0n
+      ? Number(((maxAllowance - remainingAllowance) * 10000n) / maxAllowance) / 100
+      : 0
 
   // Determine color coding
   const percentRemaining = 100 - percentUsed
@@ -84,23 +101,38 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center gap-2 text-base">
             Spending Allowance
-            <TooltipIcon content="The oracle tracks your spending across all operations. Remaining allowance is calculated based on your spending limit and the Safe's portfolio value." />
+            <TooltipIcon
+              content={
+                isOracleless
+                  ? 'In oracleless mode, the spending budget is the fixed USD limit per window. There is no oracle tracking — only on-chain cumulative enforcement.'
+                  : "The oracle tracks your spending across all operations. Remaining allowance is calculated based on your spending limit and the Safe's portfolio value."
+              }
+            />
           </CardTitle>
-          {isStale && (
+          {isOracleless ? (
+            <Badge
+              variant="outline"
+              className="text-accent-primary text-xs"
+            >
+              Oracleless
+            </Badge>
+          ) : isStale ? (
             <Badge
               variant="outline"
               className="text-yellow-600 dark:text-yellow-400 text-xs"
             >
               Stale Data
             </Badge>
-          )}
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex justify-between items-center">
           <div>
-            <p className="font-bold text-2xl">${formatUSD(allowance)}</p>
-            <p className="text-muted-foreground text-xs">Remaining allowance</p>
+            <p className="font-bold text-2xl">${formatUSD(remainingAllowance)}</p>
+            <p className="text-muted-foreground text-xs">
+              {isOracleless ? 'USD limit per window' : 'Remaining allowance'}
+            </p>
           </div>
           <Badge variant={statusVariant}>{percentRemaining.toFixed(1)}% left</Badge>
         </div>
@@ -111,7 +143,7 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
             className="h-2"
           />
           <div className="flex justify-between text-muted-foreground text-xs">
-            <span>Used: ${formatUSD(maxAllowance - allowance)}</span>
+            <span>Used: ${formatUSD(maxAllowance - remainingAllowance)}</span>
             <span>Max: ${formatUSD(maxAllowance)}</span>
           </div>
         </div>

@@ -47,6 +47,28 @@ export function useSafeOwners() {
 }
 
 /**
+ * Hook to check if the module is in oracleless mode (authorizedOracle == address(0)).
+ * In oracleless mode: no oracle freshness checks, USD-only spending limits,
+ * spending governed solely by on-chain cumulativeSpent.
+ */
+export function useIsOracleless() {
+  const { chainId } = useAccount()
+  const { addresses } = useContractAddresses()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'isOracleless',
+    chainId,
+    query: {
+      enabled: Boolean(addresses.defiInteractor),
+      staleTime: 5 * 60 * 1000, // 5 minutes — mode changes are rare admin actions
+      gcTime: 10 * 60 * 1000,
+    },
+  })
+}
+
+/**
  * Hook to check if the contract is paused (emergency stop)
  */
 export function useIsPaused() {
