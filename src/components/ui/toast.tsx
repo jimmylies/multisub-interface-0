@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, XCircle, AlertTriangle, Info, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast, Toast, ToastType } from '@/contexts/ToastContext'
+import { getExplorerBase } from '@/lib/chains'
 import { useChainId } from 'wagmi'
 
 const toastVariants = cva(
@@ -54,16 +55,7 @@ const ICONS: Record<ToastType, typeof CheckCircle> = {
 
 // Etherscan URL helper
 function getExplorerUrl(chainId: number, txHash: string): string {
-  const explorers: Record<number, string> = {
-    1: 'https://etherscan.io',
-    11155111: 'https://sepolia.etherscan.io',
-    137: 'https://polygonscan.com',
-    42161: 'https://arbiscan.io',
-    10: 'https://optimistic.etherscan.io',
-    8453: 'https://basescan.org',
-  }
-  const baseUrl = explorers[chainId] || 'https://etherscan.io'
-  return `${baseUrl}/tx/${txHash}`
+  return `${getExplorerBase(chainId)}/tx/${txHash}`
 }
 
 interface ToastItemProps extends VariantProps<typeof toastVariants> {

@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Tooltip } from '@/components/ui/tooltip'
 import { type Transaction, OP_TYPES, type OpType } from '@/hooks/useTransactionHistory'
+import { getExplorerBase } from '@/lib/chains'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
 import { formatTokenAmount, formatTimeAgo, cn } from '@/lib/utils'
 
@@ -39,16 +40,7 @@ const OP_COLORS: Record<OpType, string> = {
 
 // Explorer URLs
 function getExplorerUrl(chainId: number, txHash: string): string {
-  const explorers: Record<number, string> = {
-    1: 'https://etherscan.io',
-    11155111: 'https://sepolia.etherscan.io',
-    137: 'https://polygonscan.com',
-    42161: 'https://arbiscan.io',
-    10: 'https://optimistic.etherscan.io',
-    8453: 'https://basescan.org',
-  }
-  const baseUrl = explorers[chainId] || 'https://etherscan.io'
-  return `${baseUrl}/tx/${txHash}`
+  return `${getExplorerBase(chainId)}/tx/${txHash}`
 }
 
 function shortenAddress(address: string): string {

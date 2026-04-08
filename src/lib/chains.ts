@@ -2,7 +2,7 @@ import { mainnet, sepolia, base, baseSepolia } from 'wagmi/chains'
 import { http } from 'wagmi'
 import type { Chain, Transport } from 'wagmi/chains'
 
-type NetworkName = 'sepolia' | 'mainnet' | 'base' | 'base-sepolia'
+export type NetworkName = 'sepolia' | 'mainnet' | 'base' | 'base-sepolia'
 
 // Map network names to chain objects
 const NETWORK_MAP: Record<NetworkName, Chain> = {
@@ -20,6 +20,26 @@ const RPC_MAP: Record<NetworkName, string> = {
   'base-sepolia': 'https://sepolia.base.org',
 }
 
+const EXPLORER_BASE_MAP: Record<number, string> = {
+  1: 'https://etherscan.io',
+  10: 'https://optimistic.etherscan.io',
+  137: 'https://polygonscan.com',
+  8453: 'https://basescan.org',
+  84532: 'https://sepolia.basescan.org',
+  42161: 'https://arbiscan.io',
+  11155111: 'https://sepolia.etherscan.io',
+}
+
+const CHAIN_LABEL_MAP: Record<number, string> = {
+  1: 'Ethereum',
+  10: 'Optimism',
+  137: 'Polygon',
+  8453: 'Base',
+  84532: 'Base Sepolia',
+  42161: 'Arbitrum',
+  11155111: 'Ethereum Sepolia',
+}
+
 // Get network from env or default to Base
 const networkName = (import.meta.env.VITE_NETWORK as NetworkName) || 'base'
 
@@ -34,6 +54,24 @@ export const selectedChain = NETWORK_MAP[networkName]
 
 function getRpcUrl(): string | undefined {
   return RPC_MAP[networkName]
+}
+
+export function getRpcUrlForChainId(chainId: number): string | undefined {
+  const chain = Object.values(NETWORK_MAP).find(candidate => candidate.id === chainId)
+  if (!chain) return undefined
+
+  const name = Object.entries(NETWORK_MAP).find(([, candidate]) => candidate.id === chainId)?.[0]
+  if (!name) return undefined
+
+  return RPC_MAP[name as NetworkName]
+}
+
+export function getExplorerBase(chainId: number): string {
+  return EXPLORER_BASE_MAP[chainId] || 'https://etherscan.io'
+}
+
+export function getChainLabel(chainId: number): string {
+  return CHAIN_LABEL_MAP[chainId] || `Chain ${chainId}`
 }
 
 // Get transports with custom RPC if provided

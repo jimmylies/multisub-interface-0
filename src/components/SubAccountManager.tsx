@@ -571,6 +571,88 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     setLocalTransferRole(hasTransferRole || false)
   }
 
+  const handleDeleteSubAccount = async () => {
+    if (!addresses.defiInteractor) {
+      toast.warning('Contract not configured')
+      return
+    }
+
+    const roles: RoleChange[] = []
+    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+
+    if (hasExecuteRole) {
+      roles.push({
+        roleId: ROLES.DEFI_EXECUTE_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
+        action: 'remove',
+      })
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+          account,
+          ROLES.DEFI_EXECUTE_ROLE,
+        ]),
+      })
+    }
+
+    if (hasTransferRole) {
+      roles.push({
+        roleId: ROLES.DEFI_TRANSFER_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
+        action: 'remove',
+      })
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+          account,
+          ROLES.DEFI_TRANSFER_ROLE,
+        ]),
+      })
+    }
+
+    if (transactions.length === 0) {
+      toast.info('This sub-account is already inactive')
+      return
+    }
+
+    const previewData: TransactionPreviewData = {
+      type: 'update-roles',
+      subAccountAddress: account,
+      roles,
+      fullState: {
+        roles: mergeRolesWithChanges(currentFullState.roles, roles),
+        spendingLimits: currentFullState.spendingLimits,
+        protocols: currentFullState.protocols,
+      },
+    }
+
+    showPreview(previewData, async () => {
+      try {
+        const result = await proposeTransaction(
+          transactions.length === 1 ? transactions[0] : transactions,
+          { transactionType: TRANSACTION_TYPES.REVOKE_ROLE }
+        )
+
+        if (result.success) {
+          toast.success('Sub-account deleted successfully')
+          setIsRolesPopoverOpen(false)
+          setLocalExecuteRole(false)
+          setLocalTransferRole(false)
+        } else if ('cancelled' in result && result.cancelled) {
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        console.error('Error deleting sub-account:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete sub-account'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
+  }
+
   const handleSaveName = () => {
     const trimmed = nameInputValue.trim()
     if (trimmed) {
@@ -723,6 +805,18 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
           >
             {isExpanded ? 'Hide' : 'Configure'}
           </Button>
+
+          {(hasExecuteRole || hasTransferRole) && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDeleteSubAccount}
+              disabled={isRevoking || isUpdating}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+            >
+              {isUpdating ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
 
           {/* Update Roles Popover */}
           <Popover

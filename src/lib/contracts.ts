@@ -10,4 +10,5 @@ export {
   AAVE_V3_POOL_ABI,
   ERC20_ABI,
   AGENT_VAULT_FACTORY_ABI,
+  MODULE_REGISTRY_ABI,
 } from './contracts/index'

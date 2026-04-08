@@ -8,10 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/router/routes'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
-import { useManagedAccounts, useSafeValue } from '@/hooks/useSafe'
+import { useIsSafeOwner, useManagedAccounts, useSafeValue } from '@/hooks/useSafe'
 import { useModulesForEOA } from '@/hooks/useModulesForEOA'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { DEFI_INTERACTOR_ABI, ROLE_DESCRIPTIONS, ROLE_NAMES, ROLES } from '@/lib/contracts'
 import { TransactionHistory } from '@/components/TransactionHistory'
+import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
+import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
+import { useToast } from '@/contexts/ToastContext'
+import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
+import type { RoleChange, TransactionPreviewData } from '@/types/transactionPreview'
 
 /**
  * AgentsPage — Dashboard view of all agents (sub-accounts) for a vault.
@@ -201,14 +206,12 @@ export function AgentsPage() {
         <>
           <div className="space-y-4">
             {managedAccounts.map(account => {
-              const roles: string[] = []
-              if (account.hasExecuteRole) roles.push('EXECUTE')
-              if (account.hasTransferRole) roles.push('TRANSFER')
               return (
                 <AgentCard
                   key={account.address}
                   address={account.address}
-                  roles={roles}
+                  hasExecuteRole={account.hasExecuteRole}
+                  hasTransferRole={account.hasTransferRole}
                   safeValueUSD={safeValueUSD}
                 />
               )
@@ -228,7 +231,8 @@ export function AgentsPage() {
 
 interface AgentCardProps {
   address: string
-  roles: string[]
+  hasExecuteRole: boolean
+  hasTransferRole: boolean
   safeValueUSD: number
 }
 
@@ -271,9 +275,91 @@ function ManualAddressInput({
   )
 }
 
-function AgentCard({ address, roles, safeValueUSD }: AgentCardProps) {
+function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: AgentCardProps) {
+  const roles = [
+    hasExecuteRole ? 'EXECUTE' : null,
+    hasTransferRole ? 'TRANSFER' : null,
+  ].filter(Boolean) as string[]
   const isActive = roles.length > 0
   const [showHistory, setShowHistory] = useState(false)
+  const { addresses } = useContractAddresses()
+  const { isSafeOwner } = useIsSafeOwner()
+  const { toast } = useToast()
+  const { proposeTransaction, isPending } = useSafeProposal()
+  const { showPreview } = useTransactionPreviewContext()
+
+  const handleDeleteSubAccount = async () => {
+    if (!addresses.defiInteractor) {
+      toast.warning('Contract not configured')
+      return
+    }
+
+    const rolesToRemove: RoleChange[] = []
+    const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+
+    if (hasExecuteRole) {
+      rolesToRemove.push({
+        roleId: ROLES.DEFI_EXECUTE_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
+        action: 'remove',
+      })
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+          address,
+          ROLES.DEFI_EXECUTE_ROLE,
+        ]),
+      })
+    }
+
+    if (hasTransferRole) {
+      rolesToRemove.push({
+        roleId: ROLES.DEFI_TRANSFER_ROLE,
+        roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
+        description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
+        action: 'remove',
+      })
+      transactions.push({
+        to: addresses.defiInteractor,
+        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+          address,
+          ROLES.DEFI_TRANSFER_ROLE,
+        ]),
+      })
+    }
+
+    if (transactions.length === 0) {
+      toast.info('This sub-account is already inactive')
+      return
+    }
+
+    const previewData: TransactionPreviewData = {
+      type: 'update-roles',
+      subAccountAddress: address as `0x${string}`,
+      roles: rolesToRemove,
+    }
+
+    showPreview(previewData, async () => {
+      try {
+        const result = await proposeTransaction(
+          transactions.length === 1 ? transactions[0] : transactions,
+          { transactionType: TRANSACTION_TYPES.REVOKE_ROLE }
+        )
+
+        if (result.success) {
+          toast.success('Sub-account deleted successfully')
+        } else if ('cancelled' in result && result.cancelled) {
+          return
+        } else {
+          throw result.error || new Error('Transaction failed')
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete sub-account'
+        toast.error(`Transaction failed: ${errorMsg}`)
+      }
+    })
+  }
 
   return (
     <div className="bg-elevated-1 rounded-xl border border-subtle p-5 hover:border-accent-primary/20 transition-colors">
@@ -294,9 +380,20 @@ function AgentCard({ address, roles, safeValueUSD }: AgentCardProps) {
             ))}
           </div>
         </div>
-        <span className={`text-xs font-medium ${isActive ? 'text-green-400' : 'text-red-400'}`}>
-          {isActive ? 'Active' : 'Revoked'}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-xs font-medium ${isActive ? 'text-green-400' : 'text-red-400'}`}>
+            {isActive ? 'Active' : 'Revoked'}
+          </span>
+          {isSafeOwner && isActive && (
+            <button
+              onClick={handleDeleteSubAccount}
+              disabled={isPending}
+              className="text-[11px] text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
+            >
+              {isPending ? 'Deleting...' : 'Delete sub-account'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs text-tertiary">

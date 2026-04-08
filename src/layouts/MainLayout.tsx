@@ -1,4 +1,4 @@
-import { Outlet, Link } from 'react-router-dom'
+import { Outlet, Link, NavLink } from 'react-router-dom'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SkipLink, SkipLinkTarget } from '@/components/SkipLink'
@@ -9,6 +9,13 @@ import { ROUTES } from '@/router/routes'
 export function MainLayout() {
   const { isConnected } = useAccount()
   const { isSafeOwner, isDualRole } = useUserRoles()
+  const getNavClassName = ({ isActive }: { isActive: boolean }) =>
+    [
+      'px-3 py-1.5 rounded-md text-sm transition-colors',
+      isActive
+        ? 'bg-elevated-1 text-primary'
+        : 'text-secondary hover:text-primary hover:bg-elevated-1',
+    ].join(' ')
 
   return (
     <div className="min-h-screen app-background">
@@ -52,30 +59,37 @@ export function MainLayout() {
             className="items-center gap-1 hidden md:flex"
             role="navigation"
           >
-            <Link
+            <NavLink
               to={ROUTES.WIZARD}
-              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+              className={getNavClassName}
             >
               Deploy
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               to={ROUTES.AGENTS}
-              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+              className={getNavClassName}
             >
               Agents
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               to={ROUTES.DASHBOARD}
-              className="px-3 py-1.5 rounded-md text-secondary text-sm hover:text-primary hover:bg-elevated-1 transition-colors"
+              className={getNavClassName}
             >
               Advanced
-            </Link>
-            <Link
+            </NavLink>
+            <NavLink
               to={ROUTES.CHALLENGE}
-              className="px-3 py-1.5 rounded-md font-medium text-sm text-accent-primary hover:bg-accent-primary/10 transition-colors"
+              className={({ isActive }) =>
+                [
+                  'px-3 py-1.5 rounded-md font-medium text-sm transition-colors',
+                  isActive
+                    ? 'bg-accent-primary/10 text-primary'
+                    : 'text-accent-primary hover:bg-accent-primary/10',
+                ].join(' ')
+              }
             >
               Break the Vault
-            </Link>
+            </NavLink>
           </nav>
 
           {/* Actions */}

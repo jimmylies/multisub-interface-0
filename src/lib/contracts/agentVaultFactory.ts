@@ -45,6 +45,13 @@ export const AGENT_VAULT_FACTORY_ABI = [
   },
   {
     type: 'function',
+    name: 'registry',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'contract IModuleRegistry' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'computeModuleAddress',
     inputs: [
       { name: 'safe', type: 'address', internalType: 'address' },

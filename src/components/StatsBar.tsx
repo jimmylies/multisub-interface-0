@@ -4,16 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { ViewSwitcher } from '@/components/ViewSwitcher'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getChainLabel } from '@/lib/chains'
 import { formatUSD, formatTimeAgo } from '@/lib/utils'
-
-const chainNames: Record<number, string> = {
-  1: 'Ethereum',
-  137: 'Polygon',
-  42161: 'Arbitrum',
-  10: 'Optimism',
-  8453: 'Base',
-  11155111: 'Sepolia',
-}
 
 export function StatsBar() {
   const { isConnected } = useAccount()
@@ -23,7 +15,7 @@ export function StatsBar() {
 
   if (!isConnected) return null
 
-  const networkName = chainNames[chainId] || `Chain ${chainId}`
+  const networkName = getChainLabel(chainId)
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 animate-fade-in">

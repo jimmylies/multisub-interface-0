@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useChainId,
+  useReadContract,
+} from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { isAddress, decodeEventLog, parseUnits, zeroAddress, type Address } from 'viem'
 import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
@@ -8,21 +14,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/ui/copy-button'
 import { ROUTES } from '@/router/routes'
-import { AGENT_VAULT_FACTORY_ABI } from '@/lib/contracts'
+import { getExplorerBase } from '@/lib/chains'
+import { AGENT_VAULT_FACTORY_ABI, MODULE_REGISTRY_ABI } from '@/lib/contracts'
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
-
-function getExplorerBase(chainId: number): string {
-  const explorers: Record<number, string> = {
-    1: 'https://etherscan.io',
-    11155111: 'https://sepolia.etherscan.io',
-    137: 'https://polygonscan.com',
-    42161: 'https://arbiscan.io',
-    10: 'https://optimistic.etherscan.io',
-    8453: 'https://basescan.org',
-    84532: 'https://sepolia.basescan.org',
-  }
-  return explorers[chainId] || 'https://etherscan.io'
-}
 
 // Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
 const PRESET_IDS: Record<string, number> = {
@@ -121,6 +115,33 @@ export function WizardPage() {
   const txFailMessage = txReverted
     ? 'Transaction reverted on-chain.'
     : (receiptError?.message ?? null)
+  const hasValidSafeAddress = isAddress(safeAddress)
+
+  const { data: moduleRegistryAddress } = useReadContract({
+    address: FACTORY_ADDRESS,
+    abi: AGENT_VAULT_FACTORY_ABI,
+    functionName: 'registry',
+    query: {
+      enabled: Boolean(FACTORY_ADDRESS),
+    },
+  })
+
+  const { data: existingModule } = useReadContract({
+    address: moduleRegistryAddress,
+    abi: MODULE_REGISTRY_ABI,
+    functionName: 'getModuleForSafe',
+    args: hasValidSafeAddress ? [safeAddress as Address] : undefined,
+    query: {
+      enabled: Boolean(moduleRegistryAddress) && hasValidSafeAddress,
+    },
+  })
+
+  const existingModuleAddress = existingModule && existingModule !== zeroAddress ? existingModule : null
+  const justDeployedRegisteredModule =
+    Boolean(deployedModule) &&
+    deployedModule !== 'unknown' &&
+    existingModuleAddress?.toLowerCase() === deployedModule?.toLowerCase()
+  const showExistingModuleWarning = Boolean(existingModuleAddress) && !justDeployedRegisteredModule
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
   const isDeploying = isWriting || isConfirming
@@ -134,6 +155,13 @@ export function WizardPage() {
       !effectiveOracle
     )
       return
+
+    if (showExistingModuleWarning) {
+      setDeployError(
+        `This Safe already has a registered module: ${existingModuleAddress}. Reuse that vault or deploy with a different Safe.`
+      )
+      return
+    }
 
     // Oracleless mode requires a USD spending limit
     if (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) {
@@ -650,6 +678,53 @@ export function WizardPage() {
             </div>
           )}
 
+          {showExistingModuleWarning && existingModuleAddress && (
+            <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <p className="text-sm font-medium text-yellow-400">
+                This Safe already has a registered vault
+              </p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-xs text-yellow-400/80 font-mono">
+                  {existingModuleAddress}
+                </span>
+                <CopyButton value={existingModuleAddress} />
+                <a
+                  href={`${getExplorerBase(chainId)}/address/${existingModuleAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-yellow-400/70 hover:text-yellow-400 transition-colors"
+                  title="View module"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-xs text-yellow-400/80 mt-2">
+                `AgentVaultFactory` allows only one registered module per Safe, so this deployment
+                would revert.
+              </p>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    localStorage.setItem('defiInteractor', existingModuleAddress)
+                    navigate(`${ROUTES.AGENTS}?defiInteractor=${existingModuleAddress}`)
+                  }}
+                >
+                  Open In Agents
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    localStorage.setItem('defiInteractor', existingModuleAddress)
+                    navigate(`${ROUTES.DASHBOARD}?defiInteractor=${existingModuleAddress}`)
+                  }}
+                >
+                  Open In Advanced
+                </Button>
+              </div>
+            </div>
+          )}
+
           {deployError && (
             <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-sm text-red-400">{deployError}</p>
@@ -779,7 +854,7 @@ export function WizardPage() {
             </Button>
             <Button
               onClick={handleDeploy}
-              disabled={isDeploying || (isSuccess && !txReverted)}
+              disabled={isDeploying || (isSuccess && !txReverted) || showExistingModuleWarning}
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
               {isWriting

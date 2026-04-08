@@ -27,6 +27,27 @@ export function useSafeAddress() {
 }
 
 /**
+ * Hook to read the module owner address.
+ * For factory-deployed vaults this is usually the Safe, but it can also be an EOA-owned vault.
+ */
+export function useModuleOwner() {
+  const { chainId } = useAccount()
+  const { addresses } = useContractAddresses()
+
+  return useReadContract({
+    address: addresses.defiInteractor,
+    abi: DEFI_INTERACTOR_ABI,
+    functionName: 'owner',
+    chainId,
+    query: {
+      enabled: Boolean(addresses.defiInteractor),
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    },
+  })
+}
+
+/**
  * Hook to fetch the list of Safe owners
  */
 export function useSafeOwners() {
@@ -138,17 +159,24 @@ export function useIsPaused() {
 export function useIsSafeOwner() {
   const { address: connectedAddress } = useAccount()
   const { data: safeAddress } = useSafeAddress()
+  const { data: moduleOwner } = useModuleOwner()
   const { data: owners, isLoading } = useSafeOwners()
 
-  const isSafeOwner =
+  const isSafeSigner =
     connectedAddress &&
     owners &&
     owners.some(owner => owner.toLowerCase() === connectedAddress.toLowerCase())
 
+  const isDirectOwner =
+    connectedAddress &&
+    moduleOwner &&
+    connectedAddress.toLowerCase() === moduleOwner.toLowerCase()
+
   return {
-    isSafeOwner: Boolean(isSafeOwner),
+    isSafeOwner: Boolean(isSafeSigner || isDirectOwner),
     isLoading,
     safeAddress,
+    moduleOwner,
     connectedAddress,
     owners,
   }

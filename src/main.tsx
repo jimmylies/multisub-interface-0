@@ -17,24 +17,15 @@ import '@rainbow-me/rainbowkit/styles.css'
 import './index.css'
 
 import { SafeProvider, createConfig } from '@safe-global/safe-react-hooks'
-import { selectedChain } from './lib/chains'
+import { getRpcUrlForChainId, selectedChain } from './lib/chains'
 
 const queryClient = new QueryClient()
 
 const SafeProviderWrapper = () => {
   const { address, chain } = useAccount()
 
-  // Get RPC URL from env based on selected chain
   const getRpcProvider = () => {
-    if (selectedChain.id === 11155111) {
-      // Sepolia
-      return 'https://sepolia.drpc.org'
-    }
-    if (selectedChain.id === 1) {
-      // Mainnet
-      return 'https://eth.llamarpc.com'
-    }
-    return 'https://sepolia.drpc.org' // fallback
+    return getRpcUrlForChainId(chain?.id ?? selectedChain.id) || 'https://eth.llamarpc.com'
   }
 
   const safeConfig = createConfig({
