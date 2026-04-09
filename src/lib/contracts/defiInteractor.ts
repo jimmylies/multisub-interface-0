@@ -191,6 +191,20 @@ export const DEFI_INTERACTOR_ABI = [
   },
   {
     type: 'function',
+    name: 'protocolParsers',
+    inputs: [{ name: '', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'address', internalType: 'contract ICalldataParser' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'selectorType',
+    inputs: [{ name: '', type: 'bytes4', internalType: 'bytes4' }],
+    outputs: [{ name: '', type: 'uint8', internalType: 'enum DeFiInteractorModule.OperationType' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'owner',
     inputs: [],
     outputs: [{ name: '', type: 'address', internalType: 'address' }],

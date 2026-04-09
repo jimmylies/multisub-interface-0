@@ -17,6 +17,7 @@ import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
 import type { RoleChange, TransactionPreviewData } from '@/types/transactionPreview'
+import { mergeRolesWithChanges, useSubAccountFullState } from '@/hooks/useSubAccountFullState'
 
 /**
  * AgentsPage — Dashboard view of all agents (sub-accounts) for a vault.
@@ -287,6 +288,7 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
   const { toast } = useToast()
   const { proposeTransaction, isPending } = useSafeProposal()
   const { showPreview } = useTransactionPreviewContext()
+  const { fullState: currentFullState } = useSubAccountFullState(address as `0x${string}`)
 
   const handleDeleteSubAccount = async () => {
     if (!addresses.defiInteractor) {
@@ -338,6 +340,11 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
       type: 'update-roles',
       subAccountAddress: address as `0x${string}`,
       roles: rolesToRemove,
+      fullState: {
+        roles: mergeRolesWithChanges(currentFullState.roles, rolesToRemove),
+        spendingLimits: currentFullState.spendingLimits,
+        protocols: currentFullState.protocols,
+      },
     }
 
     showPreview(previewData, async () => {

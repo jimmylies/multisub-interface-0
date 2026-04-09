@@ -6,6 +6,7 @@ import {
   useWaitForTransactionReceipt,
   useChainId,
   useReadContract,
+  usePublicClient,
 } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { isAddress, decodeEventLog, parseUnits, zeroAddress, type Address } from 'viem'
@@ -13,10 +14,22 @@ import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/ui/copy-button'
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase } from '@/lib/chains'
-import { AGENT_VAULT_FACTORY_ABI, MODULE_REGISTRY_ABI } from '@/lib/contracts'
+import { AGENT_VAULT_FACTORY_ABI, DEFI_INTERACTOR_ABI, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
+import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
+import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 
 // Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
 const PRESET_IDS: Record<string, number> = {
@@ -67,6 +80,13 @@ const PRESETS = [
 
 type Step = 'preset' | 'configure' | 'review'
 
+type ExistingVaultTransaction = { to: `0x${string}`; data: `0x${string}` }
+
+type ExistingVaultTransactionExplanation = {
+  title: string
+  description: string
+}
+
 // Fixed deployment config — set via environment variables
 const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefined
@@ -77,10 +97,104 @@ const PRICE_FEED_ADDRESSES = (import.meta.env.VITE_PRICE_FEED_ADDRESSES || '')
   .split(',')
   .filter(Boolean) as Address[]
 
+const PRESET_ROLE_IDS: Record<string, number> = {
+  'defi-trader': ROLES.DEFI_EXECUTE_ROLE,
+  'yield-farmer': ROLES.DEFI_EXECUTE_ROLE,
+  'payment-agent': ROLES.DEFI_TRANSFER_ROLE,
+}
+
+const BASE_SEPOLIA_PRESET_CONFIG: Record<
+  string,
+  {
+    roleId: number
+    maxSpendingBps: number
+    allowedProtocols: Address[]
+    parserRegistrations: Array<{ protocol: Address; parser: Address }>
+    selectorRegistrations: Array<{ selector: `0x${string}`; opType: number }>
+  }
+> = {
+  'defi-trader': {
+    roleId: ROLES.DEFI_EXECUTE_ROLE,
+    maxSpendingBps: 500,
+    allowedProtocols: [
+      '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
+      '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
+      '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
+      '0x492E6456D9528771018DeB9E87ef7750EF184104',
+    ],
+    parserRegistrations: [
+      {
+        protocol: '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
+        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
+      },
+      {
+        protocol: '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
+        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
+      },
+      {
+        protocol: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
+        parser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
+      },
+      {
+        protocol: '0x492E6456D9528771018DeB9E87ef7750EF184104',
+        parser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
+      },
+    ],
+    selectorRegistrations: [
+      { selector: '0x095ea7b3', opType: 5 },
+      { selector: '0x617ba037', opType: 2 },
+      { selector: '0x69328dec', opType: 3 },
+      { selector: '0xa415bcad', opType: 3 },
+      { selector: '0x573ade81', opType: 6 },
+      { selector: '0x236300dc', opType: 4 },
+      { selector: '0xbb492bf5', opType: 4 },
+      { selector: '0x04e45aaf', opType: 1 },
+      { selector: '0xb858183f', opType: 1 },
+      { selector: '0x5023b4df', opType: 1 },
+      { selector: '0x3593564c', opType: 1 },
+    ],
+  },
+  'yield-farmer': {
+    roleId: ROLES.DEFI_EXECUTE_ROLE,
+    maxSpendingBps: 1000,
+    allowedProtocols: [
+      '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
+      '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
+    ],
+    parserRegistrations: [
+      {
+        protocol: '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
+        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
+      },
+      {
+        protocol: '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
+        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
+      },
+    ],
+    selectorRegistrations: [
+      { selector: '0x095ea7b3', opType: 5 },
+      { selector: '0x617ba037', opType: 2 },
+      { selector: '0x69328dec', opType: 3 },
+      { selector: '0xa415bcad', opType: 3 },
+      { selector: '0x573ade81', opType: 6 },
+      { selector: '0x236300dc', opType: 4 },
+      { selector: '0xbb492bf5', opType: 4 },
+    ],
+  },
+  'payment-agent': {
+    roleId: ROLES.DEFI_TRANSFER_ROLE,
+    maxSpendingBps: 100,
+    allowedProtocols: [],
+    parserRegistrations: [],
+    selectorRegistrations: [],
+  },
+}
+
 export function WizardPage() {
   const navigate = useNavigate()
   const { isConnected } = useAccount()
   const chainId = useChainId()
+  const publicClient = usePublicClient()
   const [step, setStep] = useState<Step>('preset')
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [agentAddress, setAgentAddress] = useState('')
@@ -90,6 +204,15 @@ export function WizardPage() {
   const [oracleless, setOracleless] = useState(false)
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
+  const [existingVaultTxHash, setExistingVaultTxHash] = useState<`0x${string}` | null>(null)
+  const [usedExistingVault, setUsedExistingVault] = useState(false)
+  const [isExistingVaultFlowModalOpen, setIsExistingVaultFlowModalOpen] = useState(false)
+  const [pendingExistingVaultTransactions, setPendingExistingVaultTransactions] = useState<
+    ExistingVaultTransaction[]
+  >([])
+  const [pendingExistingVaultExplanations, setPendingExistingVaultExplanations] = useState<
+    ExistingVaultTransactionExplanation[]
+  >([])
 
   // Effective oracle: real address in oracle mode, zeroAddress in oracleless mode
   const effectiveOracle: Address | undefined = oracleless ? zeroAddress : ORACLE_ADDRESS
@@ -145,6 +268,252 @@ export function WizardPage() {
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
   const isDeploying = isWriting || isConfirming
+  const { proposeTransaction, isPending: isConfiguringExistingVault } = useSafeProposal()
+
+  async function executeExistingVaultConfiguration(transactions: ExistingVaultTransaction[]) {
+    setDeployError(null)
+    setExistingVaultTxHash(null)
+    setUsedExistingVault(false)
+    setIsExistingVaultFlowModalOpen(false)
+
+    try {
+      const result = await proposeTransaction(
+        transactions.length === 1 ? transactions[0] : transactions,
+        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
+      )
+
+      if (result.success) {
+        setUsedExistingVault(true)
+        setDeployedModule(existingModuleAddress)
+        setExistingVaultTxHash(result.transactionHash as `0x${string}`)
+        setPendingExistingVaultTransactions([])
+        setPendingExistingVaultExplanations([])
+      } else if ('cancelled' in result && result.cancelled) {
+        return
+      } else {
+        throw result.error || new Error('Transaction failed')
+      }
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : 'Failed to configure existing vault')
+    }
+  }
+
+  async function handleConfigureExistingVault() {
+    if (
+      !preset ||
+      !existingModuleAddress ||
+      !isAddress(agentAddress) ||
+      !publicClient
+    ) {
+      return
+    }
+
+    const transactions: ExistingVaultTransaction[] = []
+    const explanations: ExistingVaultTransactionExplanation[] = []
+    const addTransaction = (
+      transaction: ExistingVaultTransaction,
+      explanation: ExistingVaultTransactionExplanation
+    ) => {
+      transactions.push(transaction)
+      explanations.push(explanation)
+    }
+
+    if (preset.id === 'custom') {
+      addTransaction(
+        {
+          to: existingModuleAddress,
+          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'grantRole', [
+            agentAddress as Address,
+            ROLES.DEFI_EXECUTE_ROLE,
+          ]),
+        },
+        {
+          title: 'Grant agent role',
+          description: 'Gives this agent the EXECUTE permission needed to operate inside the vault.',
+        }
+      )
+      addTransaction(
+        {
+          to: existingModuleAddress,
+          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
+            agentAddress as Address,
+            oracleless ? 0n : 10000n,
+            parseUnits(spendingLimitUSD || '0', 18),
+            86400n,
+          ]),
+        },
+        {
+          title: 'Set spending limits',
+          description: 'Applies the spending cap and 24-hour window for this agent.',
+        }
+      )
+
+      const allowedProtocols = selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
+      if (allowedProtocols.length > 0) {
+        addTransaction(
+          {
+            to: existingModuleAddress,
+            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setAllowedAddresses', [
+              agentAddress as Address,
+              allowedProtocols,
+              true,
+            ]),
+          },
+          {
+            title: 'Whitelist allowed protocols',
+            description: 'Restricts this agent to the protocol addresses you selected for the custom setup.',
+          }
+        )
+      }
+    } else {
+      const presetConfig = chainId === 84532 ? BASE_SEPOLIA_PRESET_CONFIG[preset.id] : undefined
+
+      if (!presetConfig) {
+        setDeployError('Adding preset agents to an existing vault is currently supported on Base Sepolia only.')
+        return
+      }
+
+      const parserStatuses = await Promise.all(
+        presetConfig.parserRegistrations.map(async ({ protocol, parser }) => {
+          const currentParser = await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: DEFI_INTERACTOR_ABI,
+            functionName: 'protocolParsers',
+            args: [protocol],
+          })
+
+          return {
+            protocol,
+            parser,
+            needsRegistration: currentParser.toLowerCase() !== parser.toLowerCase(),
+          }
+        })
+      )
+
+      parserStatuses
+        .filter(({ needsRegistration }) => needsRegistration)
+        .forEach(({ protocol, parser }) => {
+          addTransaction(
+            {
+              to: existingModuleAddress,
+              data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'registerParser', [
+                protocol,
+                parser,
+              ]),
+            },
+            {
+              title: 'Register protocol parser',
+              description: `Lets the vault validate interactions with protocol ${protocol.slice(0, 6)}...${protocol.slice(-4)}.`,
+            }
+          )
+        })
+
+      const selectorStatuses = await Promise.all(
+        presetConfig.selectorRegistrations.map(async ({ selector, opType }) => {
+          const currentOpType = await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: DEFI_INTERACTOR_ABI,
+            functionName: 'selectorType',
+            args: [selector],
+          })
+
+          return {
+            selector,
+            opType,
+            needsRegistration: Number(currentOpType) !== opType,
+          }
+        })
+      )
+
+      selectorStatuses
+        .filter(({ needsRegistration }) => needsRegistration)
+        .forEach(({ selector, opType }) => {
+          addTransaction(
+            {
+              to: existingModuleAddress,
+              data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'registerSelector', [
+                selector,
+                opType,
+              ]),
+            },
+            {
+              title: 'Register operation selector',
+              description: `Maps selector ${selector} to the preset safety rules before the agent can use it.`,
+            }
+          )
+        })
+
+      const alreadyHasRole = await publicClient.readContract({
+        address: existingModuleAddress,
+        abi: DEFI_INTERACTOR_ABI,
+        functionName: 'hasRole',
+        args: [agentAddress as Address, PRESET_ROLE_IDS[preset.id]],
+      })
+
+      if (!alreadyHasRole) {
+        addTransaction(
+          {
+            to: existingModuleAddress,
+            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'grantRole', [
+              agentAddress as Address,
+              PRESET_ROLE_IDS[preset.id],
+            ]),
+          },
+          {
+            title: 'Grant agent role',
+            description: `Gives this agent the ${preset.roleLabel} permission required by the preset.`,
+          }
+        )
+      }
+
+      addTransaction(
+        {
+          to: existingModuleAddress,
+          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
+            agentAddress as Address,
+            BigInt(presetConfig.maxSpendingBps),
+            0n,
+            86400n,
+          ]),
+        },
+        {
+          title: 'Set spending limits',
+          description: 'Applies the preset spending cap and daily reset window for this agent.',
+        }
+      )
+
+      if (presetConfig.allowedProtocols.length > 0) {
+        addTransaction(
+          {
+            to: existingModuleAddress,
+            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setAllowedAddresses', [
+              agentAddress as Address,
+              presetConfig.allowedProtocols,
+              true,
+            ]),
+          },
+          {
+            title: 'Whitelist allowed protocols',
+            description: 'Allows this agent to call only the protocol contracts included in the preset.',
+          }
+        )
+      }
+    }
+
+    if (transactions.length === 0) {
+      setDeployError('This agent already appears to be configured for the selected preset on the existing vault.')
+      return
+    }
+
+    if (transactions.length > 1) {
+      setPendingExistingVaultTransactions(transactions)
+      setPendingExistingVaultExplanations(explanations)
+      setIsExistingVaultFlowModalOpen(true)
+      return
+    }
+
+    await executeExistingVaultConfiguration(transactions)
+  }
 
   async function handleDeploy() {
     if (
@@ -157,9 +526,7 @@ export function WizardPage() {
       return
 
     if (showExistingModuleWarning) {
-      setDeployError(
-        `This Safe already has a registered module: ${existingModuleAddress}. Reuse that vault or deploy with a different Safe.`
-      )
+      await handleConfigureExistingVault()
       return
     }
 
@@ -171,6 +538,8 @@ export function WizardPage() {
 
     setDeployError(null)
     setDeployedModule(null)
+    setUsedExistingVault(false)
+    setExistingVaultTxHash(null)
 
     const presetId = PRESET_IDS[preset.id]
     // In oracleless mode, price feeds are not strictly needed for spending tracking
@@ -699,8 +1068,9 @@ export function WizardPage() {
                 </a>
               </div>
               <p className="text-xs text-yellow-400/80 mt-2">
-                `AgentVaultFactory` allows only one registered module per Safe, so this deployment
-                would revert.
+                `AgentVaultFactory` allows only one registered module per Safe. Instead of creating
+                a second module, this wizard will add the new agent to the existing vault with the
+                selected preset.
               </p>
               <div className="flex gap-2 mt-3">
                 <Button
@@ -728,6 +1098,13 @@ export function WizardPage() {
           {deployError && (
             <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-sm text-red-400">{deployError}</p>
+            </div>
+          )}
+
+          {isConfiguringExistingVault && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+              <p className="text-sm text-blue-400">Configuring the existing vault...</p>
             </div>
           )}
 
@@ -788,19 +1165,22 @@ export function WizardPage() {
             </div>
           )}
 
-          {isSuccess && !txReverted && txHash && (
+          {(usedExistingVault || (isSuccess && !txReverted && txHash)) && (
             <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
-              <p className="text-sm font-medium text-green-400">Vault deployed successfully!</p>
+              <p className="text-sm font-medium text-green-400">
+                {usedExistingVault ? 'Agent added to existing vault successfully!' : 'Vault deployed successfully!'}
+              </p>
 
               <div>
                 <p className="text-xs text-green-400/70 mb-1">Transaction</p>
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-green-400 font-mono">
-                    {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                    {(usedExistingVault ? existingVaultTxHash : txHash)?.slice(0, 10)}...
+                    {(usedExistingVault ? existingVaultTxHash : txHash)?.slice(-8)}
                   </span>
-                  <CopyButton value={txHash} />
+                  <CopyButton value={(usedExistingVault ? existingVaultTxHash : txHash)!} />
                   <a
-                    href={`${getExplorerBase(chainId)}/tx/${txHash}`}
+                    href={`${getExplorerBase(chainId)}/tx/${usedExistingVault ? existingVaultTxHash : txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
@@ -832,7 +1212,9 @@ export function WizardPage() {
 
               <div className="pt-1">
                 <p className="text-xs text-green-400/70 mb-2">
-                  Next: enable this module in your Safe to activate the agent.
+                  {usedExistingVault
+                    ? 'The new agent is now configured on the existing vault.'
+                    : 'Next: enable this module in your Safe to activate the agent.'}
                 </p>
                 <Button
                   variant="outline"
@@ -854,22 +1236,75 @@ export function WizardPage() {
             </Button>
             <Button
               onClick={handleDeploy}
-              disabled={isDeploying || (isSuccess && !txReverted) || showExistingModuleWarning}
+              disabled={isDeploying || isConfiguringExistingVault || usedExistingVault || (isSuccess && !txReverted && !usedExistingVault)}
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
-              {isWriting
+              {isConfiguringExistingVault
+                ? 'Configuring Existing Vault...'
+                : isWriting
                 ? 'Confirm in Wallet...'
                 : isConfirming && !txFailed
                   ? 'Deploying...'
-                  : isSuccess && !txReverted
+                  : usedExistingVault || (isSuccess && !txReverted)
                     ? 'Deployed!'
                     : txFailed
                       ? 'Retry Deploy'
-                      : 'Deploy Vault'}
+                      : showExistingModuleWarning
+                        ? 'Add Agent To Existing Vault'
+                        : 'Deploy Vault'}
             </Button>
           </div>
         </div>
       )}
+
+      <Dialog
+        open={isExistingVaultFlowModalOpen}
+        onOpenChange={open => {
+          if (!open && !isConfiguringExistingVault) {
+            setIsExistingVaultFlowModalOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogClose onClose={() => setIsExistingVaultFlowModalOpen(false)} />
+          <DialogHeader>
+            <DialogTitle>
+              You will sign {pendingExistingVaultTransactions.length} transactions
+            </DialogTitle>
+            <DialogDescription>
+              This vault already exists, so Rabby will ask you to approve each setup step
+              separately before the new agent is fully configured.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody className="space-y-3">
+            {pendingExistingVaultExplanations.map((item, index) => (
+              <div key={`${item.title}-${index}`} className="rounded-lg border border-subtle bg-elevated-2 p-4">
+                <p className="text-sm font-medium text-primary">
+                  Transaction {index + 1}: {item.title}
+                </p>
+                <p className="mt-1 text-sm text-secondary">{item.description}</p>
+              </div>
+            ))}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={isConfiguringExistingVault}
+              onClick={() => setIsExistingVaultFlowModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isConfiguringExistingVault || pendingExistingVaultTransactions.length === 0}
+              onClick={() => executeExistingVaultConfiguration(pendingExistingVaultTransactions)}
+            >
+              {isConfiguringExistingVault ? 'Submitting...' : 'Continue'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

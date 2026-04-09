@@ -29,17 +29,22 @@ export function OracleStatusIndicator() {
   }
 
   const [totalValueUSD, lastUpdated, updateCount] = safeValue
+  const hasOracleUpdate = lastUpdated > 0n
 
   // Calculate time since last update
   const now = Math.floor(Date.now() / 1000)
-  const timeSinceUpdate = now - Number(lastUpdated)
+  const timeSinceUpdate = hasOracleUpdate ? now - Number(lastUpdated) : Number.POSITIVE_INFINITY
 
   // Determine status color based on time since update
   let statusColor = 'bg-green-500'
   let statusText = 'Active'
   let statusVariant: 'default' | 'secondary' | 'outline' = 'default'
 
-  if (isStale || timeSinceUpdate > 3600) {
+  if (!hasOracleUpdate) {
+    statusColor = 'bg-yellow-500'
+    statusText = 'Pending'
+    statusVariant = 'outline'
+  } else if (isStale || timeSinceUpdate > 3600) {
     // More than 1 hour or marked as stale
     statusColor = 'bg-yellow-500'
     statusText = 'Stale'
@@ -71,7 +76,7 @@ export function OracleStatusIndicator() {
         >
           {statusText}
         </Badge>
-        {isStale && (
+        {hasOracleUpdate && isStale && (
           <Badge
             variant="outline"
             className="text-warning text-xs"

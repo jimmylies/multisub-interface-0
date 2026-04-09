@@ -53,6 +53,7 @@ export function formatBps(bps: bigint | number): string {
  * @returns Human-readable time ago string (e.g., "5 minutes ago", "2 hours ago")
  */
 export function formatTimeAgo(timestamp: bigint): string {
+  if (timestamp === 0n) return 'Never updated'
   return dayjs.unix(Number(timestamp)).fromNow()
 }
 

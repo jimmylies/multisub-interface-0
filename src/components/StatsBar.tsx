@@ -62,12 +62,17 @@ function OracleStatusCompact() {
 
   const [totalValueUSD, lastUpdated, updateCount] = safeValue
   const now = Math.floor(Date.now() / 1000)
-  const timeSinceUpdate = now - Number(lastUpdated)
+  const hasOracleUpdate = lastUpdated > 0n
+  const timeSinceUpdate = hasOracleUpdate ? now - Number(lastUpdated) : Number.POSITIVE_INFINITY
 
   let statusColor = 'bg-success'
   let statusText = 'Active'
+  const badgeVariant = !hasOracleUpdate || isStale ? 'outline' : 'default'
 
-  if (isStale || timeSinceUpdate > 3600) {
+  if (!hasOracleUpdate) {
+    statusColor = 'bg-warning'
+    statusText = 'Pending'
+  } else if (isStale || timeSinceUpdate > 3600) {
     statusColor = 'bg-warning'
     statusText = 'Stale'
   } else if (timeSinceUpdate > 900) {
@@ -82,7 +87,7 @@ function OracleStatusCompact() {
         <span className="text-caption text-tertiary uppercase tracking-wider">Oracle</span>
         <TooltipIcon content="Chainlink oracle for portfolio value" />
       </div>
-      <Badge variant={isStale ? 'outline' : 'default'} className="text-xs">
+      <Badge variant={badgeVariant} className="text-xs">
         {statusText}
       </Badge>
       <div className="flex items-center gap-4 text-xs">
