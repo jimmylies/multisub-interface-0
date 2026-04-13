@@ -192,7 +192,7 @@ const BASE_SEPOLIA_PRESET_CONFIG: Record<
 
 export function WizardPage() {
   const navigate = useNavigate()
-  const { isConnected } = useAccount()
+  const { isConnected, address: connectedAddress } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
   const [step, setStep] = useState<Step>('preset')
@@ -265,6 +265,15 @@ export function WizardPage() {
     deployedModule !== 'unknown' &&
     existingModuleAddress?.toLowerCase() === deployedModule?.toLowerCase()
   const showExistingModuleWarning = Boolean(existingModuleAddress) && !justDeployedRegisteredModule
+  const isExistingVaultDirectOwnerFlow =
+    Boolean(connectedAddress) &&
+    Boolean(safeAddress) &&
+    connectedAddress!.toLowerCase() === safeAddress.toLowerCase()
+  const expectedExistingVaultWalletApprovals = isExistingVaultDirectOwnerFlow
+    ? pendingExistingVaultTransactions.length
+    : pendingExistingVaultTransactions.length > 0
+      ? 2
+      : 0
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
   const isDeploying = isWriting || isConfirming
@@ -279,7 +288,11 @@ export function WizardPage() {
     try {
       const result = await proposeTransaction(
         transactions.length === 1 ? transactions[0] : transactions,
-        { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
+        {
+          transactionType: TRANSACTION_TYPES.GRANT_ROLE,
+          safeAddressOverride: safeAddress as Address,
+          moduleOwnerOverride: safeAddress as Address,
+        }
       )
 
       if (result.success) {
@@ -1269,20 +1282,25 @@ export function WizardPage() {
           <DialogClose onClose={() => setIsExistingVaultFlowModalOpen(false)} />
           <DialogHeader>
             <DialogTitle>
-              You will sign {pendingExistingVaultTransactions.length} transactions
+              You will approve {expectedExistingVaultWalletApprovals} transaction{expectedExistingVaultWalletApprovals === 1 ? '' : 's'}
             </DialogTitle>
             <DialogDescription>
-              This vault already exists, so Rabby will ask you to approve each setup step
-              separately before the new agent is fully configured.
+              {isExistingVaultDirectOwnerFlow
+                ? 'This vault is owned directly by your connected wallet, so Rabby will ask you to approve each setup transaction separately.'
+                : 'This vault is Safe-backed, so the setup steps are bundled into one Safe flow. Rabby usually asks you to approve a signature and then the execution transaction.'}
             </DialogDescription>
           </DialogHeader>
 
           <DialogBody className="space-y-3">
+            <div className="rounded-lg border border-subtle bg-elevated-2 p-4">
+              <p className="text-sm font-medium text-primary">Setup plan</p>
+              <p className="mt-1 text-sm text-secondary">
+                {pendingExistingVaultTransactions.length} configuration step{pendingExistingVaultTransactions.length === 1 ? '' : 's'} will be applied to the existing vault.
+              </p>
+            </div>
             {pendingExistingVaultExplanations.map((item, index) => (
               <div key={`${item.title}-${index}`} className="rounded-lg border border-subtle bg-elevated-2 p-4">
-                <p className="text-sm font-medium text-primary">
-                  Transaction {index + 1}: {item.title}
-                </p>
+                <p className="text-sm font-medium text-primary">Step {index + 1}: {item.title}</p>
                 <p className="mt-1 text-sm text-secondary">{item.description}</p>
               </div>
             ))}

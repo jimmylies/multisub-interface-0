@@ -16,6 +16,8 @@ interface TransactionRequest {
 
 interface ProposeTransactionOptions {
   transactionType?: TransactionType;
+  safeAddressOverride?: Address;
+  moduleOwnerOverride?: Address;
 }
 
 // Helper to detect user rejection errors from wallet
@@ -84,7 +86,10 @@ export function useSafeProposal() {
         throw new Error('Wallet not connected');
       }
 
-      if (!safeAddress) {
+      const resolvedSafeAddress = options?.safeAddressOverride ?? safeAddress
+      const resolvedModuleOwner = options?.moduleOwnerOverride ?? moduleOwner
+
+      if (!resolvedSafeAddress) {
         throw new Error('Safe address not found');
       }
 
@@ -99,10 +104,10 @@ export function useSafeProposal() {
         const transactions = Array.isArray(transaction) ? transaction : [transaction];
         const isDirectOwnerVault =
           Boolean(address) &&
-          Boolean(safeAddress) &&
-          Boolean(moduleOwner) &&
-          address.toLowerCase() === safeAddress.toLowerCase() &&
-          address.toLowerCase() === moduleOwner.toLowerCase()
+          Boolean(resolvedSafeAddress) &&
+          Boolean(resolvedModuleOwner) &&
+          address.toLowerCase() === resolvedSafeAddress.toLowerCase() &&
+          address.toLowerCase() === resolvedModuleOwner.toLowerCase()
 
         if (isDirectOwnerVault) {
           const txHashes: `0x${string}`[] = []
@@ -144,7 +149,7 @@ export function useSafeProposal() {
         // Initialize Safe Protocol Kit with signer
         const protocolKit = await Safe.init({
           provider,
-          safeAddress: safeAddress as string,
+          safeAddress: resolvedSafeAddress as string,
           signer: address,
         });
 

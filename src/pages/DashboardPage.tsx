@@ -15,12 +15,18 @@ import { useViewMode } from '@/contexts/ViewModeContext'
 import { FadeInUp } from '@/components/ui/motion'
 import { useModulesForEOA } from '@/hooks/useModulesForEOA'
 import { Button } from '@/components/ui/button'
+import { useIsSafeOwner, useManagedAccounts } from '@/hooks/useSafe'
 
 export function DashboardPage() {
   const { isConfigured, setDefiInteractor } = useContractAddresses()
   const { viewMode } = useViewMode()
   const { isConnected, address } = useAccount()
   const { data: discoveredModules, isLoading: isDiscovering } = useModulesForEOA()
+  const { isSafeOwner } = useIsSafeOwner()
+  const { data: managedAccounts } = useManagedAccounts()
+
+  const managedSubAccounts = managedAccounts?.map(account => account.address as `0x${string}`) ?? []
+  const shouldShowVaultHistory = isSafeOwner && managedSubAccounts.length > 0
 
   useEffect(() => {
     if (!isConfigured && discoveredModules?.length === 1) {
@@ -97,7 +103,11 @@ export function DashboardPage() {
           </div>
           <ContractSetup />
         </div>
-        <TransactionHistory />
+        {shouldShowVaultHistory ? (
+          <TransactionHistory subAccounts={managedSubAccounts} />
+        ) : (
+          <TransactionHistory subAccount={address as `0x${string}` | undefined} />
+        )}
       </FadeInUp>
     )
   }

@@ -5,10 +5,16 @@ import { TransactionHistory } from '@/components/TransactionHistory'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { ROUTES } from '@/router/routes'
 import { FadeInUp } from '@/components/ui/motion'
+import { useIsSafeOwner, useManagedAccounts } from '@/hooks/useSafe'
 
 export function HistoryPage() {
   const { isConfigured } = useContractAddresses()
   const { isConnected, address } = useAccount()
+  const { isSafeOwner } = useIsSafeOwner()
+  const { data: managedAccounts } = useManagedAccounts()
+
+  const managedSubAccounts = managedAccounts?.map(account => account.address as `0x${string}`) ?? []
+  const shouldShowVaultHistory = isSafeOwner && managedSubAccounts.length > 0
 
   // Redirect to home if not configured
   if (!isConfigured) {
@@ -23,7 +29,11 @@ export function HistoryPage() {
   return (
     <FadeInUp className="space-y-6">
       <StatsBar />
-      <TransactionHistory subAccount={address} />
+      {shouldShowVaultHistory ? (
+        <TransactionHistory subAccounts={managedSubAccounts} />
+      ) : (
+        <TransactionHistory subAccount={address} />
+      )}
     </FadeInUp>
   )
 }
