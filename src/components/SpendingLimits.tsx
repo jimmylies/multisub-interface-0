@@ -23,7 +23,7 @@ interface SpendingLimitsProps {
 export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   const { addresses } = useContractAddresses()
 
-  // Read current limits using hook - NEW: returns only 2 values
+  // Read current limits using hook: [maxSpendingBps, maxSpendingUSD, windowDuration]
   const { data: currentLimits } = useSubAccountLimits(subAccountAddress)
 
   // Get full sub-account state for preview context
@@ -50,7 +50,8 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   useEffect(() => {
     if (currentLimits) {
       setSpendingLimit((Number(currentLimits[0]) / 100).toString())
-      setWindowHours((Number(currentLimits[1]) / 3600).toString())
+      const currentWindowHours = Number(currentLimits[2]) / 3600
+      setWindowHours((currentWindowHours > 0 ? currentWindowHours : 24).toString())
     }
   }, [currentLimits])
 
@@ -64,7 +65,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
 
     return (
       inputSpendingBps !== Number(currentLimits[0]) ||
-      inputWindowSeconds !== Number(currentLimits[1])
+      inputWindowSeconds !== Number(currentLimits[2])
     )
   }, [currentLimits, spendingLimit, windowHours])
 
@@ -114,7 +115,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       before: currentLimits
         ? {
             maxSpendingBps: Number(currentLimits[0]),
-            windowDuration: Number(currentLimits[1]),
+            windowDuration: Number(currentLimits[2]),
           }
         : null,
       after: {
@@ -195,7 +196,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-primary text-2xl">
-                    {(Number(currentLimits[1]) / 3600).toFixed(0)}h
+                    {(Number(currentLimits[2]) / 3600 || 24).toFixed(0)}h
                   </p>
                   <p className="mt-1 text-muted-foreground text-xs">Time Window</p>
                 </div>
@@ -261,7 +262,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-medium text-primary text-small">
                 Time Window
-                <TooltipIcon content="Duration in hours for the spending window. Transfer limits reset after this period. Coming soon." />
+                <TooltipIcon content="Duration in hours for the spending window. Spending limits reset after this period." />
               </label>
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
@@ -271,17 +272,20 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                     max="168"
                     step="1"
                     value={windowHours}
-                    onChange={e => setWindowHours(e.target.value)}
+                    onChange={e => {
+                      const value = e.target.value
+                      if (value === '' || /^\d+$/.test(value)) {
+                        setWindowHours(value)
+                      }
+                    }}
                     placeholder="24"
                     className="pr-8"
-                    disabled
                   />
                   <div className="top-1/2 right-4 absolute flex flex-col gap-0.5 -translate-y-1/2">
                     <button
                       type="button"
                       onClick={incrementWindowHours}
                       className="text-tertiary hover:text-primary transition-colors cursor-pointer"
-                      disabled
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
                     </button>
@@ -289,7 +293,6 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                       type="button"
                       onClick={decrementWindowHours}
                       className="text-tertiary hover:text-primary transition-colors cursor-pointer"
-                      disabled
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>

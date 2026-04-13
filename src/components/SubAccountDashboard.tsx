@@ -59,7 +59,8 @@ export function SubAccountDashboard() {
     )
   }
 
-  const [maxSpendingBps, windowDuration] = limits
+  const [maxSpendingBps, , rawWindowDuration] = limits
+  const windowDuration = rawWindowDuration > 0n ? rawWindowDuration : 86400n
 
   return (
     <div className="space-y-6">

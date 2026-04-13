@@ -68,7 +68,8 @@ export function useSubAccountFullState(subAccountAddress?: `0x${string}`) {
   // Build spending limits state
   const spendingLimits = useMemo<SpendingLimitChange | null>(() => {
     if (!limitsData) return null
-    const [maxSpendingBps, windowDuration] = limitsData as [bigint, bigint]
+    const [maxSpendingBps, , rawWindowDuration] = limitsData as [bigint, bigint, bigint]
+    const windowDuration = rawWindowDuration > 0n ? rawWindowDuration : 86400n
     // Only return if limits are actually set (non-zero)
     if (maxSpendingBps === 0n && windowDuration === 0n) return null
     return {
