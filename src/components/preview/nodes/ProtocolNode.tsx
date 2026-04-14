@@ -15,6 +15,8 @@ function getProtocolIcon(protocolId: string): string {
       return '🦄'
     case 'aave':
       return '👻'
+    case 'morpho':
+      return '🦋'
     case 'merkl':
       return '🌳'
     default:

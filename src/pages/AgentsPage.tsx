@@ -332,7 +332,7 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
     }
 
     if (transactions.length === 0) {
-      toast.info('This sub-account is already inactive')
+      toast.info('This agent is already inactive')
       return
     }
 
@@ -355,14 +355,14 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
         )
 
         if (result.success) {
-          toast.success('Sub-account deleted successfully')
+          toast.success('Agent deleted successfully')
         } else if ('cancelled' in result && result.cancelled) {
           return
         } else {
           throw result.error || new Error('Transaction failed')
         }
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Failed to delete sub-account'
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete agent'
         toast.error(`Transaction failed: ${errorMsg}`)
       }
     })
@@ -397,7 +397,7 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
               disabled={isPending}
               className="text-[11px] text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
             >
-              {isPending ? 'Deleting...' : 'Delete sub-account'}
+              {isPending ? 'Deleting...' : 'Delete agent'}
             </button>
           )}
         </div>

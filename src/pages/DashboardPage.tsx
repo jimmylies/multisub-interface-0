@@ -40,7 +40,7 @@ export function DashboardPage() {
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold text-primary">Advanced</h1>
           <p className="text-secondary mt-1">
-            Load a deployed module address to access owner and sub-account controls.
+            Load a deployed module address to access owner and agent controls.
           </p>
         </div>
         {isConnected && (

@@ -199,6 +199,8 @@ export function WizardPage() {
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [agentAddress, setAgentAddress] = useState('')
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
+  const [spendingLimitBps, setSpendingLimitBps] = useState('5')
+  const [spendingMode, setSpendingMode] = useState<'usd' | 'bps'>('usd')
   const [safeAddress, setSafeAddress] = useState('')
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([])
   const [oracleless, setOracleless] = useState(false)
@@ -350,8 +352,8 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            oracleless ? 0n : 10000n,
-            parseUnits(spendingLimitUSD || '0', 18),
+            oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
+            spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
             86400n,
           ]),
         },
@@ -484,14 +486,14 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            BigInt(presetConfig.maxSpendingBps),
-            0n,
+            oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
+            spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
             86400n,
           ]),
         },
         {
           title: 'Set spending limits',
-          description: 'Applies the preset spending cap and daily reset window for this agent.',
+          description: 'Applies the spending cap and daily reset window for this agent.',
         }
       )
 
@@ -588,8 +590,12 @@ export function WizardPage() {
         )
       } else {
         // Custom preset — deploy with full config
-        // Oracleless mode requires USD-only spending limits (BPS not allowed)
-        const maxSpendingBps = oracleless ? 0n : 10000n
+        // Oracleless mode: BPS=0 (USD-only). Oracle+BPS mode: use user value. Oracle+USD mode: 100% BPS cap.
+        const maxSpendingBps = oracleless
+          ? 0n
+          : spendingMode === 'bps'
+            ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
+            : 10000n
         writeContract(
           {
             address: FACTORY_ADDRESS,
@@ -602,7 +608,7 @@ export function WizardPage() {
                 agentAddress: agentAddress as Address,
                 roleId: 1, // EXECUTE by default for custom
                 maxSpendingBps,
-                maxSpendingUSD: parseUnits(spendingLimitUSD || '0', 18),
+                maxSpendingUSD: spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
                 windowDuration: 86400n, // 24h
                 allowedProtocols: selectedProtocols.flatMap(
                   id => getProtocolContractAddresses(id) as Address[]
@@ -704,6 +710,8 @@ export function WizardPage() {
                 key={p.id}
                 onClick={() => {
                   setSelectedPreset(p.id)
+                  setSpendingLimitBps(String(p.defaultBps / 100))
+                  setSpendingMode('bps')
                 }}
                 className={`text-left p-5 rounded-xl border transition-all ${
                   selectedPreset === p.id
@@ -783,36 +791,13 @@ export function WizardPage() {
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-primary mb-1.5">
-                Max spending per 24h (USD)
-              </label>
-              <div className="flex items-center gap-3">
-                <span className="text-secondary text-lg">$</span>
-                <Input
-                  type="number"
-                  value={spendingLimitUSD}
-                  onChange={e => setSpendingLimitUSD(e.target.value)}
-                  min={1}
-                  step={100}
-                  placeholder="5000"
-                  className="bg-elevated-2 border-subtle w-40"
-                />
-                <span className="text-secondary text-sm">USD per 24h window</span>
-              </div>
-              <p className="text-xs text-tertiary mt-1.5">
-                The agent cannot spend more than this amount in any rolling 24-hour period. Enforced
-                on-chain via price feed oracles.
-              </p>
-            </div>
-
-            {/* Oracleless mode toggle */}
+            {/* Trust mode toggle */}
             <div>
               <label className="block text-sm font-medium text-primary mb-1.5">Trust Mode</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setOracleless(false)}
+                  onClick={() => { setOracleless(false); setSpendingMode('usd') }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     !oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -830,7 +815,7 @@ export function WizardPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOracleless(true)}
+                  onClick={() => { setOracleless(true); setSpendingMode('usd') }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -847,12 +832,79 @@ export function WizardPage() {
                   </p>
                 </button>
               </div>
-              {oracleless && (
-                <p className="text-xs text-accent-primary mt-2">
-                  Oracleless mode requires a USD spending limit. BPS mode is unavailable (no
-                  portfolio valuation).
-                </p>
+            </div>
+
+            {/* Spending limit */}
+            <div>
+              <label className="block text-sm font-medium text-primary mb-1.5">
+                Spending Limit per 24h
+              </label>
+
+              {/* Mode toggle — only show when oracle is enabled */}
+              {!oracleless && (
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setSpendingMode('usd')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                      spendingMode === 'usd'
+                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
+                        : 'border-subtle bg-elevated text-tertiary hover:text-secondary'
+                    }`}
+                  >
+                    USD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpendingMode('bps')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                      spendingMode === 'bps'
+                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
+                        : 'border-subtle bg-elevated text-tertiary hover:text-secondary'
+                    }`}
+                  >
+                    % of portfolio
+                  </button>
+                </div>
               )}
+
+              {spendingMode === 'usd' || oracleless ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-secondary text-lg">$</span>
+                  <Input
+                    type="number"
+                    value={spendingLimitUSD}
+                    onChange={e => setSpendingLimitUSD(e.target.value)}
+                    min={1}
+                    step={100}
+                    placeholder="5000"
+                    className="bg-elevated-2 border-subtle w-40"
+                  />
+                  <span className="text-secondary text-sm">USD per 24h window</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    value={spendingLimitBps}
+                    onChange={e => setSpendingLimitBps(e.target.value)}
+                    min={0.01}
+                    max={100}
+                    step={0.5}
+                    placeholder="5"
+                    className="bg-elevated-2 border-subtle w-40"
+                  />
+                  <span className="text-secondary text-sm">% of portfolio per 24h</span>
+                </div>
+              )}
+
+              <p className="text-xs text-tertiary mt-1.5">
+                {oracleless
+                  ? 'The agent cannot spend more than this USD amount in any rolling 24-hour period. Enforced on-chain.'
+                  : spendingMode === 'bps'
+                    ? 'Percentage of the total portfolio value the agent can spend per 24-hour window. Tracked by the oracle.'
+                    : 'The agent cannot spend more than this amount in any rolling 24-hour period. Enforced on-chain via price feed oracles.'}
+              </p>
             </div>
           </div>
 
@@ -1024,7 +1076,9 @@ export function WizardPage() {
             <div className="flex justify-between">
               <span className="text-secondary">Spending Limit</span>
               <span className="text-primary">
-                ${Number(spendingLimitUSD || 0).toLocaleString()} per 24h
+                {!oracleless && spendingMode === 'bps'
+                  ? `${spendingLimitBps}% of portfolio per 24h`
+                  : `$${Number(spendingLimitUSD || 0).toLocaleString()} per 24h`}
               </span>
             </div>
             <div className="flex justify-between">
@@ -1181,7 +1235,7 @@ export function WizardPage() {
           {(usedExistingVault || (isSuccess && !txReverted && txHash)) && (
             <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
               <p className="text-sm font-medium text-green-400">
-                {usedExistingVault ? 'Agent added to existing vault successfully!' : 'Vault deployed successfully!'}
+                {usedExistingVault ? 'The agent has been added to the existing vault successfully!' : 'Vault deployed successfully!'}
               </p>
 
               <div>
@@ -1278,32 +1332,30 @@ export function WizardPage() {
           }
         }}
       >
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-md">
           <DialogClose onClose={() => setIsExistingVaultFlowModalOpen(false)} />
           <DialogHeader>
             <DialogTitle>
-              You will approve {expectedExistingVaultWalletApprovals} transaction{expectedExistingVaultWalletApprovals === 1 ? '' : 's'}
+              Approve {expectedExistingVaultWalletApprovals} transaction{expectedExistingVaultWalletApprovals === 1 ? '' : 's'}
             </DialogTitle>
             <DialogDescription>
               {isExistingVaultDirectOwnerFlow
-                ? 'This vault is owned directly by your connected wallet, so Rabby will ask you to approve each setup transaction separately.'
-                : 'This vault is Safe-backed, so the setup steps are bundled into one Safe flow. Rabby usually asks you to approve a signature and then the execution transaction.'}
+                ? 'Your wallet will sign each transaction separately.'
+                : 'Transactions are bundled into one Safe flow — sign once, then execute.'}
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody className="space-y-3">
-            <div className="rounded-lg border border-subtle bg-elevated-2 p-4">
-              <p className="text-sm font-medium text-primary">Setup plan</p>
-              <p className="mt-1 text-sm text-secondary">
-                {pendingExistingVaultTransactions.length} configuration step{pendingExistingVaultTransactions.length === 1 ? '' : 's'} will be applied to the existing vault.
+          <DialogBody>
+            <div className="rounded-lg border border-subtle bg-elevated-2 p-3">
+              <p className="text-sm text-secondary">
+                <span className="font-medium text-primary">{pendingExistingVaultTransactions.length} setup step{pendingExistingVaultTransactions.length === 1 ? '' : 's'}</span>
+                {' '}
+                {(() => {
+                  const titles = [...new Set(pendingExistingVaultExplanations.map(e => e.title))]
+                  return titles.join(', ').toLowerCase()
+                })()}
               </p>
             </div>
-            {pendingExistingVaultExplanations.map((item, index) => (
-              <div key={`${item.title}-${index}`} className="rounded-lg border border-subtle bg-elevated-2 p-4">
-                <p className="text-sm font-medium text-primary">Step {index + 1}: {item.title}</p>
-                <p className="mt-1 text-sm text-secondary">{item.description}</p>
-              </div>
-            ))}
           </DialogBody>
 
           <DialogFooter>

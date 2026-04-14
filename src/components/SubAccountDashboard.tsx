@@ -17,8 +17,8 @@ export function SubAccountDashboard() {
     return (
       <Card variant="glass">
         <CardHeader>
-          <CardTitle>My Sub-Account</CardTitle>
-          <CardDescription>Connect your wallet to view your sub-account details</CardDescription>
+          <CardTitle>My Agent</CardTitle>
+          <CardDescription>Connect your wallet to view your agent details</CardDescription>
         </CardHeader>
       </Card>
     )
@@ -28,7 +28,7 @@ export function SubAccountDashboard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>My Sub-Account</CardTitle>
+          <CardTitle>My Agent</CardTitle>
           <CardDescription>No roles assigned</CardDescription>
         </CardHeader>
         <CardContent>
@@ -47,7 +47,7 @@ export function SubAccountDashboard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>My Sub-Account</CardTitle>
+          <CardTitle>My Agent</CardTitle>
           <CardDescription>Loading limits...</CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,7 +66,7 @@ export function SubAccountDashboard() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>My Sub-Account</CardTitle>
+          <CardTitle>My Agent</CardTitle>
           <CardDescription>Your roles and limits</CardDescription>
         </CardHeader>
         <CardContent>

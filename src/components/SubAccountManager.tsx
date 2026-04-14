@@ -192,12 +192,12 @@ export function SubAccountManager() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Sub-Account Management</CardTitle>
-          <CardDescription>Only Safe owners can manage sub-accounts</CardDescription>
+          <CardTitle>Agent Management</CardTitle>
+          <CardDescription>Only Safe owners can manage agents</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-small text-tertiary">
-            Connect with a Safe owner address to create and manage sub-accounts.
+            Connect with a Safe owner address to create and manage agents.
           </p>
         </CardContent>
       </Card>
@@ -210,7 +210,7 @@ export function SubAccountManager() {
       <div className="xl:col-span-2">
         <Card className="h-full">
           <CardHeader>
-            <CardTitle>Add Sub-Account</CardTitle>
+            <CardTitle>Add Agent</CardTitle>
             <CardDescription>Grant DeFi permissions to an address</CardDescription>
           </CardHeader>
           <CardContent>
@@ -288,7 +288,7 @@ export function SubAccountManager() {
                         Set spending limits now
                       </label>
                       <p className="mt-0.5 text-caption text-tertiary">
-                        Configure spending restrictions for this sub-account (can be set later,
+                        Configure spending restrictions for this agent (can be set later,
                         default 5%)
                       </p>
                     </div>
@@ -337,7 +337,7 @@ export function SubAccountManager() {
                 disabled={isPending || !newSubAccount}
                 className="w-full"
               >
-                {'Add Sub-Account'}
+                {'Add Agent'}
               </Button>
             </div>
           </CardContent>
@@ -350,7 +350,7 @@ export function SubAccountManager() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Managed Sub-Accounts</CardTitle>
+                <CardTitle>Managed Agents</CardTitle>
                 <CardDescription>View and manage permissions</CardDescription>
               </div>
               <Badge variant="outline">{managedAccounts.length} accounts</Badge>
@@ -368,7 +368,7 @@ export function SubAccountManager() {
                   <span className="text-2xl">👤</span>
                 </div>
                 <p className="text-small text-tertiary">
-                  No sub-accounts yet. Add one to get started.
+                  No agents yet. Add one to get started.
                 </p>
               </div>
             ) : (
@@ -636,7 +636,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         )
 
         if (result.success) {
-          toast.success('Sub-account deleted successfully')
+          toast.success('Agent deleted successfully')
           setIsRolesPopoverOpen(false)
           setLocalExecuteRole(false)
           setLocalTransferRole(false)
@@ -646,8 +646,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
           throw result.error || new Error('Transaction failed')
         }
       } catch (error) {
-        console.error('Error deleting sub-account:', error)
-        const errorMsg = error instanceof Error ? error.message : 'Failed to delete sub-account'
+        console.error('Error deleting agent:', error)
+        const errorMsg = error instanceof Error ? error.message : 'Failed to delete agent'
         toast.error(`Transaction failed: ${errorMsg}`)
       }
     })
@@ -684,7 +684,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       >
         <div className="space-y-3">
           <div>
-            <label className="block mb-2 font-medium text-sm">Sub-Account Name</label>
+            <label className="block mb-2 font-medium text-sm">Agent Name</label>
             <Input
               type="text"
               placeholder="Enter name..."
@@ -888,7 +888,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
                       disabled={isRevoking || isUpdating}
                     >
                       {!localExecuteRole && !localTransferRole
-                        ? 'Remove sub-account'
+                        ? 'Remove agent'
                         : isUpdating
                           ? 'Updating...'
                           : 'Update'}

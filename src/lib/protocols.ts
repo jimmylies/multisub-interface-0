@@ -11,6 +11,7 @@ export interface ProtocolContract {
 export interface Protocol {
   id: string
   name: string
+  icon?: string
   description: string
   contracts: ProtocolContract[]
 }
@@ -84,8 +85,30 @@ export const MERKL_PROTOCOL: Protocol = {
   ],
 }
 
+// Morpho Protocol Configuration (Base)
+export const MORPHO_PROTOCOL: Protocol = {
+  id: 'morpho',
+  name: 'Morpho',
+  icon: '🦋',
+  description: 'Lending and vault protocol for optimized yield',
+  contracts: [
+    {
+      id: 'morpho-blue',
+      name: 'Morpho Blue',
+      address: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
+      description: 'Core lending and borrowing market',
+    },
+    {
+      id: 'morpho-bundler3',
+      name: 'Bundler3',
+      address: '0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245',
+      description: 'Batch operations for vault deposits and withdrawals',
+    },
+  ],
+}
+
 // All available protocols
-export const PROTOCOLS = [UNISWAP_PROTOCOL, AAVE_PROTOCOL, MERKL_PROTOCOL] as const
+export const PROTOCOLS = [UNISWAP_PROTOCOL, AAVE_PROTOCOL, MORPHO_PROTOCOL, MERKL_PROTOCOL] as const
 
 // Helper to get protocol by ID
 export function getProtocolById(id: string): Protocol | undefined {
