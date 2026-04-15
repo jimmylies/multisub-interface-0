@@ -27,12 +27,14 @@ export interface ContractChange {
   address: `0x${string}`
   description: string
   action: ChangeAction
+  isActive?: boolean
 }
 
 export interface ProtocolChange {
   protocolId: string
   protocolName: string
   contracts: ContractChange[]
+  isActive?: boolean
 }
 
 export type TransactionPreviewType =

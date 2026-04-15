@@ -24,18 +24,15 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   const { data: safeValue, isLoading: valueLoading } = useSafeValue()
   const { data: isStale } = useIsValueStale(3600) // 1 hour threshold
   const { data: isOracleless } = useIsOracleless()
-  const { data: cumulativeSpent, isLoading: spentLoading } = useCumulativeSpent(
-    isOracleless ? address : undefined
-  )
-  const { data: windowStart, isLoading: windowLoading } = useWindowStart(
-    isOracleless ? address : undefined
-  )
+  const { data: cumulativeSpent, isLoading: spentLoading } = useCumulativeSpent(address)
+  const { data: windowStart, isLoading: windowLoading } = useWindowStart(address)
 
   if (
     allowanceLoading ||
     limitsLoading ||
     (valueLoading && !isOracleless) ||
-    (isOracleless && (spentLoading || windowLoading))
+    spentLoading ||
+    windowLoading
   ) {
     return (
       <Card>
@@ -77,26 +74,36 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   const [maxSpendingBps, maxSpendingUSD, windowDuration] = limits
   let maxAllowance: bigint
   let remainingAllowance: bigint
+  const nowSec = BigInt(Math.floor(Date.now() / 1000))
+  const ws = windowStart ?? 0n
+  const isWindowExpired = ws !== 0n && nowSec > ws + windowDuration
+  const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
 
   if (isOracleless) {
     maxAllowance = maxSpendingUSD
-    // Compute effective spent: 0 if window has expired (next op will reset on-chain)
-    const nowSec = BigInt(Math.floor(Date.now() / 1000))
-    const ws = windowStart ?? 0n
-    const isWindowExpired = ws !== 0n && nowSec > ws + windowDuration
-    const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
     remainingAllowance = maxSpendingUSD > effectiveSpent ? maxSpendingUSD - effectiveSpent : 0n
   } else {
     const [totalValueUSD] = safeValue!
     maxAllowance =
       maxSpendingUSD > 0n ? maxSpendingUSD : (totalValueUSD * BigInt(maxSpendingBps)) / 10000n
-    remainingAllowance = allowance!
+    const remainingBySpent = maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
+    remainingAllowance = allowance! < remainingBySpent ? allowance! : remainingBySpent
   }
+  const isOracleAllowanceLagging =
+    !isOracleless &&
+    allowance !== undefined &&
+    maxAllowance > effectiveSpent &&
+    allowance < (maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n)
+  const isPriorSessionConstraint =
+    !isWindowExpired &&
+    effectiveSpent > 0n &&
+    allowance !== undefined &&
+    remainingAllowance < allowance
 
   // Calculate percent used
   const percentUsed =
     maxAllowance > 0n
-      ? Number(((maxAllowance - remainingAllowance) * 10000n) / maxAllowance) / 100
+      ? Number(((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance) / 100
       : 0
 
   // Determine color coding
@@ -160,7 +167,15 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
             className="h-2"
           />
           <div className="flex justify-between text-muted-foreground text-xs">
-            <span>Used: ${formatUSD(maxAllowance - remainingAllowance)}</span>
+            <span className="flex items-center gap-1">
+              Used: ${formatUSD(effectiveSpent)}
+              {isPriorSessionConstraint && (
+                <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
+              )}
+              {!isPriorSessionConstraint && isOracleAllowanceLagging && (
+                <TooltipIcon content="Your spending limit was increased, but the oracle-managed remaining allowance has not fully refreshed yet. The used amount is based on actual spent value, not the stale allowance snapshot." />
+              )}
+            </span>
             <span>Max: ${formatUSD(maxAllowance)}</span>
           </div>
         </div>

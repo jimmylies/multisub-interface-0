@@ -20,6 +20,8 @@ import {
   useSpendingAllowance,
   useSafeValue,
   useSubAccountLimits,
+  useCumulativeSpent,
+  useWindowStart,
 } from '@/hooks/useSafe'
 import { useSubAccountFullState, mergeRolesWithChanges } from '@/hooks/useSubAccountFullState'
 import { formatUSD, cn } from '@/lib/utils'
@@ -437,12 +439,37 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { data: spendingAllowance } = useSpendingAllowance(account)
   const { data: safeValue } = useSafeValue()
   const { data: limits } = useSubAccountLimits(account)
+  const { data: cumulativeSpent } = useCumulativeSpent(account)
+  const { data: windowStart } = useWindowStart(account)
 
   // Calculate spending progress
   const maxAllowance = safeValue && limits ? (safeValue[0] * BigInt(limits[0])) / 10000n : null
+  const windowDuration = limits?.[2] ?? 0n
+  const nowSec = BigInt(Math.floor(Date.now() / 1000))
+  const isWindowExpired =
+    windowStart !== undefined &&
+    windowStart !== 0n &&
+    windowDuration > 0n &&
+    nowSec > windowStart + windowDuration
+  const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
+  const remainingBySpent =
+    maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
+  const effectiveRemainingAllowance =
+    spendingAllowance !== undefined && spendingAllowance < remainingBySpent
+      ? spendingAllowance
+      : remainingBySpent
+  const isOracleAllowanceLagging =
+    spendingAllowance !== undefined &&
+    spendingAllowance < remainingBySpent &&
+    effectiveSpent < maxAllowance
+  const isPriorSessionConstraint =
+    !isWindowExpired &&
+    effectiveSpent > 0n &&
+    spendingAllowance !== undefined &&
+    effectiveRemainingAllowance < spendingAllowance
   const percentUsed =
-    maxAllowance && spendingAllowance !== undefined && maxAllowance > 0n
-      ? Number(((maxAllowance - spendingAllowance) * 10000n) / maxAllowance) / 100
+    maxAllowance && maxAllowance > 0n
+      ? Number(((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance) / 100
       : 0
 
   // Get necessary dependencies for handlers
@@ -784,8 +811,16 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
           {maxAllowance !== null && maxAllowance > 0n && (
             <div className="mt-2 sm:mt-3 w-full">
               <div className="flex justify-between mb-1 text-tertiary text-xs">
-                <span>Used: {percentUsed.toFixed(1)}%</span>
-                <span>${formatUSD(spendingAllowance ?? 0n)} remaining</span>
+                <span className="flex items-center gap-1">
+                  Used: {percentUsed.toFixed(1)}%
+                  {isPriorSessionConstraint && (
+                    <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
+                  )}
+                  {!isPriorSessionConstraint && isOracleAllowanceLagging && (
+                    <TooltipIcon content="Your spending limit was increased, but the oracle-managed remaining allowance has not fully refreshed yet. The used percentage is based on actual spent amount, not the stale allowance snapshot." />
+                  )}
+                </span>
+                <span>${formatUSD(effectiveRemainingAllowance)} remaining</span>
               </div>
               <div className="bg-elevated-3 rounded-full h-2 overflow-hidden">
                 <div

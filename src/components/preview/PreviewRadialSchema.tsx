@@ -75,7 +75,14 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
     () => displayData.roles.filter(role => role.isActive || role.action === 'add'),
     [displayData.roles]
   )
-
+  const executeRole = useMemo(
+    () => activeRoles.find(role => role.roleId === ROLES.DEFI_EXECUTE_ROLE),
+    [activeRoles]
+  )
+  const topRoles = activeRoles
+  const shouldNestProtocolsUnderExecute = Boolean(
+    executeRole && displayData.protocols.length > 0 && executeRole.action !== 'unchanged'
+  )
   // Helper to get center of an element relative to container
   const getElementCenter = useCallback((element: HTMLElement | null, containerRect: DOMRect) => {
     if (!element) return null
@@ -96,8 +103,8 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
 
     const newLines: typeof lines = []
 
-    // Lines to active roles (top direction)
-    activeRoles.forEach(role => {
+    // Lines to top roles
+    topRoles.forEach(role => {
       const roleRef = roleRefsMap.current.get(role.roleId)
       if (roleRef) {
         const to = getElementCenter(roleRef, containerRect)
@@ -107,7 +114,7 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
       }
     })
 
-    // Line to Protocols (left)
+    // Line to Protocols
     if (protocolsContainerRef.current && displayData.protocols.length > 0) {
       const rect = protocolsContainerRef.current.getBoundingClientRect()
       // Determine dominant protocol action
@@ -120,17 +127,25 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
         0
       )
       const protocolAction: ChangeAction = additions > removals ? 'add' : removals > 0 ? 'remove' : 'unchanged'
+      const protocolAnchor =
+        shouldNestProtocolsUnderExecute && executeRole
+          ? getElementCenter(roleRefsMap.current.get(executeRole.roleId), containerRect)
+          : center
+      const protocolLineAction =
+        shouldNestProtocolsUnderExecute && executeRole ? executeRole.action : protocolAction
 
-      newLines.push({
-        key: 'protocols',
-        from: center,
-        to: {
-          x: rect.right - containerRect.left,
-          y: rect.top + rect.height / 2 - containerRect.top,
-        },
-        action: protocolAction,
-        direction: 'left',
-      })
+      if (protocolAnchor) {
+        newLines.push({
+          key: 'protocols',
+          from: protocolAnchor,
+          to: {
+            x: rect.right - containerRect.left,
+            y: rect.top + rect.height / 2 - containerRect.top,
+          },
+          action: protocolLineAction,
+          direction: 'left',
+        })
+      }
     }
 
     // Line to Spending (right)
@@ -149,7 +164,7 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
     }
 
     setLines(newLines)
-  }, [activeRoles, displayData, getElementCenter])
+  }, [displayData, executeRole, getElementCenter, shouldNestProtocolsUnderExecute, topRoles])
 
   useEffect(() => {
     // Calculate after animations complete
@@ -215,10 +230,10 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
         ))}
       </svg>
 
-      {/* === ROLES (TOP) === */}
-      {activeRoles.length > 0 && (
+      {/* === TOP ROLES === */}
+      {topRoles.length > 0 && (
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-40 z-10">
-          {activeRoles.map((role, idx) => (
+          {topRoles.map((role, idx) => (
             <RoleNode
               key={role.roleId}
               ref={el => {
@@ -231,15 +246,29 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
         </div>
       )}
 
-      {/* === PROTOCOLS (LEFT) === */}
+      {/* === PROTOCOLS (LEFT OF EXECUTE) === */}
       {displayData.protocols.length > 0 && (
         <div
           ref={protocolsContainerRef}
-          className="absolute left-10 top-[55%] -translate-y-1/2 z-10 flex flex-col gap-3"
-          style={{ maxWidth: 180 }}
+          className="absolute z-10 flex flex-col gap-3"
+          style={{
+            left: 28,
+            top: '55%',
+            transform: 'translateY(-50%)',
+            maxWidth: 180,
+          }}
         >
           {displayData.protocols.map((protocol, idx) => (
-            <ProtocolNode key={protocol.protocolId} protocol={protocol} delay={0.1 + idx * 0.05} />
+            <ProtocolNode
+              key={protocol.protocolId}
+              protocol={protocol}
+              delay={0.1 + idx * 0.05}
+              forceAction={
+                shouldNestProtocolsUnderExecute && executeRole && protocol.isActive
+                  ? executeRole.action
+                  : undefined
+              }
+            />
           ))}
         </div>
       )}

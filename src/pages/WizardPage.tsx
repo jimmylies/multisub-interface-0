@@ -52,8 +52,8 @@ const PRESETS = [
   {
     id: 'yield-farmer',
     name: 'Yield Farmer',
-    description: 'Deposit into Morpho vaults and Aave V3. Maximize yield safely.',
-    protocols: ['Aave V3', 'Morpho Vault', 'Morpho Blue'],
+    description: 'Deposit into Morpho Blue and Aave V3. Maximize yield safely.',
+    protocols: ['Aave V3', 'Morpho Blue'],
     defaultBps: 1000,
     roleLabel: 'EXECUTE',
     icon: '+',
@@ -85,6 +85,35 @@ type ExistingVaultTransaction = { to: `0x${string}`; data: `0x${string}` }
 type ExistingVaultTransactionExplanation = {
   title: string
   description: string
+}
+
+function getPresetProtocolLabels(
+  presetId: string,
+  chainId: number,
+  fallbackLabels: readonly string[]
+): string[] {
+  if (presetId === 'custom' || presetId === 'payment-agent') {
+    return [...fallbackLabels]
+  }
+
+  if (chainId !== 84532) {
+    return [...fallbackLabels]
+  }
+
+  const presetConfig = BASE_SEPOLIA_PRESET_CONFIG[presetId]
+  if (!presetConfig) {
+    return [...fallbackLabels]
+  }
+
+  const matchingProtocols = PROTOCOLS.filter(protocol => {
+    const protocolAddresses = new Set(
+      getProtocolContractAddresses(protocol.id).map(addr => addr.toLowerCase())
+    )
+
+    return presetConfig.allowedProtocols.some(addr => protocolAddresses.has(addr.toLowerCase()))
+  }).map(protocol => protocol.name)
+
+  return matchingProtocols.length > 0 ? matchingProtocols : [...fallbackLabels]
 }
 
 // Fixed deployment config — set via environment variables
@@ -160,6 +189,8 @@ const BASE_SEPOLIA_PRESET_CONFIG: Record<
     allowedProtocols: [
       '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
       '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
+      '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
+      '0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245',
     ],
     parserRegistrations: [
       {
@@ -179,6 +210,11 @@ const BASE_SEPOLIA_PRESET_CONFIG: Record<
       { selector: '0x573ade81', opType: 6 },
       { selector: '0x236300dc', opType: 4 },
       { selector: '0xbb492bf5', opType: 4 },
+      { selector: '0xa99aad89', opType: 2 },
+      { selector: '0x5c2bea49', opType: 3 },
+      { selector: '0x20b76e81', opType: 6 },
+      { selector: '0x238d6579', opType: 2 },
+      { selector: '0x8720316d', opType: 3 },
     ],
   },
   'payment-agent': {
@@ -278,6 +314,9 @@ export function WizardPage() {
       : 0
 
   const preset = PRESETS.find(p => p.id === selectedPreset)
+  const selectedPresetProtocolLabels = preset
+    ? getPresetProtocolLabels(preset.id, chainId, preset.protocols)
+    : []
   const isDeploying = isWriting || isConfirming
   const { proposeTransaction, isPending: isConfiguringExistingVault } = useSafeProposal()
 
@@ -727,7 +766,7 @@ export function WizardPage() {
                     <h3 className="font-semibold text-primary">{p.name}</h3>
                     <p className="text-sm text-secondary mt-1">{p.description}</p>
                     <div className="flex flex-wrap gap-1.5 mt-3">
-                      {p.protocols.map(proto => (
+                      {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
                         <span
                           key={proto}
                           className="text-xs px-2 py-0.5 rounded-full bg-elevated-2 text-tertiary"
@@ -1089,7 +1128,7 @@ export function WizardPage() {
                       .map(id => PROTOCOLS.find(p => p.id === id)?.name)
                       .filter(Boolean)
                       .join(', ') || 'None'
-                  : preset.protocols.join(', ')}
+                  : selectedPresetProtocolLabels.join(', ')}
               </span>
             </div>
           </div>

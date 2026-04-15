@@ -88,12 +88,15 @@ export function useSubAccountFullState(subAccountAddress?: `0x${string}`) {
   const protocols = useMemo<ProtocolChange[]>(() => {
     return PROTOCOLS.map(protocol => {
       const contracts: ContractChange[] = protocol.contracts.map(contract => {
+        const contractAddresses = getContractAddresses(contract)
+        const isActive = contractAddresses.every(addr => allowedAddresses?.has(addr))
         return {
           contractId: contract.id,
           contractName: contract.name,
           address: contract.address,
           description: contract.description,
           action: 'unchanged', // Current state - not a change
+          isActive,
         }
       })
 
@@ -101,9 +104,10 @@ export function useSubAccountFullState(subAccountAddress?: `0x${string}`) {
         protocolId: protocol.id,
         protocolName: protocol.name,
         contracts,
+        isActive: contracts.some(contract => contract.isActive),
       }
     })
-  }, [])
+  }, [allowedAddresses])
 
   const isLoading = loadingExecute || loadingTransfer || loadingLimits || loadingAllowed
 
@@ -160,6 +164,7 @@ export function mergeProtocolsWithChanges(
     return {
       ...protocol,
       contracts,
+      isActive: contracts.some(contract => contract.isActive),
     }
   })
 }
