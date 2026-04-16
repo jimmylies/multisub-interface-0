@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +35,7 @@ import type { TransactionPreviewData, RoleChange } from '@/types/transactionPrev
 
 export function SubAccountManager() {
   const { addresses } = useContractAddresses()
+  const queryClient = useQueryClient()
   const { isSafeOwner } = useIsSafeOwner()
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
@@ -57,6 +59,15 @@ export function SubAccountManager() {
 
   // Use Safe proposal hook
   const { proposeTransaction, isPending } = useSafeProposal()
+
+  const updateManagedAccountsCache = (
+    updater: (accounts: SubAccount[]) => SubAccount[]
+  ) => {
+    queryClient.setQueryData<SubAccount[]>(
+      ['managedAccounts', addresses.defiInteractor],
+      current => updater(current ?? [])
+    )
+  }
 
   const handleAddSubAccount = async () => {
     if (!isAddress(newSubAccount)) {
@@ -578,6 +589,17 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         )
 
         if (result.success) {
+          updateManagedAccountsCache(accounts =>
+            accounts.map(existing =>
+              existing.address.toLowerCase() === account.toLowerCase()
+                ? {
+                    ...existing,
+                    hasExecuteRole: localExecuteRole,
+                    hasTransferRole: localTransferRole,
+                  }
+                : existing
+            )
+          )
           toast.success('Permissions updated successfully')
           setIsRolesPopoverOpen(false)
         } else if ('cancelled' in result && result.cancelled) {
@@ -663,6 +685,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         )
 
         if (result.success) {
+          updateManagedAccountsCache(accounts =>
+            accounts.filter(existing => existing.address.toLowerCase() !== account.toLowerCase())
+          )
           toast.success('Agent deleted successfully')
           setIsRolesPopoverOpen(false)
           setLocalExecuteRole(false)

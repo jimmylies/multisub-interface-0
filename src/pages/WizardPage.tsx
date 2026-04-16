@@ -740,8 +740,8 @@ export function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary mb-2">Choose a Preset</h1>
           <p className="text-secondary mb-8">
-            Select a template that matches your agent's use case. You can customize everything in
-            the next step.
+            Select a template that matches your agent's use case. Presets are just a starting
+            point, you can still add custom protocols and adjust the guardrails afterward.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {PRESETS.map(p => (

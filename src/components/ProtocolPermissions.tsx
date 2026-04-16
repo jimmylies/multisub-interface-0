@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -25,6 +26,7 @@ interface ProtocolPermissionsProps {
 
 export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsProps) {
   const { addresses } = useContractAddresses()
+  const queryClient = useQueryClient()
   const [selectedProtocols, setSelectedProtocols] = useState<Map<string, Set<string>>>(new Map())
   const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null)
   const { toast } = useToast()
@@ -46,14 +48,13 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   }, [])
 
   // Fetch already allowed addresses from contract
-  const { data: allowedAddresses = new Set(), isLoading: isLoadingAllowed } = useAllowedAddresses(
-    subAccountAddress,
-    addressesToCheck
-  )
+  const {
+    data: allowedAddresses = new Set(),
+    isLoading: isLoadingAllowed,
+    refetch: refetchAllowedAddresses,
+  } = useAllowedAddresses(subAccountAddress, addressesToCheck)
 
   useEffect(() => {
-    if (allowedAddresses.size === 0) return
-
     const newMap = new Map<string, Set<string>>()
 
     PROTOCOLS.forEach(protocol => {
@@ -306,6 +307,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         )
 
         if (result.success) {
+          await queryClient.refetchQueries({
+            predicate: query => Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+          })
+          await refetchAllowedAddresses()
           toast.success('Protocol permissions updated')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAccount, usePublicClient } from 'wagmi'
 import { isAddress } from 'viem'
@@ -17,6 +18,7 @@ import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
 import type { RoleChange, TransactionPreviewData } from '@/types/transactionPreview'
+import type { SubAccount } from '@/types'
 import { mergeRolesWithChanges, useSubAccountFullState } from '@/hooks/useSubAccountFullState'
 
 /**
@@ -284,11 +286,20 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
   const isActive = roles.length > 0
   const [showHistory, setShowHistory] = useState(false)
   const { addresses } = useContractAddresses()
+  const queryClient = useQueryClient()
   const { isSafeOwner } = useIsSafeOwner()
   const { toast } = useToast()
   const { proposeTransaction, isPending } = useSafeProposal()
   const { showPreview } = useTransactionPreviewContext()
   const { fullState: currentFullState } = useSubAccountFullState(address as `0x${string}`)
+
+  const removeManagedAccountFromCache = () => {
+    queryClient.setQueryData<SubAccount[]>(
+      ['managedAccounts', addresses.defiInteractor],
+      current =>
+        (current ?? []).filter(existing => existing.address.toLowerCase() !== address.toLowerCase())
+    )
+  }
 
   const handleDeleteSubAccount = async () => {
     if (!addresses.defiInteractor) {
@@ -355,6 +366,7 @@ function AgentCard({ address, hasExecuteRole, hasTransferRole, safeValueUSD }: A
         )
 
         if (result.success) {
+          removeManagedAccountFromCache()
           toast.success('Agent deleted successfully')
         } else if ('cancelled' in result && result.cancelled) {
           return
