@@ -51,6 +51,7 @@ export type TransactionFilter = {
   opType?: OpType | 'all'
   dateRange?: 'all' | '24h' | '7d' | '30d'
   token?: string | 'all'
+  agent?: string | 'all'
 }
 
 interface UseTransactionHistoryOptions {
@@ -147,6 +148,11 @@ function applyFilters(transactions: Transaction[], filter: TransactionFilter): T
     })
   }
 
+  if (filter.agent && filter.agent !== 'all') {
+    const agentLower = filter.agent.toLowerCase()
+    filtered = filtered.filter(tx => tx.subAccount.toLowerCase() === agentLower)
+  }
+
   return filtered
 }
 
@@ -200,7 +206,7 @@ async function getLogsChunked({
 
 async function fetchHistoryFromLogs(
   publicClient: PublicClient,
-  defiInteractor: Address,
+  guardian: Address,
   subAccount: Address,
   fromTimestamp: number,
   dateRange: TransactionFilter['dateRange']
@@ -212,7 +218,7 @@ async function fetchHistoryFromLogs(
   const [protocolLogs, transferLogs] = await Promise.all([
     getLogsChunked({
       publicClient,
-      address: defiInteractor,
+      address: guardian,
       event: PROTOCOL_EXECUTION_EVENT,
       args: { subAccount },
       fromBlock,
@@ -220,7 +226,7 @@ async function fetchHistoryFromLogs(
     }),
     getLogsChunked({
       publicClient,
-      address: defiInteractor,
+      address: guardian,
       event: TRANSFER_EXECUTED_EVENT,
       args: { subAccount },
       fromBlock,
@@ -289,13 +295,13 @@ async function fetchHistoryFromLogs(
 
 async function fetchTransactionHistoryForSubAccount({
   publicClient,
-  defiInteractor,
+  guardian,
   subAccount,
   filter,
   fromTimestamp,
 }: {
   publicClient: PublicClient
-  defiInteractor: Address
+  guardian: Address
   subAccount: Address
   filter: TransactionFilter
   fromTimestamp: number
@@ -341,7 +347,7 @@ async function fetchTransactionHistoryForSubAccount({
 
   const rangeFilteredLogTransactions = await fetchHistoryFromLogs(
     publicClient,
-    defiInteractor,
+    guardian,
     subAccount,
     fromTimestamp,
     filter.dateRange
@@ -360,11 +366,11 @@ async function fetchTransactionHistoryForSubAccount({
 export function useTransactionHistory(options: UseTransactionHistoryOptions = {}) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient()
-  const { defiInteractor } = useContractAddresses()
+  const { guardian } = useContractAddresses()
 
   const subAccount = options.subAccount || connectedAddress
   const filter = options.filter || {}
-  const enabled = options.enabled !== false && !!subAccount && !!defiInteractor && !!publicClient
+  const enabled = options.enabled !== false && !!subAccount && !!guardian && !!publicClient
 
   const fromTimestamp = getTimestampForRange(filter.dateRange)
 
@@ -372,17 +378,17 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
     queryKey: [
       'transactionHistory',
       subAccount,
-      defiInteractor,
+      guardian,
       fromTimestamp,
       filter.type,
       filter.opType,
     ],
     queryFn: async () => {
-      if (!subAccount || !defiInteractor || !publicClient) return []
+      if (!subAccount || !guardian || !publicClient) return []
 
       return fetchTransactionHistoryForSubAccount({
         publicClient,
-        defiInteractor,
+        guardian,
         subAccount,
         filter,
         fromTimestamp,
@@ -409,10 +415,10 @@ export function useMultipleTransactionHistories(
   options: UseMultipleTransactionHistoriesOptions = {}
 ) {
   const publicClient = usePublicClient()
-  const { defiInteractor } = useContractAddresses()
+  const { guardian } = useContractAddresses()
   const subAccounts = options.subAccounts || []
   const filter = options.filter || {}
-  const enabled = options.enabled !== false && !!defiInteractor && !!publicClient && subAccounts.length > 0
+  const enabled = options.enabled !== false && !!guardian && !!publicClient && subAccounts.length > 0
   const fromTimestamp = getTimestampForRange(filter.dateRange)
 
   const queries = useQueries({
@@ -420,17 +426,17 @@ export function useMultipleTransactionHistories(
       queryKey: [
         'transactionHistory',
         subAccount,
-        defiInteractor,
+        guardian,
         fromTimestamp,
         filter.type,
         filter.opType,
       ],
       queryFn: async () => {
-        if (!defiInteractor || !publicClient) return []
+        if (!guardian || !publicClient) return []
 
         return fetchTransactionHistoryForSubAccount({
           publicClient,
-          defiInteractor,
+          guardian,
           subAccount,
           filter,
           fromTimestamp,

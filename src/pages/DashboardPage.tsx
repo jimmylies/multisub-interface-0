@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { useIsSafeOwner, useManagedAccounts } from '@/hooks/useSafe'
 
 export function DashboardPage() {
-  const { isConfigured, setDefiInteractor } = useContractAddresses()
+  const { isConfigured, setGuardian } = useContractAddresses()
   const { viewMode } = useViewMode()
   const { isConnected, address } = useAccount()
   const { data: discoveredModules, isLoading: isDiscovering } = useModulesForEOA()
@@ -30,15 +30,15 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (!isConfigured && discoveredModules?.length === 1) {
-      setDefiInteractor(discoveredModules[0].module)
+      setGuardian(discoveredModules[0].module)
     }
-  }, [discoveredModules, isConfigured, setDefiInteractor])
+  }, [discoveredModules, isConfigured, setGuardian])
 
   if (!isConfigured) {
     return (
       <FadeInUp className="space-y-6">
         <div className="max-w-2xl">
-          <h1 className="text-2xl font-semibold text-primary">Advanced</h1>
+          <h1 className="text-2xl font-semibold text-primary">Dashboard</h1>
           <p className="text-secondary mt-1">
             Load a deployed module address to access owner and agent controls.
           </p>
@@ -69,7 +69,7 @@ export function DashboardPage() {
                     <Button
                       size="sm"
                       className="ml-4 shrink-0 bg-accent-primary text-black"
-                      onClick={() => setDefiInteractor(module)}
+                      onClick={() => setGuardian(module)}
                     >
                       Open
                     </Button>

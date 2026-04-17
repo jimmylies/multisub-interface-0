@@ -18,12 +18,12 @@ import { useRecentAddresses } from '@/hooks/useRecentAddresses'
 import { useSafeAddress } from '@/hooks/useSafe'
 import { usePublicClient } from 'wagmi'
 import { isAddress } from 'viem'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
 
 export function ContractSetup() {
-  const { addresses, setDefiInteractor, clearDefiInteractor, isConfigured } = useContractAddresses()
+  const { addresses, setGuardian, clearGuardian, isConfigured } = useContractAddresses()
   const { recentAddresses, addAddress, removeAddress } = useRecentAddresses()
   const { data: safeAddress } = useSafeAddress()
   const publicClient = usePublicClient()
@@ -45,15 +45,15 @@ export function ContractSetup() {
     setChangeError('')
 
     try {
-      // Verify it's a valid DeFi Interactor by reading avatar
+      // Verify it's a valid Guardian contract by reading avatar
       await publicClient?.readContract({
         address: newAddressInput as `0x${string}`,
-        abi: DEFI_INTERACTOR_ABI,
+        abi: GUARDIAN_ABI,
         functionName: 'avatar',
       })
 
-      // Update DeFi Interactor (Safe will be automatically fetched via useSafeAddress)
-      setDefiInteractor(newAddressInput as `0x${string}`)
+      // Update Guardian (Safe will be automatically fetched via useSafeAddress)
+      setGuardian(newAddressInput as `0x${string}`)
 
       // Add to recent history
       addAddress(newAddressInput as `0x${string}`)
@@ -62,7 +62,7 @@ export function ContractSetup() {
       setChangeModalOpen(false)
       setNewAddressInput('')
     } catch {
-      setChangeError('Failed to read contract. Is this a valid DeFi Interactor?')
+      setChangeError('Failed to read contract. Is this a valid Guardian contract?')
     } finally {
       setIsChanging(false)
     }
@@ -80,10 +80,10 @@ export function ContractSetup() {
   }
 
   const copyShareableLink = () => {
-    if (!addresses.defiInteractor) return
+    if (!addresses.guardian) return
 
     const params = new URLSearchParams()
-    params.set('defiInteractor', addresses.defiInteractor)
+    params.set('guardian', addresses.guardian)
     const url = `${window.location.origin}${window.location.pathname}?${params}`
 
     navigator.clipboard.writeText(url)
@@ -102,16 +102,16 @@ export function ContractSetup() {
           </div>
           {!isConfigured && (
             <CardDescription>
-              Enter a deployed DeFi Interactor module address to open the Advanced dashboard.
+              Enter a deployed Guardian module address to open the Dashboard.
             </CardDescription>
           )}
         </CardHeader>
         <CardContent>
-          {!isConfigured || !addresses.defiInteractor ? (
+          {!isConfigured || !addresses.guardian ? (
             <div className="space-y-4">
               <div>
                 <label className="block mb-2 font-medium text-primary text-small">
-                  DeFi Interactor Address
+                  Guardian Address
                 </label>
                 <Input
                   type="text"
@@ -190,13 +190,13 @@ export function ContractSetup() {
             <div className="space-y-4">
               <div className="bg-elevated-2 p-3 border border-subtle rounded-lg">
                 <p className="mb-1 text-caption text-tertiary uppercase tracking-wider">
-                  DeFi Interactor
+                  Guardian
                 </p>
                 <div className="flex items-center gap-1">
                   <p className="font-mono text-primary text-small break-all">
-                    {addresses.defiInteractor.slice(0, 10)}...{addresses.defiInteractor.slice(-8)}
+                    {addresses.guardian.slice(0, 10)}...{addresses.guardian.slice(-8)}
                   </p>
-                  <CopyButton value={addresses.defiInteractor} />
+                  <CopyButton value={addresses.guardian} />
                 </div>
               </div>
 
@@ -244,7 +244,7 @@ export function ContractSetup() {
         <DialogContent>
           <DialogClose onClose={() => setChangeModalOpen(false)} />
           <DialogHeader>
-            <DialogTitle>Change DeFi Interactor</DialogTitle>
+            <DialogTitle>Change Guardian</DialogTitle>
           </DialogHeader>
 
           <DialogBody className="space-y-4">
@@ -317,7 +317,7 @@ export function ContractSetup() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                clearDefiInteractor()
+                clearGuardian()
                 setChangeModalOpen(false)
               }}
               className="mr-auto text-error hover:text-error"

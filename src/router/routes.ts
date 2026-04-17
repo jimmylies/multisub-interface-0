@@ -3,7 +3,6 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/dashboard',
   WIZARD: '/wizard',
-  AGENTS: '/agents',
   CHALLENGE: '/challenge',
 } as const
 

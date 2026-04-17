@@ -6,7 +6,7 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useReadContract } from 'wagmi'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { useToast } from '@/contexts/ToastContext'
 
 export function EmergencyControls() {
@@ -17,30 +17,30 @@ export function EmergencyControls() {
 
   // Read current pause status
   const { data: isPaused } = useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'paused',
     query: {
-      enabled: Boolean(addresses.defiInteractor),
+      enabled: Boolean(addresses.guardian),
     },
   })
 
   const handlePause = async () => {
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
 
     try {
       const data = encodeContractCall(
-        addresses.defiInteractor,
-        DEFI_INTERACTOR_ABI as unknown as any[],
+        addresses.guardian,
+        GUARDIAN_ABI as unknown as any[],
         'pause',
         []
       )
 
       const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
+        { to: addresses.guardian, data },
         { transactionType: TRANSACTION_TYPES.PAUSE }
       )
 
@@ -60,21 +60,21 @@ export function EmergencyControls() {
   }
 
   const handleUnpause = async () => {
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
 
     try {
       const data = encodeContractCall(
-        addresses.defiInteractor,
-        DEFI_INTERACTOR_ABI as unknown as any[],
+        addresses.guardian,
+        GUARDIAN_ABI as unknown as any[],
         'unpause',
         []
       )
 
       const result = await proposeTransaction(
-        { to: addresses.defiInteractor, data },
+        { to: addresses.guardian, data },
         { transactionType: TRANSACTION_TYPES.UNPAUSE }
       )
 

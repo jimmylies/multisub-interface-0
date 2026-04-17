@@ -1,22 +1,22 @@
 import React from 'react'
 import { useAccount, useReadContract, usePublicClient } from 'wagmi'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
-import { DEFI_INTERACTOR_ABI, SAFE_ABI, ROLES } from '@/lib/contracts'
+import { GUARDIAN_ABI, SAFE_ABI, ROLES } from '@/lib/contracts'
 import { useQuery } from '@tanstack/react-query'
 import type { SubAccount } from '@/types'
 import { AcquiredTokenWithTimestamp } from '@/lib/subgraph'
 import { useFifoBalances } from './useFifoBalances'
 
 /**
- * Hook to read the target Safe address from the DeFi Interactor contract
+ * Hook to read the target Safe address from the Guardian contract
  */
 export function useSafeAddress() {
   const { chainId } = useAccount()
   const { addresses } = useContractAddresses()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'avatar',
     chainId,
     query: {
@@ -35,12 +35,12 @@ export function useModuleOwner() {
   const { addresses } = useContractAddresses()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'owner',
     chainId,
     query: {
-      enabled: Boolean(addresses.defiInteractor),
+      enabled: Boolean(addresses.guardian),
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
     },
@@ -76,13 +76,13 @@ export function useCumulativeSpent(subAccountAddress?: `0x${string}`) {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'cumulativeSpent',
     args: subAccountAddress ? [subAccountAddress] : undefined,
     chainId,
     query: {
-      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      enabled: Boolean(subAccountAddress && addresses.guardian),
       staleTime: 30 * 1000, // 30s — changes after each spending op
       gcTime: 2 * 60 * 1000,
     },
@@ -98,13 +98,13 @@ export function useWindowStart(subAccountAddress?: `0x${string}`) {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'windowStart',
     args: subAccountAddress ? [subAccountAddress] : undefined,
     chainId,
     query: {
-      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      enabled: Boolean(subAccountAddress && addresses.guardian),
       staleTime: 30 * 1000,
       gcTime: 2 * 60 * 1000,
     },
@@ -121,12 +121,12 @@ export function useIsOracleless() {
   const { addresses } = useContractAddresses()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'isOracleless',
     chainId,
     query: {
-      enabled: Boolean(addresses.defiInteractor),
+      enabled: Boolean(addresses.guardian),
       staleTime: 5 * 60 * 1000, // 5 minutes — mode changes are rare admin actions
       gcTime: 10 * 60 * 1000,
     },
@@ -141,12 +141,12 @@ export function useIsPaused() {
   const { addresses } = useContractAddresses()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'paused',
     chainId,
     query: {
-      enabled: Boolean(addresses.defiInteractor),
+      enabled: Boolean(addresses.guardian),
       staleTime: 60 * 1000, // 1 minute — check pause status periodically
       gcTime: 5 * 60 * 1000,
     },
@@ -190,8 +190,8 @@ export function useSubAccountLimits(subAccountAddress?: `0x${string}`) {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'getSubAccountLimits',
     args: subAccountAddress ? [subAccountAddress] : undefined,
     chainId,
@@ -206,8 +206,8 @@ export function useHasRole(member?: `0x${string}`, roleId?: number) {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'hasRole',
     args: member && roleId !== undefined ? [member, roleId] : undefined,
     chainId,
@@ -222,8 +222,8 @@ export function useIsAddressAllowed(subAccount?: `0x${string}`, target?: `0x${st
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'allowedAddresses',
     args: subAccount && target ? [subAccount, target] : undefined,
     chainId,
@@ -240,23 +240,23 @@ export function useManagedAccounts() {
   const { chainId } = useAccount()
 
   return useQuery({
-    queryKey: ['managedAccounts', addresses.defiInteractor],
+    queryKey: ['managedAccounts', addresses.guardian],
     queryFn: async (): Promise<SubAccount[]> => {
-      if (!publicClient || !addresses.defiInteractor) {
+      if (!publicClient || !addresses.guardian) {
         return []
       }
 
       // Fetch accounts for each role using the contract's getter functions
       const [executeAccounts, transferAccounts] = await Promise.all([
         publicClient.readContract({
-          address: addresses.defiInteractor,
-          abi: DEFI_INTERACTOR_ABI,
+          address: addresses.guardian,
+          abi: GUARDIAN_ABI,
           functionName: 'getSubaccountsByRole',
           args: [ROLES.DEFI_EXECUTE_ROLE],
         }) as Promise<`0x${string}`[]>,
         publicClient.readContract({
-          address: addresses.defiInteractor,
-          abi: DEFI_INTERACTOR_ABI,
+          address: addresses.guardian,
+          abi: GUARDIAN_ABI,
           functionName: 'getSubaccountsByRole',
           args: [ROLES.DEFI_TRANSFER_ROLE],
         }) as Promise<`0x${string}`[]>,
@@ -297,7 +297,7 @@ export function useManagedAccounts() {
 
       return accountList
     },
-    enabled: Boolean(addresses.defiInteractor && publicClient),
+    enabled: Boolean(addresses.guardian && publicClient),
   })
 }
 
@@ -313,7 +313,7 @@ export function useAllowedAddresses(
   const publicClient = usePublicClient()
 
   return useQuery({
-    queryKey: ['allowedAddresses', addresses.defiInteractor, subAccountAddress, addressesToCheck],
+    queryKey: ['allowedAddresses', addresses.guardian, subAccountAddress, addressesToCheck],
     queryFn: async (): Promise<Set<`0x${string}`>> => {
       if (!publicClient || !subAccountAddress || !addressesToCheck) {
         return new Set()
@@ -324,8 +324,8 @@ export function useAllowedAddresses(
         addressesToCheck.map(async targetAddress => {
           try {
             const isAllowed = (await publicClient.readContract({
-              address: addresses.defiInteractor,
-              abi: DEFI_INTERACTOR_ABI as any,
+              address: addresses.guardian,
+              abi: GUARDIAN_ABI as any,
               functionName: 'allowedAddresses',
               args: [subAccountAddress, targetAddress],
             } as any)) as boolean
@@ -347,7 +347,7 @@ export function useAllowedAddresses(
       return allowed
     },
     enabled: Boolean(
-      addresses.defiInteractor && publicClient && subAccountAddress && addressesToCheck
+      addresses.guardian && publicClient && subAccountAddress && addressesToCheck
     ),
   })
 }
@@ -361,12 +361,12 @@ export function useSpendingAllowance(subAccountAddress?: `0x${string}`) {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'getSpendingAllowance',
     args: subAccountAddress ? [subAccountAddress] : undefined,
     query: {
-      enabled: Boolean(subAccountAddress && addresses.defiInteractor),
+      enabled: Boolean(subAccountAddress && addresses.guardian),
       staleTime: 30 * 1000, // 30s — changes after each spending op
       gcTime: 2 * 60 * 1000,
     },
@@ -386,12 +386,12 @@ export function useAcquiredBalance(
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'getAcquiredBalance',
     args: subAccountAddress && tokenAddress ? [subAccountAddress, tokenAddress] : undefined,
     query: {
-      enabled: Boolean(subAccountAddress && tokenAddress && addresses.defiInteractor),
+      enabled: Boolean(subAccountAddress && tokenAddress && addresses.guardian),
     },
     chainId,
   })
@@ -406,11 +406,11 @@ export function useSafeValue() {
   const { chainId } = useAccount()
 
   return useReadContract({
-    address: addresses.defiInteractor,
-    abi: DEFI_INTERACTOR_ABI,
+    address: addresses.guardian,
+    abi: GUARDIAN_ABI,
     functionName: 'getSafeValue',
     query: {
-      enabled: Boolean(addresses.defiInteractor),
+      enabled: Boolean(addresses.guardian),
       staleTime: 30 * 1000, // 30s — oracle updates portfolio value periodically
       gcTime: 5 * 60 * 1000,
     },
@@ -450,7 +450,7 @@ function useAcquiredBalancesFromContract(
   const publicClient = usePublicClient()
 
   return useQuery({
-    queryKey: ['acquiredBalances', addresses.defiInteractor, subAccountAddress, tokenAddresses],
+    queryKey: ['acquiredBalances', addresses.guardian, subAccountAddress, tokenAddresses],
     queryFn: async (): Promise<Map<string, AcquiredTokenWithTimestamp>> => {
       if (!publicClient || !subAccountAddress || !tokenAddresses || tokenAddresses.length === 0) {
         return new Map()
@@ -461,8 +461,8 @@ function useAcquiredBalancesFromContract(
         tokenAddresses.map(async tokenAddress => {
           try {
             const balance = await publicClient.readContract({
-              address: addresses.defiInteractor,
-              abi: DEFI_INTERACTOR_ABI,
+              address: addresses.guardian,
+              abi: GUARDIAN_ABI,
               functionName: 'getAcquiredBalance',
               args: [subAccountAddress, tokenAddress],
               code: '0x',
@@ -490,7 +490,7 @@ function useAcquiredBalancesFromContract(
     enabled:
       options?.enabled !== false &&
       Boolean(
-        addresses.defiInteractor &&
+        addresses.guardian &&
         publicClient &&
         subAccountAddress &&
         tokenAddresses &&

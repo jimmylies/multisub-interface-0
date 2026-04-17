@@ -6,7 +6,7 @@ import { ROLE_NAMES, ROLES } from '@/lib/contracts'
 
 /**
  * Example component demonstrating how to fetch and display managed accounts
- * from the DeFi Interactor contract by reading role assignment events
+ * from the Guardian contract by reading role assignment events
  */
 export function ManagedAccountsList() {
   const { data: accounts = [], isLoading, error } = useManagedAccounts()

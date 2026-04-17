@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate, useLocation } from 'react-router-dom'
 import { MainLayout } from '@/layouts/MainLayout'
 import { PageLoader } from '@/components/PageLoader'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -11,10 +11,20 @@ const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage }))
 )
 const WizardPage = lazy(() => import('@/pages/WizardPage').then(m => ({ default: m.WizardPage })))
-const AgentsPage = lazy(() => import('@/pages/AgentsPage').then(m => ({ default: m.AgentsPage })))
 const ChallengePage = lazy(() =>
   import('@/pages/ChallengePage').then(m => ({ default: m.ChallengePage }))
 )
+
+function LegacyAgentsRedirect() {
+  const location = useLocation()
+
+  return (
+    <Navigate
+      to={`${ROUTES.DASHBOARD}${location.search}`}
+      replace
+    />
+  )
+}
 
 // Wrapper with ErrorBoundary and Suspense for lazy loaded pages
 function LazyPage({ children }: { children: React.ReactNode }) {
@@ -58,7 +68,7 @@ const router = createBrowserRouter([
         path: 'agents',
         element: (
           <LazyPage>
-            <AgentsPage />
+            <LegacyAgentsRedirect />
           </LazyPage>
         ),
       },

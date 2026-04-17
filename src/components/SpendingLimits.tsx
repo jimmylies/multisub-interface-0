@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSubAccountLimits, useSafeValue } from '@/hooks/useSafe'
 import { useSubAccountFullState } from '@/hooks/useSubAccountFullState'
@@ -105,7 +105,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       return
     }
 
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
@@ -143,14 +143,14 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       try {
         // NEW signature: only 3 params (subAccount, maxSpendingBps, windowDuration)
         const data = encodeContractCall(
-          addresses.defiInteractor,
-          DEFI_INTERACTOR_ABI as any[],
+          addresses.guardian,
+          GUARDIAN_ABI as any[],
           'setSubAccountLimits',
           [subAccountAddress, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
         )
 
         const result = await proposeTransaction(
-          { to: addresses.defiInteractor, data },
+          { to: addresses.guardian, data },
           { transactionType: TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS }
         )
 

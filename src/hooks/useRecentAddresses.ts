@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { isAddress } from 'viem'
 
-const STORAGE_KEY = 'recentDefiInteractors'
+const STORAGE_KEY = 'recentGuardians'
 const MAX_RECENT = 5
 
 interface UseRecentAddressesReturn {

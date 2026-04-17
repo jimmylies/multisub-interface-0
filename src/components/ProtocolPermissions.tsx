@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ChevronUp, ChevronDown } from 'lucide-react'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/lib/protocols'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
@@ -181,7 +181,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   }, [selectedProtocols, allowedAddresses])
 
   const handleSavePermissions = async () => {
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
@@ -277,10 +277,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       // Build transaction to ADD addresses
       if (addressesToAdd.length > 0) {
         transactions.push({
-          to: addresses.defiInteractor,
+          to: addresses.guardian,
           data: encodeContractCall(
-            addresses.defiInteractor,
-            DEFI_INTERACTOR_ABI as unknown as any[],
+            addresses.guardian,
+            GUARDIAN_ABI as unknown as any[],
             'setAllowedAddresses',
             [subAccountAddress, addressesToAdd, true]
           ),
@@ -290,10 +290,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       // Build transaction to REMOVE addresses
       if (addressesToRemove.length > 0) {
         transactions.push({
-          to: addresses.defiInteractor,
+          to: addresses.guardian,
           data: encodeContractCall(
-            addresses.defiInteractor,
-            DEFI_INTERACTOR_ABI as unknown as any[],
+            addresses.guardian,
+            GUARDIAN_ABI as unknown as any[],
             'setAllowedAddresses',
             [subAccountAddress, addressesToRemove, false]
           ),

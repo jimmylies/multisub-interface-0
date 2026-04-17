@@ -64,9 +64,9 @@ export function tokenAmountSchema(decimals: number = 18) {
 // ============ Contract Setup Schemas ============
 
 /**
- * DeFi Interactor address input
+ * Guardian address input
  */
-export const defiInteractorInputSchema = z.object({
+export const guardianInputSchema = z.object({
   address: addressSchema,
 })
 

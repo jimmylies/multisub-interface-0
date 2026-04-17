@@ -7,7 +7,7 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useRecentAddresses } from '@/hooks/useRecentAddresses'
 import { usePublicClient } from 'wagmi'
 import { isAddress } from 'viem'
-import { DEFI_INTERACTOR_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { cn } from '@/lib/utils'
 
 interface WelcomeHeroProps {
@@ -15,7 +15,7 @@ interface WelcomeHeroProps {
 }
 
 export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
-  const { addresses, setDefiInteractor } = useContractAddresses()
+  const { addresses, setGuardian } = useContractAddresses()
   const { recentAddresses, addAddress, removeAddress } = useRecentAddresses()
   const publicClient = usePublicClient()
 
@@ -28,10 +28,10 @@ export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
 
   // Pré-remplir si l'adresse existe dans le context
   useEffect(() => {
-    if (addresses.defiInteractor) {
-      setAddressInput(addresses.defiInteractor)
+    if (addresses.guardian) {
+      setAddressInput(addresses.guardian)
     }
-  }, [addresses.defiInteractor])
+  }, [addresses.guardian])
 
   const validateAndSubmit = async (address: string) => {
     // Clear any existing timeout
@@ -59,15 +59,15 @@ export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
     setError('')
 
     try {
-      // Verify it's a valid DeFi Interactor by calling avatar()
+      // Verify it's a valid Guardian contract by calling avatar()
       await publicClient?.readContract({
         address: trimmedAddress as `0x${string}`,
-        abi: DEFI_INTERACTOR_ABI,
+        abi: GUARDIAN_ABI,
         functionName: 'avatar',
       })
 
       // Success - auto-submit
-      setDefiInteractor(trimmedAddress as `0x${string}`)
+      setGuardian(trimmedAddress as `0x${string}`)
       addAddress(trimmedAddress as `0x${string}`)
       setError('')
 
@@ -76,7 +76,7 @@ export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
         onNavigateAway()
       }
     } catch (err) {
-      setError('Not a valid DeFi Interactor contract')
+      setError('Not a valid Guardian contract')
     } finally {
       setIsValidating(false)
     }
@@ -144,7 +144,7 @@ export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
         </p>
       </div>
 
-      {/* DeFi Interactor Input */}
+      {/* Guardian Input */}
       <div
         className="mx-auto mt-8 w-full max-w-md animate-fade-in-up"
         style={{ animationDelay: '0.4s' }}
@@ -153,7 +153,7 @@ export function WelcomeHero({ onNavigateAway }: WelcomeHeroProps = {}) {
           {/* Address Input */}
           <div>
             <label className="block mb-2 font-medium text-primary text-small">
-              DeFi Interactor Address
+              Guardian Address
             </label>
             <div className="flex items-center gap-2">
               <Input

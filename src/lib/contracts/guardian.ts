@@ -1,5 +1,5 @@
-// DeFiInteractor contract ABI - Updated for new oracle-based architecture
-export const DEFI_INTERACTOR_ABI = [
+// Guardian contract ABI - Updated for new oracle-based architecture
+export const GUARDIAN_ABI = [
   // ============ Constants ============
   {
     type: 'function',

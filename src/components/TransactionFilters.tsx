@@ -8,6 +8,7 @@ interface TransactionFiltersProps {
   filter: TransactionFilter
   onFilterChange: (filter: TransactionFilter) => void
   availableTokens?: Array<{ address: string; symbol: string }>
+  availableAgents?: Array<{ address: string; label: string }>
   className?: string
 }
 
@@ -83,6 +84,7 @@ export function TransactionFilters({
   filter,
   onFilterChange,
   availableTokens = [],
+  availableAgents = [],
   className,
 }: TransactionFiltersProps) {
   // Type options
@@ -118,12 +120,21 @@ export function TransactionFilters({
     })),
   ]
 
+  const agentOptions = [
+    { value: 'all', label: 'All Agents' },
+    ...availableAgents.map(agent => ({
+      value: agent.address,
+      label: agent.label,
+    })),
+  ]
+
   // Count active filters
   const activeFilterCount = [
     filter.type !== 'all' && filter.type,
     filter.opType !== 'all' && filter.opType,
     filter.dateRange !== 'all' && filter.dateRange,
     filter.token !== 'all' && filter.token,
+    filter.agent !== 'all' && filter.agent,
   ].filter(Boolean).length
 
   // Clear all filters
@@ -133,6 +144,7 @@ export function TransactionFilters({
       opType: 'all',
       dateRange: 'all',
       token: 'all',
+      agent: 'all',
     })
   }
 
@@ -208,6 +220,16 @@ export function TransactionFilters({
             icon={Coins}
           />
         )}
+
+        {availableAgents.length > 0 && (
+          <FilterDropdown
+            label="Agent"
+            value={filter.agent || 'all'}
+            options={agentOptions}
+            onChange={(value) => onFilterChange({ ...filter, agent: value })}
+            icon={Filter}
+          />
+        )}
       </div>
 
       {/* Active filter badges */}
@@ -253,6 +275,17 @@ export function TransactionFilters({
               onClick={() => onFilterChange({ ...filter, token: 'all' })}
             >
               {availableTokens.find((t) => t.address === filter.token)?.symbol || 'Token'}
+              <X className="w-3 h-3" />
+            </Badge>
+          )}
+
+          {filter.agent && filter.agent !== 'all' && (
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1 cursor-pointer hover:bg-elevated-2"
+              onClick={() => onFilterChange({ ...filter, agent: 'all' })}
+            >
+              {availableAgents.find(agent => agent.address === filter.agent)?.label || 'Agent'}
               <X className="w-3 h-3" />
             </Badge>
           )}

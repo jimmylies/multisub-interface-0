@@ -1,10 +1,10 @@
 # Fetching Managed Accounts from the Contract
 
-This document explains how to fetch managed accounts from the DeFi Interactor contract using view functions.
+This document explains how to fetch managed accounts from the Guardian contract using view functions.
 
 ## Overview
 
-The `useManagedAccounts` hook fetches all addresses that have been granted roles in the DeFi Interactor contract. It works by:
+The `useManagedAccounts` hook fetches all addresses that have been granted roles in the Guardian contract. It works by:
 
 1. Calling `getSubaccountsByRole(DEFI_EXECUTE_ROLE)` to get all accounts with execute permission
 2. Calling `getSubaccountsByRole(DEFI_TRANSFER_ROLE)` to get all accounts with transfer permission
@@ -101,7 +101,7 @@ The hook uses the Wagmi `usePublicClient` to call contract view functions:
 - The hook uses contract view functions (`getSubaccountsByRole`) which are fast and reliable
 - Results are cached in component state and won't automatically update when new roles are granted
 - To manually refresh the data, call the `refetch()` function returned by the hook
-- The hook requires the DeFi Interactor contract address to be configured in the `ContractAddressContext`
+- The hook requires the Guardian contract address to be configured in the `ContractAddressContext`
 
 ## Performance Considerations
 
@@ -119,7 +119,7 @@ For production use with many accounts, consider:
 
 ### No accounts showing up
 
-1. Verify the DeFi Interactor contract address is correctly configured
+1. Verify the Guardian contract address is correctly configured
 2. Check that roles have actually been granted on-chain (transactions confirmed)
 3. Ensure you're connected to the correct network
 4. Check the browser console for error messages

@@ -1,11 +1,11 @@
 // Re-export all contract ABIs and types from a single entry point
 export {
-  DEFI_INTERACTOR_ABI,
+  GUARDIAN_ABI,
   OperationType,
   ROLES,
   ROLE_NAMES,
   ROLE_DESCRIPTIONS,
-} from './defiInteractor'
+} from './guardian'
 
 export { SAFE_ABI } from './safe'
 

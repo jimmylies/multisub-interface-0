@@ -2,14 +2,14 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { isAddress } from 'viem'
 
 interface ContractAddresses {
-  defiInteractor: `0x${string}` | undefined
+  guardian: `0x${string}` | undefined
   safe: `0x${string}` | undefined
 }
 
 interface ContractAddressContextType {
   addresses: ContractAddresses
-  setDefiInteractor: (address: `0x${string}`) => void
-  clearDefiInteractor: () => void
+  setGuardian: (address: `0x${string}`) => void
+  clearGuardian: () => void
   setSafe: (address: `0x${string}`) => void
   isConfigured: boolean
 }
@@ -22,52 +22,52 @@ interface ContractAddressProviderProps {
 
 export function ContractAddressProvider({ children }: ContractAddressProviderProps) {
   const [addresses, setAddresses] = useState<ContractAddresses>({
-    defiInteractor: undefined,
+    guardian: undefined,
     safe: undefined,
   })
 
   // Parse URL parameters on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const defiInteractorParam = params.get('defiInteractor')
+    const guardianParam = params.get('guardian')
 
     // Check localStorage for saved address
-    const savedDefiInteractor = localStorage.getItem('defiInteractor')
+    const savedGuardian = localStorage.getItem('guardian')
 
-    let defiInteractor: `0x${string}` | undefined = undefined
+    let guardian: `0x${string}` | undefined = undefined
 
     // Priority: URL params > localStorage
-    if (defiInteractorParam && isAddress(defiInteractorParam)) {
-      defiInteractor = defiInteractorParam
-      localStorage.setItem('defiInteractor', defiInteractorParam)
-    } else if (savedDefiInteractor && isAddress(savedDefiInteractor)) {
-      defiInteractor = savedDefiInteractor
+    if (guardianParam && isAddress(guardianParam)) {
+      guardian = guardianParam
+      localStorage.setItem('guardian', guardianParam)
+    } else if (savedGuardian && isAddress(savedGuardian)) {
+      guardian = savedGuardian
     }
 
-    // Note: Safe is derived from DeFi Interactor via useSafeAddress() hook
-    setAddresses({ defiInteractor, safe: undefined })
+    // Note: Safe is derived from Guardian via useSafeAddress() hook
+    setAddresses({ guardian, safe: undefined })
   }, [])
 
-  const setDefiInteractor = (address: `0x${string}`) => {
-    setAddresses(prev => ({ ...prev, defiInteractor: address, safe: undefined }))
-    localStorage.setItem('defiInteractor', address)
+  const setGuardian = (address: `0x${string}`) => {
+    setAddresses(prev => ({ ...prev, guardian: address, safe: undefined }))
+    localStorage.setItem('guardian', address)
     localStorage.removeItem('safe') // Clean up legacy storage
 
-    // Update URL params (only defiInteractor, remove safe if present)
+    // Update URL params (only guardian, remove safe if present)
     const params = new URLSearchParams(window.location.search)
-    params.set('defiInteractor', address)
+    params.set('guardian', address)
     params.delete('safe') // Clean up legacy URL param
     window.history.replaceState({}, '', `${window.location.pathname}?${params}`)
   }
 
-  const clearDefiInteractor = () => {
-    setAddresses({ defiInteractor: undefined, safe: undefined })
-    localStorage.removeItem('defiInteractor')
+  const clearGuardian = () => {
+    setAddresses({ guardian: undefined, safe: undefined })
+    localStorage.removeItem('guardian')
     localStorage.removeItem('safe')
 
     // Clear URL params
     const params = new URLSearchParams(window.location.search)
-    params.delete('defiInteractor')
+    params.delete('guardian')
     params.delete('safe')
     const newUrl = params.toString()
       ? `${window.location.pathname}?${params}`
@@ -76,18 +76,18 @@ export function ContractAddressProvider({ children }: ContractAddressProviderPro
   }
 
   const setSafe = (address: `0x${string}`) => {
-    // Safe is derived from DeFi Interactor - only update local state as cache
+    // Safe is derived from Guardian - only update local state as cache
     setAddresses(prev => ({ ...prev, safe: address }))
   }
 
-  const isConfigured = Boolean(addresses.defiInteractor)
+  const isConfigured = Boolean(addresses.guardian)
 
   return (
     <ContractAddressContext.Provider
       value={{
         addresses,
-        setDefiInteractor,
-        clearDefiInteractor,
+        setGuardian,
+        clearGuardian,
         setSafe,
         isConfigured,
       }}

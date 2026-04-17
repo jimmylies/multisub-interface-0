@@ -9,7 +9,7 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { ChevronDown, Pencil } from 'lucide-react'
-import { DEFI_INTERACTOR_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { GUARDIAN_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
 import { SpendingLimits } from '@/components/SpendingLimits'
@@ -64,7 +64,7 @@ export function SubAccountManager() {
     updater: (accounts: SubAccount[]) => SubAccount[]
   ) => {
     queryClient.setQueryData<SubAccount[]>(
-      ['managedAccounts', addresses.defiInteractor],
+      ['managedAccounts', addresses.guardian],
       current => updater(current ?? [])
     )
   }
@@ -89,7 +89,7 @@ export function SubAccountManager() {
       }
     }
 
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
@@ -151,8 +151,8 @@ export function SubAccountManager() {
         // Add grantRole transactions
         rolesToGrant.forEach(roleId => {
           transactions.push({
-            to: addresses.defiInteractor,
-            data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'grantRole', [
+            to: addresses.guardian,
+            data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'grantRole', [
               newSubAccount,
               roleId,
             ]),
@@ -165,10 +165,10 @@ export function SubAccountManager() {
           const windowSeconds = 24 * 3600 // 24 hours fixed
 
           transactions.push({
-            to: addresses.defiInteractor,
+            to: addresses.guardian,
             data: encodeContractCall(
-              addresses.defiInteractor,
-              DEFI_INTERACTOR_ABI as unknown as any[],
+              addresses.guardian,
+              GUARDIAN_ABI as unknown as any[],
               'setSubAccountLimits',
               [newSubAccount as `0x${string}`, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
             ),
@@ -510,7 +510,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   }
 
   const handleUpdatePermissions = async () => {
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
@@ -562,8 +562,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       if (hasExecuteRole !== undefined && localExecuteRole !== hasExecuteRole) {
         const functionName = localExecuteRole ? 'grantRole' : 'revokeRole'
         transactions.push({
-          to: addresses.defiInteractor,
-          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+          to: addresses.guardian,
+          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, functionName, [
             account,
             ROLES.DEFI_EXECUTE_ROLE,
           ]),
@@ -574,8 +574,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       if (hasTransferRole !== undefined && localTransferRole !== hasTransferRole) {
         const functionName = localTransferRole ? 'grantRole' : 'revokeRole'
         transactions.push({
-          to: addresses.defiInteractor,
-          data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, functionName, [
+          to: addresses.guardian,
+          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, functionName, [
             account,
             ROLES.DEFI_TRANSFER_ROLE,
           ]),
@@ -621,7 +621,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   }
 
   const handleDeleteSubAccount = async () => {
-    if (!addresses.defiInteractor) {
+    if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
     }
@@ -637,8 +637,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         action: 'remove',
       })
       transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+        to: addresses.guardian,
+        data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'revokeRole', [
           account,
           ROLES.DEFI_EXECUTE_ROLE,
         ]),
@@ -653,8 +653,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         action: 'remove',
       })
       transactions.push({
-        to: addresses.defiInteractor,
-        data: encodeContractCall(addresses.defiInteractor, DEFI_INTERACTOR_ABI, 'revokeRole', [
+        to: addresses.guardian,
+        data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'revokeRole', [
           account,
           ROLES.DEFI_TRANSFER_ROLE,
         ]),

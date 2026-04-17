@@ -60,7 +60,7 @@
 - A pre-confirmation popup now explains when multiple wallet signatures are expected and why.
 - Main files:
   - `/Users/leo/multisub-interface-0/src/pages/WizardPage.tsx`
-  - `/Users/leo/multisub-interface-0/src/lib/contracts/defiInteractor.ts`
+  - `/Users/leo/multisub-interface-0/src/lib/contracts/guardian.ts`
   - `/Users/leo/multisub-interface-0/src/hooks/useSafeProposal.ts`
 
 ### Successful deploy / existing-vault warning bug

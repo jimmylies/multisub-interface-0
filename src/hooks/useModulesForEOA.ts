@@ -6,7 +6,7 @@ import {
   AGENT_VAULT_CREATED_QUERY,
   type AgentVaultCreatedEvent,
 } from '@/lib/subgraph'
-import { AGENT_VAULT_FACTORY_ABI, DEFI_INTERACTOR_ABI, MODULE_REGISTRY_ABI, SAFE_ABI } from '@/lib/contracts'
+import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI, MODULE_REGISTRY_ABI, SAFE_ABI } from '@/lib/contracts'
 
 const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 
@@ -93,7 +93,7 @@ export function useModulesForEOA() {
               try {
                 const safe = await publicClient.readContract({
                   address: module,
-                  abi: DEFI_INTERACTOR_ABI,
+                  abi: GUARDIAN_ABI,
                   functionName: 'avatar',
                 })
 

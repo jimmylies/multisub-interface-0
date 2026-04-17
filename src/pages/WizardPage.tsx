@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase } from '@/lib/chains'
-import { AGENT_VAULT_FACTORY_ABI, DEFI_INTERACTOR_ABI, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
+import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
@@ -317,6 +317,8 @@ export function WizardPage() {
   const selectedPresetProtocolLabels = preset
     ? getPresetProtocolLabels(preset.id, chainId, preset.protocols)
     : []
+  const stepOrder: Step[] = ['preset', 'configure', 'review']
+  const currentStepIndex = stepOrder.indexOf(step)
   const isDeploying = isWriting || isConfirming
   const { proposeTransaction, isPending: isConfiguringExistingVault } = useSafeProposal()
 
@@ -376,7 +378,7 @@ export function WizardPage() {
       addTransaction(
         {
           to: existingModuleAddress,
-          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'grantRole', [
+          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'grantRole', [
             agentAddress as Address,
             ROLES.DEFI_EXECUTE_ROLE,
           ]),
@@ -389,7 +391,7 @@ export function WizardPage() {
       addTransaction(
         {
           to: existingModuleAddress,
-          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
+          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
             oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
             spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
@@ -407,7 +409,7 @@ export function WizardPage() {
         addTransaction(
           {
             to: existingModuleAddress,
-            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setAllowedAddresses', [
+            data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setAllowedAddresses', [
               agentAddress as Address,
               allowedProtocols,
               true,
@@ -431,7 +433,7 @@ export function WizardPage() {
         presetConfig.parserRegistrations.map(async ({ protocol, parser }) => {
           const currentParser = await publicClient.readContract({
             address: existingModuleAddress,
-            abi: DEFI_INTERACTOR_ABI,
+            abi: GUARDIAN_ABI,
             functionName: 'protocolParsers',
             args: [protocol],
           })
@@ -450,7 +452,7 @@ export function WizardPage() {
           addTransaction(
             {
               to: existingModuleAddress,
-              data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'registerParser', [
+              data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'registerParser', [
                 protocol,
                 parser,
               ]),
@@ -466,7 +468,7 @@ export function WizardPage() {
         presetConfig.selectorRegistrations.map(async ({ selector, opType }) => {
           const currentOpType = await publicClient.readContract({
             address: existingModuleAddress,
-            abi: DEFI_INTERACTOR_ABI,
+            abi: GUARDIAN_ABI,
             functionName: 'selectorType',
             args: [selector],
           })
@@ -485,7 +487,7 @@ export function WizardPage() {
           addTransaction(
             {
               to: existingModuleAddress,
-              data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'registerSelector', [
+              data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'registerSelector', [
                 selector,
                 opType,
               ]),
@@ -499,7 +501,7 @@ export function WizardPage() {
 
       const alreadyHasRole = await publicClient.readContract({
         address: existingModuleAddress,
-        abi: DEFI_INTERACTOR_ABI,
+        abi: GUARDIAN_ABI,
         functionName: 'hasRole',
         args: [agentAddress as Address, PRESET_ROLE_IDS[preset.id]],
       })
@@ -508,7 +510,7 @@ export function WizardPage() {
         addTransaction(
           {
             to: existingModuleAddress,
-            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'grantRole', [
+            data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'grantRole', [
               agentAddress as Address,
               PRESET_ROLE_IDS[preset.id],
             ]),
@@ -523,7 +525,7 @@ export function WizardPage() {
       addTransaction(
         {
           to: existingModuleAddress,
-          data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setSubAccountLimits', [
+          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
             oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
             spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
@@ -540,7 +542,7 @@ export function WizardPage() {
         addTransaction(
           {
             to: existingModuleAddress,
-            data: encodeContractCall(existingModuleAddress, DEFI_INTERACTOR_ABI, 'setAllowedAddresses', [
+            data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setAllowedAddresses', [
               agentAddress as Address,
               presetConfig.allowedProtocols,
               true,
@@ -713,22 +715,30 @@ export function WizardPage() {
     <div className="max-w-3xl mx-auto">
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-8">
-        {(['preset', 'configure', 'review'] as Step[]).map((s, i) => (
+        {stepOrder.map((s, i) => (
           <div
             key={s}
             className="flex items-center gap-2"
           >
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+            <button
+              type="button"
+              onClick={() => {
+                if (i < currentStepIndex) {
+                  setStep(s)
+                }
+              }}
+              disabled={i >= currentStepIndex}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                 step === s
-                  ? 'bg-accent-primary text-black'
-                  : i < ['preset', 'configure', 'review'].indexOf(step)
-                    ? 'bg-accent-primary/20 text-accent-primary'
-                    : 'bg-elevated-2 text-tertiary'
+                  ? 'bg-accent-primary text-black cursor-default'
+                  : i < currentStepIndex
+                    ? 'bg-accent-primary/20 text-accent-primary hover:bg-accent-primary/30 cursor-pointer'
+                    : 'bg-elevated-2 text-tertiary cursor-not-allowed'
               }`}
+              aria-label={i < currentStepIndex ? `Go back to step ${i + 1}` : `Step ${i + 1}`}
             >
               {i + 1}
-            </div>
+            </button>
             {i < 2 && <div className="w-12 h-px bg-elevated-2" />}
           </div>
         ))}
@@ -1057,7 +1067,7 @@ export function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary mb-2">Review & Deploy</h1>
           <p className="text-secondary mb-8">
-            Confirm your vault configuration. This will deploy a DeFiInteractorModule configured for
+            Confirm your vault configuration. This will deploy a Guardian module configured for
             your agent.
           </p>
 
@@ -1182,20 +1192,11 @@ export function WizardPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    localStorage.setItem('defiInteractor', existingModuleAddress)
-                    navigate(`${ROUTES.AGENTS}?defiInteractor=${existingModuleAddress}`)
+                    localStorage.setItem('guardian', existingModuleAddress)
+                    navigate(`${ROUTES.DASHBOARD}?guardian=${existingModuleAddress}`)
                   }}
                 >
-                  Open In Agents
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    localStorage.setItem('defiInteractor', existingModuleAddress)
-                    navigate(`${ROUTES.DASHBOARD}?defiInteractor=${existingModuleAddress}`)
-                  }}
-                >
-                  Open In Advanced
+                  Open In Dashboard
                 </Button>
               </div>
             </div>
@@ -1324,7 +1325,7 @@ export function WizardPage() {
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(ROUTES.AGENTS)}
+                  onClick={() => navigate(ROUTES.DASHBOARD)}
                 >
                   Go to Dashboard
                 </Button>

@@ -66,16 +66,10 @@ export function MainLayout() {
               Deploy
             </NavLink>
             <NavLink
-              to={ROUTES.AGENTS}
-              className={getNavClassName}
-            >
-              Agents
-            </NavLink>
-            <NavLink
               to={ROUTES.DASHBOARD}
               className={getNavClassName}
             >
-              Advanced
+              Dashboard
             </NavLink>
             <NavLink
               to={ROUTES.CHALLENGE}

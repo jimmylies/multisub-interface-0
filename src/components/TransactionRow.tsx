@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Tooltip } from '@/components/ui/tooltip'
 import { type Transaction, OP_TYPES, type OpType } from '@/hooks/useTransactionHistory'
+import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { getExplorerBase } from '@/lib/chains'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
 import { formatTokenAmount, formatTimeAgo, cn } from '@/lib/utils'
@@ -50,11 +51,13 @@ function shortenAddress(address: string): string {
 interface TransactionRowProps {
   transaction: Transaction
   index: number
+  showAgent?: boolean
 }
 
-export function TransactionRow({ transaction, index }: TransactionRowProps) {
+export function TransactionRow({ transaction, index, showAgent = false }: TransactionRowProps) {
   const chainId = useChainId()
   const [copied, setCopied] = useState(false)
+  const { getAccountName } = useSubAccountNames()
 
   // Get all tokens for metadata lookup
   const allTokens = [
@@ -74,6 +77,9 @@ export function TransactionRow({ transaction, index }: TransactionRowProps) {
     const metadata = tokenMetadata?.get(address.toLowerCase())
     return metadata?.decimals || 18
   }
+
+  const agentName = getAccountName(transaction.subAccount as `0x${string}`)
+  const agentLabel = agentName || shortenAddress(transaction.subAccount)
 
   const handleCopyTxHash = async () => {
     await navigator.clipboard.writeText(transaction.txHash)
@@ -104,6 +110,11 @@ export function TransactionRow({ transaction, index }: TransactionRowProps) {
             <Badge variant="info" className="text-xs">
               Protocol
             </Badge>
+            {showAgent && (
+              <Badge variant="outline" className="text-xs">
+                Agent: {agentLabel}
+              </Badge>
+            )}
           </div>
 
           {/* Tokens flow */}
@@ -198,6 +209,11 @@ export function TransactionRow({ transaction, index }: TransactionRowProps) {
           <Badge variant="warning" className="text-xs">
             Token
           </Badge>
+          {showAgent && (
+            <Badge variant="outline" className="text-xs">
+              Agent: {agentLabel}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 text-sm text-secondary">

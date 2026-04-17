@@ -23,6 +23,7 @@ import {
   type TransactionFilter,
 } from '@/hooks/useTransactionHistory'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
+import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { exportToCSV, exportToJSON, copyToClipboard } from '@/lib/export'
 import { cn } from '@/lib/utils'
 
@@ -164,7 +165,9 @@ export function TransactionHistory({
     opType: 'all',
     dateRange: 'all',
     token: 'all',
+    agent: 'all',
   })
+  const { getAccountName } = useSubAccountNames()
 
   // Fetch transaction history — multi-account when subAccounts is provided, single otherwise
   const isMultiAccount = !!subAccounts && subAccounts.length > 0
@@ -206,6 +209,15 @@ export function TransactionHistory({
     }))
   }, [uniqueTokenAddresses, tokenMetadata])
 
+  const availableAgents = useMemo(() => {
+    if (!subAccounts || subAccounts.length === 0) return []
+
+    return subAccounts.map(address => ({
+      address,
+      label: getAccountName(address) || `${address.slice(0, 6)}...${address.slice(-4)}`,
+    }))
+  }, [getAccountName, subAccounts])
+
   // Export handlers
   const handleExportCSV = () => {
     if (filteredTransactions.length > 0) {
@@ -230,7 +242,8 @@ export function TransactionHistory({
     filter.type !== 'all' ||
     filter.opType !== 'all' ||
     filter.dateRange !== 'all' ||
-    filter.token !== 'all'
+    filter.token !== 'all' ||
+    filter.agent !== 'all'
 
   // Loading state
   if (isLoading) {
@@ -338,6 +351,7 @@ export function TransactionHistory({
           filter={filter}
           onFilterChange={setFilter}
           availableTokens={availableTokens}
+          availableAgents={availableAgents}
         />
 
         {/* Transaction list */}
@@ -350,6 +364,7 @@ export function TransactionHistory({
                 <TransactionRow
                   transaction={tx}
                   index={index}
+                  showAgent={isMultiAccount}
                 />
               </StaggerItem>
             ))}

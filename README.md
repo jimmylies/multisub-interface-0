@@ -56,7 +56,7 @@ Sub-accounts can have one or both roles assigned by the Safe.
 - Node.js 18+ and pnpm installed
 - A Safe multisig deployed (create at [app.safe.global](https://app.safe.global/))
 - Zodiac Roles module enabled on your Safe
-- DeFiInteractor and SmartWallet contracts deployed
+- Guardian and SmartWallet contracts deployed
 - WalletConnect Project ID (get one at [cloud.walletconnect.com](https://cloud.walletconnect.com/))
 
 ## Setup
@@ -161,7 +161,7 @@ pnpm preview
 
 This dApp integrates with three core contracts:
 
-### DeFiInteractor.sol
+### Guardian Contract
 
 - Enforces cumulative limits
 - Executes vault deposits/withdrawals
@@ -192,7 +192,7 @@ This dApp integrates with three core contracts:
 └────────┬────────┘
          ↓
 ┌─────────────────┐
-│ DeFiInteractor  │ ← Limit enforcement
+│    Guardian     │ ← Limit enforcement
 └────────┬────────┘
          ↓
 ┌─────────────────┐
