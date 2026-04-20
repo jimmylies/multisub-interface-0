@@ -156,6 +156,8 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
         const spendingAction: ChangeAction = !displayData.spendingLimits.before
           ? 'add'
           : displayData.spendingLimits.before.maxSpendingBps !== displayData.spendingLimits.after.maxSpendingBps ||
+              displayData.spendingLimits.before.maxSpendingUSD !== displayData.spendingLimits.after.maxSpendingUSD ||
+              displayData.spendingLimits.before.mode !== displayData.spendingLimits.after.mode ||
               displayData.spendingLimits.before.windowDuration !== displayData.spendingLimits.after.windowDuration
             ? 'add'
             : 'unchanged'

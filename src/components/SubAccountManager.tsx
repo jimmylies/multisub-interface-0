@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { ChevronDown, Pencil } from 'lucide-react'
+import { ChevronDown, Pencil, ShieldCheck } from 'lucide-react'
 import { GUARDIAN_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
 import { SpendingLimits } from '@/components/SpendingLimits'
@@ -24,24 +25,75 @@ import {
   useCumulativeSpent,
   useWindowStart,
 } from '@/hooks/useSafe'
-import { useSubAccountFullState, mergeRolesWithChanges } from '@/hooks/useSubAccountFullState'
+import {
+  useSubAccountFullState,
+  mergeProtocolsWithChanges,
+  mergeRolesWithChanges,
+} from '@/hooks/useSubAccountFullState'
 import { formatUSD, cn } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
-import { isAddress } from 'viem'
+import { isAddress, parseUnits } from 'viem'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
+import type { SubAccount } from '@/types'
 import type { TransactionPreviewData, RoleChange } from '@/types/transactionPreview'
+
+const DASHBOARD_AGENT_PRESETS = [
+  {
+    id: 'manual',
+    name: 'Custom',
+    description: 'Define your own guardrails. Full control over protocols, limits, and roles.',
+    execute: false,
+    transfer: false,
+    spendingLimit: '5',
+    autoSetLimits: false,
+    protocolIds: [] as string[],
+  },
+  {
+    id: 'defi-trader',
+    name: 'DeFi Trader',
+    description: 'Swap tokens on Uniswap, 1inch, and Paraswap. Supply to Aave V3.',
+    execute: true,
+    transfer: false,
+    spendingLimit: '5',
+    autoSetLimits: true,
+    protocolIds: ['uniswap', 'aave'],
+  },
+  {
+    id: 'yield-farmer',
+    name: 'Yield Farmer',
+    description: 'Deposit into Morpho Blue and Aave V3. Maximize yield safely.',
+    execute: true,
+    transfer: false,
+    spendingLimit: '10',
+    autoSetLimits: true,
+    protocolIds: ['aave', 'morpho'],
+  },
+  {
+    id: 'payment-agent',
+    name: 'Payment Agent',
+    description: 'Transfer tokens to specified recipients. No DeFi interactions.',
+    execute: false,
+    transfer: true,
+    spendingLimit: '1',
+    autoSetLimits: true,
+    protocolIds: [] as string[],
+  },
+] as const
 
 export function SubAccountManager() {
   const { addresses } = useContractAddresses()
   const queryClient = useQueryClient()
   const { isSafeOwner } = useIsSafeOwner()
+  const [selectedPreset, setSelectedPreset] = useState<(typeof DASHBOARD_AGENT_PRESETS)[number]['id']>('manual')
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
   const [grantTransfer, setGrantTransfer] = useState(false)
+  const [trustMode, setTrustMode] = useState<'oracle-managed' | 'oracleless'>('oracle-managed')
   const [setSpendingLimits, setSetSpendingLimits] = useState(false)
   const [spendingLimit, setSpendingLimit] = useState('5')
+  const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
   const { toast } = useToast()
   const { showPreview } = useTransactionPreviewContext()
 
@@ -53,12 +105,23 @@ export function SubAccountManager() {
 
   // Calculate USD amount based on user input (real-time)
   const inputAllowanceUSD =
-    safeValue && setSpendingLimits
+    safeValue && setSpendingLimits && trustMode === 'oracle-managed'
       ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
       : null
 
   // Use Safe proposal hook
   const { proposeTransaction, isPending } = useSafeProposal()
+
+  const applyPreset = (presetId: (typeof DASHBOARD_AGENT_PRESETS)[number]['id']) => {
+    const preset = DASHBOARD_AGENT_PRESETS.find(option => option.id === presetId)
+    if (!preset) return
+
+    setSelectedPreset(preset.id)
+    setGrantExecute(preset.execute)
+    setGrantTransfer(preset.transfer)
+    setSetSpendingLimits(preset.autoSetLimits)
+    setSpendingLimit(preset.spendingLimit)
+  }
 
   const updateManagedAccountsCache = (
     updater: (accounts: SubAccount[]) => SubAccount[]
@@ -75,16 +138,27 @@ export function SubAccountManager() {
       return
     }
 
-    if (!grantExecute && !grantTransfer) {
+    const activePreset = DASHBOARD_AGENT_PRESETS.find(p => p.id === selectedPreset)
+    const presetProtocolIds: readonly string[] = activePreset?.protocolIds ?? []
+    const allowedProtocolAddresses = presetProtocolIds.flatMap(
+      id => getProtocolContractAddresses(id) as `0x${string}`[]
+    )
+
+    if (!grantExecute && !grantTransfer && allowedProtocolAddresses.length === 0) {
       toast.warning('Select at least one role')
       return
     }
 
     if (setSpendingLimits) {
-      const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+      if (trustMode === 'oracle-managed') {
+        const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
 
-      if (spendingBps < 0 || spendingBps > 10000) {
-        toast.warning('Spending limit must be between 0-100%')
+        if (spendingBps < 0 || spendingBps > 10000) {
+          toast.warning('Spending limit must be between 0-100%')
+          return
+        }
+      } else if (!spendingLimitUSD || Number(spendingLimitUSD) <= 0) {
+        toast.warning('Oracleless mode requires a USD spending limit')
         return
       }
     }
@@ -107,7 +181,7 @@ export function SubAccountManager() {
       rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
     }
 
-    if (rolesToGrant.length === 0) {
+    if (rolesToGrant.length === 0 && allowedProtocolAddresses.length === 0 && !setSpendingLimits) {
       toast.info('This address already has the selected roles')
       return
     }
@@ -128,6 +202,23 @@ export function SubAccountManager() {
       },
     ].filter(r => r.action !== 'unchanged')
 
+    // Build protocol changes for preview
+    const protocolChanges = presetProtocolIds.length > 0
+      ? PROTOCOLS
+          .filter(p => presetProtocolIds.includes(p.id))
+          .map(protocol => ({
+            protocolId: protocol.id,
+            protocolName: protocol.name,
+            contracts: protocol.contracts.map(c => ({
+              contractId: c.id,
+              contractName: c.name,
+              address: c.address,
+              description: c.description,
+              action: 'add' as const,
+            })),
+          }))
+      : undefined
+
     const previewData: TransactionPreviewData = {
       type: 'add-subaccount',
       subAccountAddress: newSubAccount as `0x${string}`,
@@ -136,11 +227,16 @@ export function SubAccountManager() {
         ? {
             before: null,
             after: {
-              maxSpendingBps: Math.floor(parseFloat(spendingLimit) * 100),
+              maxSpendingBps:
+                trustMode === 'oracle-managed' ? Math.floor(parseFloat(spendingLimit) * 100) : 0,
+              maxSpendingUSD:
+                trustMode === 'oracleless' ? parseUnits(spendingLimitUSD || '0', 18).toString() : '0',
+              mode: trustMode === 'oracleless' ? 'usd' : 'bps',
               windowDuration: 24 * 3600,
             },
           }
         : undefined,
+      protocols: protocolChanges,
     }
 
     // Show preview modal and execute on confirm
@@ -161,7 +257,10 @@ export function SubAccountManager() {
 
         // Add setSubAccountLimits transaction if enabled
         if (setSpendingLimits) {
-          const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+          const spendingBps =
+            trustMode === 'oracle-managed' ? Math.floor(parseFloat(spendingLimit) * 100) : 0
+          const spendingUSD =
+            trustMode === 'oracleless' ? parseUnits(spendingLimitUSD || '0', 18) : 0n
           const windowSeconds = 24 * 3600 // 24 hours fixed
 
           transactions.push({
@@ -170,7 +269,20 @@ export function SubAccountManager() {
               addresses.guardian,
               GUARDIAN_ABI as unknown as any[],
               'setSubAccountLimits',
-              [newSubAccount as `0x${string}`, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
+              [newSubAccount as `0x${string}`, BigInt(spendingBps), spendingUSD, BigInt(windowSeconds)]
+            ),
+          })
+        }
+
+        // Add setAllowedAddresses transaction for preset protocols
+        if (allowedProtocolAddresses.length > 0) {
+          transactions.push({
+            to: addresses.guardian,
+            data: encodeContractCall(
+              addresses.guardian,
+              GUARDIAN_ABI as unknown as any[],
+              'setAllowedAddresses',
+              [newSubAccount as `0x${string}`, allowedProtocolAddresses, true]
             ),
           })
         }
@@ -181,11 +293,18 @@ export function SubAccountManager() {
         )
 
         if (result.success) {
+          // Invalidate allowedAddresses queries so Protocol Permissions tab refreshes
+          await queryClient.invalidateQueries({
+            predicate: query => Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+          })
+          setSelectedPreset('manual')
           setNewSubAccount('')
           setGrantExecute(false)
           setGrantTransfer(false)
+          setTrustMode('oracle-managed')
           setSetSpendingLimits(false)
           setSpendingLimit('5')
+          setSpendingLimitUSD('5000')
           toast.success('Transaction submitted')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing
@@ -228,6 +347,37 @@ export function SubAccountManager() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              <div className="space-y-3">
+                <label className="block font-medium text-primary text-small">Preset</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr items-stretch gap-2">
+                  {DASHBOARD_AGENT_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset.id)}
+                      className={cn(
+                        'h-full rounded-xl border p-3 text-left transition-all',
+                        selectedPreset === preset.id
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex h-full flex-col">
+                        <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-primary text-small">{preset.name}</span>
+                        {selectedPreset === preset.id && (
+                          <Badge variant="accent" className="text-[10px] uppercase">
+                            Selected
+                          </Badge>
+                        )}
+                        </div>
+                        <p className="mt-1 text-caption text-tertiary">{preset.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block mb-2 font-medium text-primary text-small">
                   Wallet Address
@@ -241,13 +391,62 @@ export function SubAccountManager() {
               </div>
 
               <div className="space-y-3">
+                <label className="block font-medium text-primary text-small">Trust Mode</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTrustMode('oracle-managed')}
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-all',
+                      trustMode === 'oracle-managed'
+                        ? 'border-accent-primary bg-accent-primary/5'
+                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                      <span className="font-medium text-primary text-small">Oracle-managed</span>
+                    </div>
+                    <p className="text-caption text-tertiary">
+                      Percentage-based daily limit tracked with oracle-backed portfolio value.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrustMode('oracleless')}
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-all',
+                      trustMode === 'oracleless'
+                        ? 'border-accent-primary bg-accent-primary/5'
+                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                      <span className="font-medium text-primary text-small">Oracleless</span>
+                    </div>
+                    <p className="text-caption text-tertiary">
+                      Fixed USD daily limit enforced through on-chain cumulative spending.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Roles</label>
                 <div className="space-y-3 bg-elevated-2 p-3 border border-subtle rounded-xl">
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id="execute-role"
                       checked={grantExecute}
-                      onChange={e => setGrantExecute((e.target as HTMLInputElement).checked)}
+                      onChange={e => {
+                        const checked = (e.target as HTMLInputElement).checked
+                        setGrantExecute(checked)
+                        if (!checked) {
+                          const preset = DASHBOARD_AGENT_PRESETS.find(p => p.id === selectedPreset)
+                          if (preset?.execute) setSelectedPreset('manual')
+                        }
+                      }}
                     />
                     <div className="flex-1">
                       <label
@@ -265,7 +464,14 @@ export function SubAccountManager() {
                     <Checkbox
                       id="transfer-role"
                       checked={grantTransfer}
-                      onChange={e => setGrantTransfer((e.target as HTMLInputElement).checked)}
+                      onChange={e => {
+                        const checked = (e.target as HTMLInputElement).checked
+                        setGrantTransfer(checked)
+                        if (!checked) {
+                          const preset = DASHBOARD_AGENT_PRESETS.find(p => p.id === selectedPreset)
+                          if (preset?.transfer) setSelectedPreset('manual')
+                        }
+                      }}
                     />
                     <div className="flex-1">
                       <label
@@ -291,7 +497,9 @@ export function SubAccountManager() {
                     <Checkbox
                       id="set-limits"
                       checked={setSpendingLimits}
-                      onChange={e => setSetSpendingLimits((e.target as HTMLInputElement).checked)}
+                      onChange={e => {
+                        setSetSpendingLimits((e.target as HTMLInputElement).checked)
+                      }}
                     />
                     <div className="flex-1">
                       <label
@@ -311,31 +519,53 @@ export function SubAccountManager() {
                     <div className="mt-4 pl-8">
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 font-medium text-small">
-                          Spending Limit
+                          {trustMode === 'oracleless' ? 'USD Spending Limit' : 'Spending Limit'}
                           <TooltipIcon content="Maximum spending as percentage of portfolio value per 24-hour window" />
                         </label>
-                        <div className="flex items-center gap-3">
-                          <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.5"
-                            value={spendingLimit}
-                            onChange={e => setSpendingLimit(e.target.value)}
-                            placeholder="5"
-                            className="flex-1"
-                          />
-                          <span className="min-w-[30px] font-medium text-small text-tertiary">
-                            %
-                          </span>
-                          {inputAllowanceUSD !== null && (
-                            <span className="text-muted-foreground text-sm">
-                              ≈ ${formatUSD(inputAllowanceUSD)}
+                        {trustMode === 'oracleless' ? (
+                          <div className="flex items-center gap-3">
+                            <span className="text-small text-tertiary">$</span>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="100"
+                              value={spendingLimitUSD}
+                              onChange={e => {
+                                setSpendingLimitUSD(e.target.value)
+                              }}
+                              placeholder="5000"
+                              className="flex-1"
+                            />
+                            <span className="font-medium text-small text-tertiary">USD</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={spendingLimit}
+                              onChange={e => {
+                                setSpendingLimit(e.target.value)
+                              }}
+                              placeholder="5"
+                              className="flex-1"
+                            />
+                            <span className="min-w-[30px] font-medium text-small text-tertiary">
+                              %
                             </span>
-                          )}
-                        </div>
+                            {inputAllowanceUSD !== null && (
+                              <span className="text-muted-foreground text-sm">
+                                ≈ ${formatUSD(inputAllowanceUSD)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p className="text-caption text-tertiary">
-                          Limit updates may take up to 2 minutes to apply.
+                          {trustMode === 'oracleless'
+                            ? 'Set a fixed USD cap for each 24-hour window.'
+                            : 'Set a percentage cap of portfolio value for each 24-hour window.'}
                           <br />
                           Time window fixed at 24 hours.
                         </p>
@@ -415,13 +645,17 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const [isRolesPopoverOpen, setIsRolesPopoverOpen] = useState(false)
   const [isNamePopoverOpen, setIsNamePopoverOpen] = useState(false)
   const [nameInputValue, setNameInputValue] = useState('')
+  const queryClient = useQueryClient()
 
   const { data: hasExecuteRole } = useHasRole(account, ROLES.DEFI_EXECUTE_ROLE)
   const { data: hasTransferRole } = useHasRole(account, ROLES.DEFI_TRANSFER_ROLE)
   const { isSafeOwner } = useIsSafeOwner()
 
   // Get full sub-account state for preview context
-  const { fullState: currentFullState } = useSubAccountFullState(account)
+  const {
+    fullState: currentFullState,
+    allowedAddresses: currentAllowedAddresses,
+  } = useSubAccountFullState(account)
   const { getAccountName, setAccountName, removeAccountName } = useSubAccountNames()
   const accountName = getAccountName(account)
 
@@ -489,6 +723,15 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { proposeTransaction, isPending: isUpdating } = useSafeProposal()
   const { showPreview } = useTransactionPreviewContext()
 
+  const updateManagedAccountsCache = (
+    updater: (accounts: SubAccount[]) => SubAccount[]
+  ) => {
+    queryClient.setQueryData<SubAccount[]>(
+      ['managedAccounts', addresses.guardian],
+      current => updater(current ?? [])
+    )
+  }
+
   // Compute if there are changes to show Update/Cancel buttons
   const hasChanges = useMemo(() => {
     // Return false if contract state is still loading
@@ -541,11 +784,41 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       return
     }
 
+    const shouldClearProtocols =
+      hasExecuteRole !== undefined &&
+      hasExecuteRole &&
+      !localExecuteRole &&
+      currentAllowedAddresses.size > 0
+
+    const protocolRemovalChanges = shouldClearProtocols
+      ? currentFullState.protocols
+          .map(protocol => {
+            const contracts = protocol.contracts
+              .filter(contract => contract.isActive)
+              .map(contract => ({
+                ...contract,
+                action: 'remove' as const,
+              }))
+
+            return contracts.length > 0
+              ? {
+                  protocolId: protocol.protocolId,
+                  protocolName: protocol.protocolName,
+                  contracts,
+                }
+              : null
+          })
+          .filter(Boolean)
+      : []
+
     // Build full state with role changes applied
     const fullStateWithChanges = {
       roles: mergeRolesWithChanges(currentFullState.roles, roles),
       spendingLimits: currentFullState.spendingLimits, // Unchanged
-      protocols: currentFullState.protocols, // Unchanged
+      protocols:
+        protocolRemovalChanges.length > 0
+          ? mergeProtocolsWithChanges(currentFullState.protocols, protocolRemovalChanges)
+          : currentFullState.protocols,
     }
 
     const previewData: TransactionPreviewData = {
@@ -566,6 +839,17 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
           data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, functionName, [
             account,
             ROLES.DEFI_EXECUTE_ROLE,
+          ]),
+        })
+      }
+
+      if (shouldClearProtocols) {
+        transactions.push({
+          to: addresses.guardian,
+          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'setAllowedAddresses', [
+            account,
+            Array.from(currentAllowedAddresses),
+            false,
           ]),
         })
       }
@@ -628,6 +912,24 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
 
     const roles: RoleChange[] = []
     const transactions: Array<{ to: `0x${string}`; data: `0x${string}` }> = []
+    const protocolRemovalChanges = currentFullState.protocols
+      .map(protocol => {
+        const contracts = protocol.contracts
+          .filter(contract => contract.isActive)
+          .map(contract => ({
+            ...contract,
+            action: 'remove' as const,
+          }))
+
+        return contracts.length > 0
+          ? {
+              protocolId: protocol.protocolId,
+              protocolName: protocol.protocolName,
+              contracts,
+            }
+          : null
+      })
+      .filter(Boolean)
 
     if (hasExecuteRole) {
       roles.push({
@@ -661,6 +963,17 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       })
     }
 
+    if (currentAllowedAddresses.size > 0) {
+      transactions.push({
+        to: addresses.guardian,
+        data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'setAllowedAddresses', [
+          account,
+          Array.from(currentAllowedAddresses),
+          false,
+        ]),
+      })
+    }
+
     if (transactions.length === 0) {
       toast.info('This sub-account is already inactive')
       return
@@ -673,7 +986,10 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       fullState: {
         roles: mergeRolesWithChanges(currentFullState.roles, roles),
         spendingLimits: currentFullState.spendingLimits,
-        protocols: currentFullState.protocols,
+        protocols:
+          protocolRemovalChanges.length > 0
+            ? mergeProtocolsWithChanges(currentFullState.protocols, protocolRemovalChanges)
+            : currentFullState.protocols,
       },
     }
 

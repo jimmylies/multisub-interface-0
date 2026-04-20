@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ChevronUp, ChevronDown } from 'lucide-react'
-import { GUARDIAN_ABI } from '@/lib/contracts'
+import { GUARDIAN_ABI, ROLES, ROLE_DESCRIPTIONS, ROLE_NAMES } from '@/lib/contracts'
 import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/lib/protocols'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { useAllowedAddresses } from '@/hooks/useSafe'
-import { useSubAccountFullState, mergeProtocolsWithChanges } from '@/hooks/useSubAccountFullState'
+import {
+  useSubAccountFullState,
+  mergeProtocolsWithChanges,
+  mergeRolesWithChanges,
+} from '@/hooks/useSubAccountFullState'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
@@ -35,7 +39,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   const { proposeTransaction, isPending } = useSafeProposal()
 
   // Get full sub-account state for preview context
-  const { fullState: currentFullState } = useSubAccountFullState(subAccountAddress)
+  const { fullState: currentFullState, hasExecuteRole } = useSubAccountFullState(subAccountAddress)
 
   const addressesToCheck = useMemo(() => {
     const allAddresses: `0x${string}`[] = []
@@ -229,6 +233,21 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       }
     }).filter(p => p.contracts.some(c => c.action !== 'unchanged'))
 
+    const hasProtocolAdditions = protocolChanges.some(protocol =>
+      protocol.contracts.some(contract => contract.action === 'add')
+    )
+    const roleChanges =
+      hasProtocolAdditions && !hasExecuteRole
+        ? [
+            {
+              roleId: ROLES.DEFI_EXECUTE_ROLE,
+              roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
+              description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
+              action: 'add' as const,
+            },
+          ]
+        : []
+
     if (protocolChanges.length === 0) {
       toast.warning('No changes to apply')
       return
@@ -236,7 +255,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
 
     // Build full state with protocol changes applied
     const fullStateWithChanges = {
-      roles: currentFullState.roles, // Unchanged
+      roles:
+        roleChanges.length > 0
+          ? mergeRolesWithChanges(currentFullState.roles, roleChanges)
+          : currentFullState.roles,
       spendingLimits: currentFullState.spendingLimits, // Unchanged
       protocols: mergeProtocolsWithChanges(currentFullState.protocols, protocolChanges),
     }
@@ -276,6 +298,16 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
 
       // Build transaction to ADD addresses
       if (addressesToAdd.length > 0) {
+        if (!hasExecuteRole) {
+          transactions.push({
+            to: addresses.guardian,
+            data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'grantRole', [
+              subAccountAddress,
+              ROLES.DEFI_EXECUTE_ROLE,
+            ]),
+          })
+        }
+
         transactions.push({
           to: addresses.guardian,
           data: encodeContractCall(

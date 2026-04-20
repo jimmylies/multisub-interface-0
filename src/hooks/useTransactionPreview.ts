@@ -87,6 +87,8 @@ export function countChanges(data: TransactionPreviewData): {
       const after = data.spendingLimits.after
       if (
         before.maxSpendingBps !== after.maxSpendingBps ||
+        before.maxSpendingUSD !== after.maxSpendingUSD ||
+        before.mode !== after.mode ||
         before.windowDuration !== after.windowDuration
       ) {
         additions++ // Treat updates as additions for visual purposes

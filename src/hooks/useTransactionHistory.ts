@@ -366,7 +366,8 @@ async function fetchTransactionHistoryForSubAccount({
 export function useTransactionHistory(options: UseTransactionHistoryOptions = {}) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient()
-  const { guardian } = useContractAddresses()
+  const { addresses } = useContractAddresses()
+  const guardian = addresses.guardian
 
   const subAccount = options.subAccount || connectedAddress
   const filter = options.filter || {}
@@ -415,7 +416,8 @@ export function useMultipleTransactionHistories(
   options: UseMultipleTransactionHistoriesOptions = {}
 ) {
   const publicClient = usePublicClient()
-  const { guardian } = useContractAddresses()
+  const { addresses } = useContractAddresses()
+  const guardian = addresses.guardian
   const subAccounts = options.subAccounts || []
   const filter = options.filter || {}
   const enabled = options.enabled !== false && !!guardian && !!publicClient && subAccounts.length > 0

@@ -13,10 +13,14 @@ export interface RoleChange {
 export interface SpendingLimitChange {
   before: {
     maxSpendingBps: number
+    maxSpendingUSD?: string
+    mode?: 'bps' | 'usd'
     windowDuration: number
   } | null
   after: {
     maxSpendingBps: number
+    maxSpendingUSD?: string
+    mode?: 'bps' | 'usd'
     windowDuration: number
   }
 }

@@ -20,6 +20,28 @@ interface ProposeTransactionOptions {
   moduleOwnerOverride?: Address;
 }
 
+function extractTransactionHash(result: unknown): `0x${string}` | undefined {
+  if (!result || typeof result !== 'object') return undefined
+
+  const candidate = result as {
+    hash?: unknown
+    transactionResponse?: { hash?: unknown }
+  }
+
+  if (typeof candidate.hash === 'string' && candidate.hash.startsWith('0x')) {
+    return candidate.hash as `0x${string}`
+  }
+
+  if (
+    typeof candidate.transactionResponse?.hash === 'string' &&
+    candidate.transactionResponse.hash.startsWith('0x')
+  ) {
+    return candidate.transactionResponse.hash as `0x${string}`
+  }
+
+  return undefined
+}
+
 // Helper to detect user rejection errors from wallet
 function isUserRejection(error: unknown): boolean {
   if (error instanceof Error) {
@@ -133,7 +155,11 @@ export function useSafeProposal() {
           }
 
           if (options?.transactionType) {
-            await invalidateQueriesForTransaction(options.transactionType);
+            try {
+              await invalidateQueriesForTransaction(options.transactionType);
+            } catch (invalidationError) {
+              console.warn('Failed to invalidate queries after direct owner transaction', invalidationError)
+            }
           }
 
           return {
@@ -178,13 +204,17 @@ export function useSafeProposal() {
         console.log('Transaction executed:', executeTxResponse);
 
         // Get transaction hash from response
-        const txHash = executeTxResponse.hash;
+        const txHash = extractTransactionHash(executeTxResponse);
         console.log('Transaction hash:', txHash);
+
+        if (!txHash) {
+          throw new Error('Transaction executed but no transaction hash was returned by the Safe SDK')
+        }
 
         // Wait for transaction to be confirmed on the blockchain
         console.log('Waiting for transaction confirmation...');
         const receipt = await publicClient.waitForTransactionReceipt({
-          hash: txHash as `0x${string}`,
+          hash: txHash,
           confirmations: 1,
         });
         console.log('Transaction confirmed:', receipt);
@@ -196,7 +226,11 @@ export function useSafeProposal() {
 
         // Invalidate relevant queries AFTER confirmation
         if (options?.transactionType) {
-          await invalidateQueriesForTransaction(options.transactionType);
+          try {
+            await invalidateQueriesForTransaction(options.transactionType);
+          } catch (invalidationError) {
+            console.warn('Failed to invalidate queries after Safe transaction', invalidationError)
+          }
         }
 
         return {

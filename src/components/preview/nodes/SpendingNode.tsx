@@ -14,15 +14,34 @@ function formatPercent(bps: number): string {
   return `${(bps / 100).toFixed(2)}%`
 }
 
+function formatUSD(value?: string): string {
+  if (!value) return '$0'
+  const numeric = Number(value) / 1e18
+  return `$${numeric.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+}
+
 export const SpendingNode = forwardRef<HTMLDivElement, SpendingNodeProps>(function SpendingNode(
   { limits, delay = 0 },
   ref
 ) {
   const isNew = !limits.before
-  const percentChanged = limits.before?.maxSpendingBps !== limits.after.maxSpendingBps
-  const isIncrease = limits.before && limits.after.maxSpendingBps > limits.before.maxSpendingBps
+  const usesUSD = limits.after.mode === 'usd'
+  const limitChanged = usesUSD
+    ? limits.before?.maxSpendingUSD !== limits.after.maxSpendingUSD
+    : limits.before?.maxSpendingBps !== limits.after.maxSpendingBps
+  const isIncrease = limits.before
+    ? usesUSD
+      ? Number(limits.after.maxSpendingUSD || '0') > Number(limits.before.maxSpendingUSD || '0')
+      : limits.after.maxSpendingBps > limits.before.maxSpendingBps
+    : false
   const hasChanges =
-    isNew || percentChanged || limits.before?.windowDuration !== limits.after.windowDuration
+    isNew || limitChanged || limits.before?.windowDuration !== limits.after.windowDuration
+
+  const formatLimit = () =>
+    usesUSD ? formatUSD(limits.after.maxSpendingUSD) : formatPercent(limits.after.maxSpendingBps)
+
+  const formatPreviousLimit = () =>
+    usesUSD ? formatUSD(limits.before?.maxSpendingUSD) : formatPercent(limits.before?.maxSpendingBps || 0)
 
   return (
     <motion.div
@@ -72,16 +91,12 @@ export const SpendingNode = forwardRef<HTMLDivElement, SpendingNodeProps>(functi
 
         <div className="flex items-center gap-1">
           {!limits.before ? (
-            // Nouveau: afficher seulement la nouvelle valeur en vert
             <span className="font-medium text-caption text-success">
-              {formatPercent(limits.after.maxSpendingBps)}
+              {formatLimit()}
             </span>
-          ) : percentChanged ? (
-            // Modifié: afficher ancien → nouveau avec couleur selon direction
+          ) : limitChanged ? (
             <>
-              <span className="text-caption text-tertiary">
-                {formatPercent(limits.before.maxSpendingBps)}
-              </span>
+              <span className="text-caption text-tertiary">{formatPreviousLimit()}</span>
               <ArrowRight className="w-3 h-3 text-tertiary" />
               <span
                 className={cn(
@@ -89,14 +104,11 @@ export const SpendingNode = forwardRef<HTMLDivElement, SpendingNodeProps>(functi
                   isIncrease ? 'text-success' : 'text-error'
                 )}
               >
-                {formatPercent(limits.after.maxSpendingBps)}
+                {formatLimit()}
               </span>
             </>
           ) : (
-            // Inchangé: afficher seulement la valeur actuelle
-            <span className="font-medium text-caption text-secondary">
-              {formatPercent(limits.after.maxSpendingBps)}
-            </span>
+            <span className="font-medium text-caption text-secondary">{formatLimit()}</span>
           )}
         </div>
       </motion.div>
