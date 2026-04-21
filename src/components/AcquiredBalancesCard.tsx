@@ -6,6 +6,7 @@ import { useAcquiredBalances } from '@/hooks/useSafe'
 import { formatTokenAmount } from '@/lib/utils'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
 import { useTimeRemaining } from '@/hooks/useTimeRemaining'
+import { TRACKED_TOKENS } from '@/lib/tokenMetadata'
 
 interface AcquiredBalancesCardProps {
   address: `0x${string}`
@@ -57,33 +58,8 @@ function TokenRow({ token }: TokenRowProps) {
   )
 }
 
-// Common tokens to track on Base mainnet
-const TOKENS_TO_TRACK: { symbol: string; address: `0x${string}`; decimals: number }[] = [
-  {
-    symbol: 'USDC',
-    address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    decimals: 6,
-  },
-  {
-    symbol: 'WETH',
-    address: '0x4200000000000000000000000000000000000006',
-    decimals: 18,
-  },
-  {
-    symbol: 'USDT',
-    address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
-    decimals: 6,
-  },
-  // { symbol: 'WBTC', address: '0x29f2D40B0605204364af54EC677bD022dA425d03', decimals: 8 },
-  {
-    symbol: 'DAI',
-    address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
-    decimals: 18,
-  },
-]
-
 export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
-  const tokenAddresses = TOKENS_TO_TRACK.map(t => t.address)
+  const tokenAddresses = TRACKED_TOKENS.map(t => t.address)
   const { data: balances = new Map(), isLoading } = useAcquiredBalances(address, tokenAddresses)
 
   // Extract token addresses from balances

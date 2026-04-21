@@ -104,9 +104,9 @@ export function DashboardPage() {
           <ContractSetup />
         </div>
         {shouldShowVaultHistory ? (
-          <TransactionHistory subAccounts={managedSubAccounts} />
+          <TransactionHistory key="multi" subAccounts={managedSubAccounts} />
         ) : (
-          <TransactionHistory subAccount={address as `0x${string}` | undefined} />
+          <TransactionHistory key="single" subAccount={address as `0x${string}` | undefined} />
         )}
       </FadeInUp>
     )

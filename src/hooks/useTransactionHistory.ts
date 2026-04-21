@@ -1,15 +1,10 @@
 import { useMemo } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { useAccount, usePublicClient } from 'wagmi'
-import { parseAbiItem, type Address, type PublicClient } from 'viem'
-import {
-  createSubgraphClient,
-  PROTOCOL_EXECUTION_QUERY,
-  TRANSFER_EXECUTED_QUERY,
-  type ProtocolExecution,
-  type TransferExecuted,
-} from '@/lib/subgraph'
+import { useAccount } from 'wagmi'
+import { decodeEventLog, type Address } from 'viem'
+import { GUARDIAN_ABI } from '@/lib/contracts'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
+import { getBlockscoutApiUrl } from '@/lib/chains'
 
 // Operation type mapping
 export const OP_TYPES = {
@@ -58,49 +53,6 @@ interface UseTransactionHistoryOptions {
   subAccount?: `0x${string}`
   filter?: TransactionFilter
   enabled?: boolean
-}
-
-const PROTOCOL_EXECUTION_EVENT = parseAbiItem(
-  'event ProtocolExecution(address indexed subAccount, address indexed target, uint8 opType, address[] tokensIn, uint256[] amountsIn, address[] tokensOut, uint256[] amountsOut, uint256 spendingCost)'
-)
-
-const TRANSFER_EXECUTED_EVENT = parseAbiItem(
-  'event TransferExecuted(address indexed subAccount, address indexed token, address indexed recipient, uint256 amount, uint256 spendingCost)'
-)
-
-// Convert raw protocol execution to unified transaction
-function mapProtocolExecution(exec: ProtocolExecution): Transaction {
-  return {
-    id: exec.id,
-    type: 'protocol',
-    timestamp: Number(exec.blockTimestamp),
-    blockNumber: Number(exec.blockNumber),
-    txHash: exec.transactionHash,
-    subAccount: exec.subAccount,
-    target: exec.target,
-    opType: Number(exec.opType) as OpType,
-    tokensIn: exec.tokensIn,
-    amountsIn: exec.amountsIn.map(a => BigInt(a)),
-    tokensOut: exec.tokensOut,
-    amountsOut: exec.amountsOut.map(a => BigInt(a)),
-    spendingCost: BigInt(exec.spendingCost),
-  }
-}
-
-// Convert raw transfer to unified transaction
-function mapTransferExecuted(transfer: TransferExecuted): Transaction {
-  return {
-    id: transfer.id,
-    type: 'transfer',
-    timestamp: Number(transfer.blockTimestamp),
-    blockNumber: Number(transfer.blockNumber),
-    txHash: transfer.transactionHash,
-    subAccount: transfer.subAccount,
-    token: transfer.token,
-    recipient: transfer.recipient,
-    amount: BigInt(transfer.amount),
-    spendingCost: BigInt(transfer.spendingCost),
-  }
 }
 
 // Get timestamp for date range filter
@@ -156,228 +108,147 @@ function applyFilters(transactions: Transaction[], filter: TransactionFilter): T
   return filtered
 }
 
-function getMaxBlockLookback(dateRange: TransactionFilter['dateRange']): bigint {
-  switch (dateRange) {
-    case '24h':
-      return 50_000n
-    case '7d':
-      return 250_000n
-    case '30d':
-      return 1_000_000n
-    default:
-      // "All time" fallback still needs a bounded window because Base Sepolia RPC
-      // rejects huge eth_getLogs ranges. This covers a large recent history window.
-      return 1_000_000n
-  }
-}
-
-async function getLogsChunked({
-  publicClient,
-  address,
-  event,
-  args,
-  fromBlock,
-  toBlock,
-}: {
-  publicClient: PublicClient
-  address: Address
-  event: typeof PROTOCOL_EXECUTION_EVENT | typeof TRANSFER_EXECUTED_EVENT
-  args: Record<string, Address>
-  fromBlock: bigint
-  toBlock: bigint
-}) {
-  const chunkSize = 9_500n
-  const logs = []
-
-  for (let startBlock = fromBlock; startBlock <= toBlock; startBlock += chunkSize + 1n) {
-    const endBlock = startBlock + chunkSize > toBlock ? toBlock : startBlock + chunkSize
-    const chunkLogs = await publicClient.getLogs({
-      address,
-      event,
-      args,
-      fromBlock: startBlock,
-      toBlock: endBlock,
-    })
-    logs.push(...chunkLogs)
-  }
-
-  return logs
-}
-
-async function fetchHistoryFromLogs(
-  publicClient: PublicClient,
+/**
+ * Fetch transaction history from blockscout API and decode Guardian events.
+ */
+async function fetchHistoryFromBlockscout(
+  blockscoutUrl: string,
   guardian: Address,
   subAccount: Address,
-  fromTimestamp: number,
-  dateRange: TransactionFilter['dateRange']
+  fromTimestamp: number
 ): Promise<Transaction[]> {
-  const latestBlock = await publicClient.getBlockNumber()
-  const maxLookback = getMaxBlockLookback(dateRange)
-  const fromBlock = latestBlock > maxLookback ? latestBlock - maxLookback : 0n
-
-  const [protocolLogs, transferLogs] = await Promise.all([
-    getLogsChunked({
-      publicClient,
-      address: guardian,
-      event: PROTOCOL_EXECUTION_EVENT,
-      args: { subAccount },
-      fromBlock,
-      toBlock: latestBlock,
-    }),
-    getLogsChunked({
-      publicClient,
-      address: guardian,
-      event: TRANSFER_EXECUTED_EVENT,
-      args: { subAccount },
-      fromBlock,
-      toBlock: latestBlock,
-    }),
-  ])
-
-  const uniqueBlockNumbers = Array.from(
-    new Set(
-      [...protocolLogs, ...transferLogs]
-        .map(log => log.blockNumber)
-        .filter((blockNumber): blockNumber is bigint => blockNumber !== null)
+  try {
+    const res = await fetch(
+      `${blockscoutUrl}/api/v2/addresses/${subAccount}/transactions?filter=from`
     )
-  )
+    if (!res.ok) return []
+    const data = await res.json()
+    const items: any[] = data.items || []
 
-  const blockEntries = await Promise.all(
-    uniqueBlockNumbers.map(async blockNumber => {
-      const block = await publicClient.getBlock({ blockNumber })
-      return [blockNumber.toString(), Number(block.timestamp)] as const
-    })
-  )
+    // Only keep txs sent TO the guardian module
+    const moduleTxs = items.filter(
+      (tx: any) =>
+        tx.to?.hash?.toLowerCase() === guardian.toLowerCase() &&
+        tx.status === 'ok'
+    )
 
-  const blockTimestampMap = new Map<string, number>(blockEntries)
+    const transactions: Transaction[] = []
 
-  const protocolTxs: Transaction[] = protocolLogs
-    .map(log => {
-      const timestamp = blockTimestampMap.get(log.blockNumber?.toString() ?? '') ?? 0
-      return {
-        id: `${log.transactionHash}-protocol-${log.logIndex?.toString() ?? '0'}`,
-        type: 'protocol' as const,
-        timestamp,
-        blockNumber: Number(log.blockNumber ?? 0n),
-        txHash: log.transactionHash,
-        subAccount: log.args.subAccount!,
-        target: log.args.target!,
-        opType: Number(log.args.opType ?? 0) as OpType,
-        tokensIn: (log.args.tokensIn ?? []) as string[],
-        amountsIn: (log.args.amountsIn ?? []) as bigint[],
-        tokensOut: (log.args.tokensOut ?? []) as string[],
-        amountsOut: (log.args.amountsOut ?? []) as bigint[],
-        spendingCost: (log.args.spendingCost ?? 0n) as bigint,
+    for (const tx of moduleTxs) {
+      try {
+        const timestamp = Math.floor(new Date(tx.timestamp).getTime() / 1000)
+        if (timestamp < fromTimestamp) continue
+
+        const logsRes = await fetch(
+          `${blockscoutUrl}/api/v2/transactions/${tx.hash}/logs`
+        )
+        if (!logsRes.ok) continue
+        const logsData = await logsRes.json()
+        const logs: any[] = logsData.items || []
+
+        for (const log of logs) {
+          if (log.address?.hash?.toLowerCase() !== guardian.toLowerCase()) continue
+
+          try {
+            const topics = (log.topics as (string | null)[]).filter(
+              (t): t is string => t !== null
+            ) as [`0x${string}`, ...`0x${string}`[]]
+
+            const decoded = decodeEventLog({
+              abi: GUARDIAN_ABI,
+              data: log.data as `0x${string}`,
+              topics,
+            })
+
+            if (decoded.eventName === 'ProtocolExecution') {
+              const args = decoded.args as any
+              transactions.push({
+                id: `${tx.hash}-protocol-${log.index}`,
+                type: 'protocol',
+                timestamp,
+                blockNumber: Number(tx.block_number ?? tx.block),
+                txHash: tx.hash,
+                subAccount: args.subAccount,
+                target: args.target,
+                opType: Number(args.opType) as OpType,
+                tokensIn: args.tokensIn as string[],
+                amountsIn: (args.amountsIn as bigint[]),
+                tokensOut: args.tokensOut as string[],
+                amountsOut: (args.amountsOut as bigint[]),
+                spendingCost: args.spendingCost as bigint,
+              })
+            } else if (decoded.eventName === 'TransferExecuted') {
+              const args = decoded.args as any
+              transactions.push({
+                id: `${tx.hash}-transfer-${log.index}`,
+                type: 'transfer',
+                timestamp,
+                blockNumber: Number(tx.block_number ?? tx.block),
+                txHash: tx.hash,
+                subAccount: args.subAccount,
+                token: args.token,
+                recipient: args.recipient,
+                amount: args.amount as bigint,
+                spendingCost: args.spendingCost as bigint,
+              })
+            }
+          } catch {
+            // Not a matching event
+          }
+        }
+      } catch {
+        // Skip failed fetches
       }
-    })
-    .filter(tx => tx.timestamp >= fromTimestamp)
+    }
 
-  const transferTxs: Transaction[] = transferLogs
-    .map(log => {
-      const timestamp = blockTimestampMap.get(log.blockNumber?.toString() ?? '') ?? 0
-      return {
-        id: `${log.transactionHash}-transfer-${log.logIndex?.toString() ?? '0'}`,
-        type: 'transfer' as const,
-        timestamp,
-        blockNumber: Number(log.blockNumber ?? 0n),
-        txHash: log.transactionHash,
-        subAccount: log.args.subAccount!,
-        token: log.args.token!,
-        recipient: log.args.recipient!,
-        amount: (log.args.amount ?? 0n) as bigint,
-        spendingCost: (log.args.spendingCost ?? 0n) as bigint,
-      }
-    })
-    .filter(tx => tx.timestamp >= fromTimestamp)
-
-  return [...protocolTxs, ...transferTxs]
+    return transactions
+  } catch {
+    return []
+  }
 }
 
 async function fetchTransactionHistoryForSubAccount({
-  publicClient,
+  blockscoutUrl,
   guardian,
   subAccount,
   filter,
   fromTimestamp,
 }: {
-  publicClient: PublicClient
+  blockscoutUrl: string
   guardian: Address
   subAccount: Address
   filter: TransactionFilter
   fromTimestamp: number
 }): Promise<Transaction[]> {
-  const shouldFetchProtocol = filter.type !== 'transfer'
-  const shouldFetchTransfers = filter.type !== 'protocol'
-  const opTypeFilter =
-    shouldFetchProtocol && filter.opType && filter.opType !== 'all'
-      ? [filter.opType]
-      : undefined
-
-  const discovered = new Map<string, Transaction>()
-
-  try {
-    const client = createSubgraphClient()
-    const [protocolResult, transferResult] = await Promise.all([
-      shouldFetchProtocol
-        ? client.request<{ protocolExecutions: ProtocolExecution[] }>(PROTOCOL_EXECUTION_QUERY, {
-            subAccount: subAccount.toLowerCase(),
-            fromTimestamp: fromTimestamp.toString(),
-            opTypes: opTypeFilter,
-          })
-        : Promise.resolve({ protocolExecutions: [] }),
-      shouldFetchTransfers
-        ? client.request<{ transferExecuteds: TransferExecuted[] }>(TRANSFER_EXECUTED_QUERY, {
-            subAccount: subAccount.toLowerCase(),
-            fromTimestamp: fromTimestamp.toString(),
-          })
-        : Promise.resolve({ transferExecuteds: [] }),
-    ])
-
-    const subgraphTransactions = [
-      ...protocolResult.protocolExecutions.map(mapProtocolExecution),
-      ...transferResult.transferExecuteds.map(mapTransferExecuted),
-    ]
-
-    subgraphTransactions.forEach(tx => {
-      discovered.set(tx.id, tx)
-    })
-  } catch {
-    // Fall through to on-chain logs
-  }
-
-  const rangeFilteredLogTransactions = await fetchHistoryFromLogs(
-    publicClient,
-    guardian,
-    subAccount,
-    fromTimestamp,
-    filter.dateRange
+  const transactions = await fetchHistoryFromBlockscout(
+    blockscoutUrl, guardian, subAccount, fromTimestamp
   )
 
-  rangeFilteredLogTransactions.forEach(tx => {
-    discovered.set(tx.id, tx)
-  })
-
   return applyFilters(
-    Array.from(discovered.values()).sort((a, b) => b.timestamp - a.timestamp),
+    transactions.sort((a: Transaction, b: Transaction) => b.timestamp - a.timestamp),
     filter
   )
 }
 
 export function useTransactionHistory(options: UseTransactionHistoryOptions = {}) {
-  const { address: connectedAddress } = useAccount()
-  const publicClient = usePublicClient()
+  const { address: connectedAddress, chainId } = useAccount()
   const { addresses } = useContractAddresses()
   const guardian = addresses.guardian
+  const blockscoutUrl = chainId ? getBlockscoutApiUrl(chainId) : undefined
 
-  const subAccount = options.subAccount || connectedAddress
+  // Don't fall back to connectedAddress when explicitly disabled — avoids
+  // polluting the query cache with a key that may collide with a multi-account query.
+  const subAccount = options.enabled !== false
+    ? (options.subAccount || connectedAddress)
+    : options.subAccount
   const filter = options.filter || {}
-  const enabled = options.enabled !== false && !!subAccount && !!guardian && !!publicClient
+  const enabled = options.enabled !== false && !!subAccount && !!guardian && !!blockscoutUrl
 
   const fromTimestamp = getTimestampForRange(filter.dateRange)
 
   return useQuery({
     queryKey: [
-      'transactionHistory',
+      'txHistory',
       subAccount,
       guardian,
       fromTimestamp,
@@ -385,10 +256,10 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
       filter.opType,
     ],
     queryFn: async () => {
-      if (!subAccount || !guardian || !publicClient) return []
+      if (!subAccount || !guardian || !blockscoutUrl) return []
 
       return fetchTransactionHistoryForSubAccount({
-        publicClient,
+        blockscoutUrl,
         guardian,
         subAccount,
         filter,
@@ -415,18 +286,19 @@ interface UseMultipleTransactionHistoriesOptions {
 export function useMultipleTransactionHistories(
   options: UseMultipleTransactionHistoriesOptions = {}
 ) {
-  const publicClient = usePublicClient()
+  const { chainId } = useAccount()
   const { addresses } = useContractAddresses()
   const guardian = addresses.guardian
+  const blockscoutUrl = chainId ? getBlockscoutApiUrl(chainId) : undefined
   const subAccounts = options.subAccounts || []
   const filter = options.filter || {}
-  const enabled = options.enabled !== false && !!guardian && !!publicClient && subAccounts.length > 0
+  const enabled = options.enabled !== false && !!guardian && !!blockscoutUrl && subAccounts.length > 0
   const fromTimestamp = getTimestampForRange(filter.dateRange)
 
   const queries = useQueries({
     queries: subAccounts.map(subAccount => ({
       queryKey: [
-        'transactionHistory',
+        'txHistory',
         subAccount,
         guardian,
         fromTimestamp,
@@ -434,10 +306,10 @@ export function useMultipleTransactionHistories(
         filter.opType,
       ],
       queryFn: async () => {
-        if (!guardian || !publicClient) return []
+        if (!guardian || !blockscoutUrl) return []
 
         return fetchTransactionHistoryForSubAccount({
-          publicClient,
+          blockscoutUrl,
           guardian,
           subAccount,
           filter,

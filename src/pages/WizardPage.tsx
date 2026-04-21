@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
-import { getExplorerBase } from '@/lib/chains'
+import { getExplorerBase, selectedChain } from '@/lib/chains'
 import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
@@ -96,11 +96,11 @@ function getPresetProtocolLabels(
     return [...fallbackLabels]
   }
 
-  if (chainId !== 84532) {
+  if (chainId !== selectedChain.id) {
     return [...fallbackLabels]
   }
 
-  const presetConfig = BASE_SEPOLIA_PRESET_CONFIG[presetId]
+  const presetConfig = PRESET_CONFIG[presetId]
   if (!presetConfig) {
     return [...fallbackLabels]
   }
@@ -132,7 +132,7 @@ const PRESET_ROLE_IDS: Record<string, number> = {
   'payment-agent': ROLES.DEFI_TRANSFER_ROLE,
 }
 
-const BASE_SEPOLIA_PRESET_CONFIG: Record<
+const PRESET_CONFIG: Record<
   string,
   {
     roleId: number
@@ -422,10 +422,10 @@ export function WizardPage() {
         )
       }
     } else {
-      const presetConfig = chainId === 84532 ? BASE_SEPOLIA_PRESET_CONFIG[preset.id] : undefined
+      const presetConfig = chainId === selectedChain.id ? PRESET_CONFIG[preset.id] : undefined
 
       if (!presetConfig) {
-        setDeployError('Adding preset agents to an existing vault is currently supported on Base Sepolia only.')
+        setDeployError('Adding preset agents to an existing vault is not supported on this network.')
         return
       }
 

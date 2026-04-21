@@ -30,6 +30,17 @@ const EXPLORER_BASE_MAP: Record<number, string> = {
   11155111: 'https://sepolia.etherscan.io',
 }
 
+// Blockscout API base URLs per chain (used for tx history)
+const BLOCKSCOUT_API_MAP: Record<number, string> = {
+  1: 'https://eth.blockscout.com',
+  10: 'https://optimism.blockscout.com',
+  137: 'https://polygon.blockscout.com',
+  8453: 'https://base.blockscout.com',
+  84532: 'https://base-sepolia.blockscout.com',
+  42161: 'https://arbitrum.blockscout.com',
+  11155111: 'https://eth-sepolia.blockscout.com',
+}
+
 const CHAIN_LABEL_MAP: Record<number, string> = {
   1: 'Ethereum',
   10: 'Optimism',
@@ -72,6 +83,10 @@ export function getExplorerBase(chainId: number): string {
 
 export function getChainLabel(chainId: number): string {
   return CHAIN_LABEL_MAP[chainId] || `Chain ${chainId}`
+}
+
+export function getBlockscoutApiUrl(chainId: number): string | undefined {
+  return BLOCKSCOUT_API_MAP[chainId]
 }
 
 // Get transports with custom RPC if provided

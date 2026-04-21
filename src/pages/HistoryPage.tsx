@@ -30,9 +30,9 @@ export function HistoryPage() {
     <FadeInUp className="space-y-6">
       <StatsBar />
       {shouldShowVaultHistory ? (
-        <TransactionHistory subAccounts={managedSubAccounts} />
+        <TransactionHistory key="multi" subAccounts={managedSubAccounts} />
       ) : (
-        <TransactionHistory subAccount={address} />
+        <TransactionHistory key="single" subAccount={address} />
       )}
     </FadeInUp>
   )
