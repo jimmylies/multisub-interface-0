@@ -100,22 +100,23 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
     allowance !== undefined &&
     remainingAllowance < allowance
 
+  // Derive displayed spent from the final remaining so it's accurate in both oracle and oracleless modes.
+  // In oracle mode, cumulativeSpent may lag or stay at 0 while getSpendingAllowance is the real source of truth.
+  const displayedSpent = maxAllowance > remainingAllowance ? maxAllowance - remainingAllowance : 0n
+
   // Calculate percent used
   const percentUsed =
     maxAllowance > 0n
-      ? Number(((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance) / 100
+      ? Number(((displayedSpent > maxAllowance ? maxAllowance : displayedSpent) * 10000n) / maxAllowance) / 100
       : 0
 
   // Determine color coding
   const percentRemaining = 100 - percentUsed
-  let statusColor: 'green' | 'yellow' | 'red' = 'green'
   let statusVariant: 'default' | 'secondary' | 'destructive' = 'default'
 
   if (percentRemaining < 25) {
-    statusColor = 'red'
     statusVariant = 'destructive'
   } else if (percentRemaining < 50) {
-    statusColor = 'yellow'
     statusVariant = 'secondary'
   }
 
@@ -168,7 +169,7 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
           />
           <div className="flex justify-between text-muted-foreground text-xs">
             <span className="flex items-center gap-1">
-              Used: ${formatUSD(effectiveSpent)}
+              Used: ${formatUSD(displayedSpent)}
               {isPriorSessionConstraint && (
                 <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
               )}

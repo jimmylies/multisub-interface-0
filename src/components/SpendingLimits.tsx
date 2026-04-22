@@ -58,7 +58,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   const { proposeTransaction, isPending } = useSafeProposal()
 
   const hasChanges = useMemo(() => {
-    if (!currentLimits) return true // No current limits = we can propose
+    if (!currentLimits) return true
 
     const inputSpendingBps = Math.floor(parseFloat(spendingLimit || '0') * 100)
     const inputWindowSeconds = Math.floor(parseFloat(windowHours || '0') * 3600)
@@ -141,16 +141,15 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
 
     showPreview(previewData, async () => {
       try {
-        // NEW signature: only 3 params (subAccount, maxSpendingBps, windowDuration)
         const data = encodeContractCall(
-          addresses.guardian,
-          GUARDIAN_ABI as any[],
+          addresses.guardian!,
+          GUARDIAN_ABI as unknown as any[],
           'setSubAccountLimits',
           [subAccountAddress, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
         )
 
         const result = await proposeTransaction(
-          { to: addresses.guardian, data },
+          { to: addresses.guardian!, data },
           { transactionType: TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS }
         )
 

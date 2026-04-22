@@ -262,6 +262,10 @@ export function useManagedAccounts() {
         }) as Promise<`0x${string}`[]>,
       ])
 
+      console.log('[useManagedAccounts] guardian:', addresses.guardian)
+      console.log('[useManagedAccounts] executeAccounts:', executeAccounts)
+      console.log('[useManagedAccounts] transferAccounts:', transferAccounts)
+
       // Build a map of addresses and their roles
       const accountMap = new Map<`0x${string}`, { executeRole: boolean; transferRole: boolean }>()
 

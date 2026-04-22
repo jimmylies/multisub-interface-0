@@ -9,7 +9,8 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { ChevronDown, Pencil, ShieldCheck } from 'lucide-react'
-import { GUARDIAN_ABI, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import { GUARDIAN_ABI as GUARDIAN_ABI_CONST, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
@@ -123,15 +124,6 @@ export function SubAccountManager() {
     setSpendingLimit(preset.spendingLimit)
   }
 
-  const updateManagedAccountsCache = (
-    updater: (accounts: SubAccount[]) => SubAccount[]
-  ) => {
-    queryClient.setQueryData<SubAccount[]>(
-      ['managedAccounts', addresses.guardian],
-      current => updater(current ?? [])
-    )
-  }
-
   const handleAddSubAccount = async () => {
     if (!isAddress(newSubAccount)) {
       toast.warning('Invalid Ethereum address')
@@ -192,15 +184,15 @@ export function SubAccountManager() {
         roleId: ROLES.DEFI_EXECUTE_ROLE,
         roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
         description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
-        action: rolesToGrant.includes(ROLES.DEFI_EXECUTE_ROLE) ? 'add' : 'unchanged',
+        action: rolesToGrant.includes(ROLES.DEFI_EXECUTE_ROLE) ? 'add' as const : 'unchanged' as const,
       },
       {
         roleId: ROLES.DEFI_TRANSFER_ROLE,
         roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
         description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
-        action: rolesToGrant.includes(ROLES.DEFI_TRANSFER_ROLE) ? 'add' : 'unchanged',
+        action: rolesToGrant.includes(ROLES.DEFI_TRANSFER_ROLE) ? 'add' as const : 'unchanged' as const,
       },
-    ].filter(r => r.action !== 'unchanged')
+    ].filter(r => r.action !== 'unchanged') as RoleChange[]
 
     // Build protocol changes for preview
     const protocolChanges = presetProtocolIds.length > 0
@@ -248,7 +240,7 @@ export function SubAccountManager() {
         rolesToGrant.forEach(roleId => {
           transactions.push({
             to: addresses.guardian,
-            data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'grantRole', [
+            data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'grantRole', [
               newSubAccount,
               roleId,
             ]),
@@ -264,10 +256,10 @@ export function SubAccountManager() {
           const windowSeconds = 24 * 3600 // 24 hours fixed
 
           transactions.push({
-            to: addresses.guardian,
+            to: addresses.guardian!,
             data: encodeContractCall(
-              addresses.guardian,
-              GUARDIAN_ABI as unknown as any[],
+              addresses.guardian!,
+              GUARDIAN_ABI,
               'setSubAccountLimits',
               [newSubAccount as `0x${string}`, BigInt(spendingBps), spendingUSD, BigInt(windowSeconds)]
             ),
@@ -277,10 +269,10 @@ export function SubAccountManager() {
         // Add setAllowedAddresses transaction for preset protocols
         if (allowedProtocolAddresses.length > 0) {
           transactions.push({
-            to: addresses.guardian,
+            to: addresses.guardian!,
             data: encodeContractCall(
-              addresses.guardian,
-              GUARDIAN_ABI as unknown as any[],
+              addresses.guardian!,
+              GUARDIAN_ABI,
               'setAllowedAddresses',
               [newSubAccount as `0x${string}`, allowedProtocolAddresses, true]
             ),
@@ -366,7 +358,7 @@ export function SubAccountManager() {
                         <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-primary text-small">{preset.name}</span>
                         {selectedPreset === preset.id && (
-                          <Badge variant="accent" className="text-[10px] uppercase">
+                          <Badge variant="secondary" className="text-[10px] uppercase">
                             Selected
                           </Badge>
                         )}
@@ -706,6 +698,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const isOracleAllowanceLagging =
     spendingAllowance !== undefined &&
     spendingAllowance < remainingBySpent &&
+    maxAllowance !== null &&
     effectiveSpent < maxAllowance
   const isPriorSessionConstraint =
     !isWindowExpired &&
@@ -808,7 +801,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
                 }
               : null
           })
-          .filter(Boolean)
+          .filter((x): x is NonNullable<typeof x> => x !== null)
       : []
 
     // Build full state with role changes applied
@@ -835,8 +828,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       if (hasExecuteRole !== undefined && localExecuteRole !== hasExecuteRole) {
         const functionName = localExecuteRole ? 'grantRole' : 'revokeRole'
         transactions.push({
-          to: addresses.guardian,
-          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, functionName, [
+          to: addresses.guardian!,
+          data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, functionName, [
             account,
             ROLES.DEFI_EXECUTE_ROLE,
           ]),
@@ -845,8 +838,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
 
       if (shouldClearProtocols) {
         transactions.push({
-          to: addresses.guardian,
-          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'setAllowedAddresses', [
+          to: addresses.guardian!,
+          data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setAllowedAddresses', [
             account,
             Array.from(currentAllowedAddresses),
             false,
@@ -858,8 +851,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       if (hasTransferRole !== undefined && localTransferRole !== hasTransferRole) {
         const functionName = localTransferRole ? 'grantRole' : 'revokeRole'
         transactions.push({
-          to: addresses.guardian,
-          data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, functionName, [
+          to: addresses.guardian!,
+          data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, functionName, [
             account,
             ROLES.DEFI_TRANSFER_ROLE,
           ]),
@@ -929,7 +922,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
             }
           : null
       })
-      .filter(Boolean)
+      .filter((x): x is NonNullable<typeof x> => x !== null)
 
     if (hasExecuteRole) {
       roles.push({
@@ -955,8 +948,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         action: 'remove',
       })
       transactions.push({
-        to: addresses.guardian,
-        data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'revokeRole', [
+        to: addresses.guardian!,
+        data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'revokeRole', [
           account,
           ROLES.DEFI_TRANSFER_ROLE,
         ]),
@@ -965,8 +958,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
 
     if (currentAllowedAddresses.size > 0) {
       transactions.push({
-        to: addresses.guardian,
-        data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'setAllowedAddresses', [
+        to: addresses.guardian!,
+        data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setAllowedAddresses', [
           account,
           Array.from(currentAllowedAddresses),
           false,

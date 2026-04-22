@@ -18,7 +18,7 @@ import { type Transaction, OP_TYPES, type OpType } from '@/hooks/useTransactionH
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { getExplorerBase } from '@/lib/chains'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
-import { formatTokenAmount, formatTimeAgo, cn } from '@/lib/utils'
+import { formatTokenAmount, formatTimeAgo, formatUSD, cn } from '@/lib/utils'
 
 // Icon mapping for operation types
 const OP_ICONS: Record<OpType, typeof ArrowRightLeft> = {
@@ -66,7 +66,7 @@ export function TransactionRow({ transaction, index, showAgent = false }: Transa
     transaction.token,
   ].filter(Boolean) as string[]
 
-  const { data: tokenMetadata } = useTokensMetadata(allTokens)
+  const { data: tokenMetadata } = useTokensMetadata(allTokens as `0x${string}`[])
 
   const getTokenSymbol = (address: string): string => {
     const metadata = tokenMetadata?.get(address.toLowerCase())
@@ -115,6 +115,9 @@ export function TransactionRow({ transaction, index, showAgent = false }: Transa
                 Agent: {agentLabel}
               </Badge>
             )}
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+              cost: ${formatUSD(transaction.spendingCost)}
+            </Badge>
           </div>
 
           {/* Tokens flow */}
@@ -214,6 +217,9 @@ export function TransactionRow({ transaction, index, showAgent = false }: Transa
               Agent: {agentLabel}
             </Badge>
           )}
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            cost: ${formatUSD(transaction.spendingCost)}
+          </Badge>
         </div>
 
         <div className="flex items-center gap-2 text-sm text-secondary">

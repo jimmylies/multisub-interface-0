@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase, selectedChain } from '@/lib/chains'
-import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
+import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI as GUARDIAN_ABI_CONST, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
+const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
@@ -297,7 +298,7 @@ export function WizardPage() {
     },
   })
 
-  const existingModuleAddress = existingModule && existingModule !== zeroAddress ? existingModule : null
+  const existingModuleAddress = existingModule && existingModule !== zeroAddress ? existingModule as `0x${string}` : null
   const justDeployedRegisteredModule =
     Boolean(deployedModule) &&
     deployedModule !== 'unknown' &&
@@ -396,6 +397,7 @@ export function WizardPage() {
             oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
             spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
             86400n,
+            true,
           ]),
         },
         {
@@ -441,7 +443,7 @@ export function WizardPage() {
           return {
             protocol,
             parser,
-            needsRegistration: currentParser.toLowerCase() !== parser.toLowerCase(),
+            needsRegistration: (currentParser as string).toLowerCase() !== parser.toLowerCase(),
           }
         })
       )
@@ -530,6 +532,7 @@ export function WizardPage() {
             oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
             spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
             86400n,
+            true,
           ]),
         },
         {
