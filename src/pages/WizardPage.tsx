@@ -237,7 +237,6 @@ export function WizardPage() {
   const [agentAddress, setAgentAddress] = useState('')
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
   const [spendingLimitBps, setSpendingLimitBps] = useState('5')
-  const [spendingMode, setSpendingMode] = useState<'usd' | 'bps'>('usd')
   const [safeAddress, setSafeAddress] = useState('')
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([])
   const [oracleless, setOracleless] = useState(false)
@@ -356,12 +355,12 @@ export function WizardPage() {
   }
 
   async function handleConfigureExistingVault() {
-    if (
-      !preset ||
-      !existingModuleAddress ||
-      !isAddress(agentAddress) ||
-      !publicClient
-    ) {
+    if (!preset || !existingModuleAddress || !isAddress(agentAddress)) {
+      return
+    }
+
+    if (!publicClient) {
+      setDeployError('No RPC client available — check your network connection.')
       return
     }
 
@@ -394,8 +393,8 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
-            spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
+            oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
+            oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
             true,
           ]),
@@ -529,8 +528,8 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            oracleless ? 0n : spendingMode === 'bps' ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100)) : 10000n,
-            spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
+            oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
+            oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
             true,
           ]),
@@ -575,19 +574,19 @@ export function WizardPage() {
   }
 
   async function handleDeploy() {
-    if (
-      !preset ||
-      !isAddress(safeAddress) ||
-      !isAddress(agentAddress) ||
-      !FACTORY_ADDRESS ||
-      !effectiveOracle
-    )
-      return
+    if (!preset || !isAddress(safeAddress) || !isAddress(agentAddress)) return
 
+    // Existing vault flow doesn't need factory or oracle — handle it first
     if (showExistingModuleWarning) {
-      await handleConfigureExistingVault()
+      try {
+        await handleConfigureExistingVault()
+      } catch (error) {
+        setDeployError(error instanceof Error ? error.message : 'Failed to configure existing vault')
+      }
       return
     }
+
+    if (!FACTORY_ADDRESS || !effectiveOracle) return
 
     // Oracleless mode requires a USD spending limit
     if (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) {
@@ -639,12 +638,10 @@ export function WizardPage() {
         // because the on-chain presets rely on BPS limits that require an oracle.
         const maxSpendingBps = oracleless
           ? 0n
-          : spendingMode === 'bps'
-            ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
-            : 10000n
-        const maxSpendingUSD = spendingMode === 'bps' && !oracleless
-          ? 0n
-          : parseUnits(spendingLimitUSD || '0', 18)
+          : BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
+        const maxSpendingUSD = oracleless
+          ? parseUnits(spendingLimitUSD || '0', 18)
+          : 0n
 
         // For named presets in oracleless mode, pull protocols/role from PRESET_CONFIG
         // rather than the user-selected protocol list (which is only populated for custom).
@@ -779,7 +776,6 @@ export function WizardPage() {
                 onClick={() => {
                   setSelectedPreset(p.id)
                   setSpendingLimitBps(String(p.defaultBps / 100))
-                  setSpendingMode('bps')
                 }}
                 className={`text-left p-5 rounded-xl border transition-all ${
                   selectedPreset === p.id
@@ -865,7 +861,7 @@ export function WizardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => { setOracleless(false); setSpendingMode('usd') }}
+                  onClick={() => { setOracleless(false) }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     !oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -883,7 +879,7 @@ export function WizardPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setOracleless(true); setSpendingMode('usd'); setSpendingLimitUSD('') }}
+                  onClick={() => { setOracleless(true); setSpendingLimitUSD('') }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -908,35 +904,7 @@ export function WizardPage() {
                 Spending Limit per 24h
               </label>
 
-              {/* Mode toggle — only show when oracle is enabled */}
-              {!oracleless && (
-                <div className="flex gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setSpendingMode('usd')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                      spendingMode === 'usd'
-                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                        : 'border-subtle bg-elevated text-tertiary hover:text-secondary'
-                    }`}
-                  >
-                    USD
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSpendingMode('bps')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                      spendingMode === 'bps'
-                        ? 'border-accent-primary bg-accent-primary/10 text-accent-primary'
-                        : 'border-subtle bg-elevated text-tertiary hover:text-secondary'
-                    }`}
-                  >
-                    % of portfolio
-                  </button>
-                </div>
-              )}
-
-              {spendingMode === 'usd' || oracleless ? (
+              {oracleless ? (
                 <div className="flex items-center gap-3">
                   <span className="text-secondary text-lg">$</span>
                   <Input
@@ -969,9 +937,7 @@ export function WizardPage() {
               <p className="text-xs text-tertiary mt-1.5">
                 {oracleless
                   ? 'The agent cannot spend more than this USD amount in any rolling 24-hour period. Enforced on-chain.'
-                  : spendingMode === 'bps'
-                    ? 'Percentage of the total portfolio value the agent can spend per 24-hour window. Tracked by the oracle.'
-                    : 'The agent cannot spend more than this amount in any rolling 24-hour period. Enforced on-chain via price feed oracles.'}
+                  : 'Percentage of the total portfolio value the agent can spend per 24-hour window. Tracked by the oracle.'}
               </p>
             </div>
           </div>
@@ -1144,9 +1110,9 @@ export function WizardPage() {
             <div className="flex justify-between">
               <span className="text-secondary">Spending Limit</span>
               <span className="text-primary">
-                {!oracleless && spendingMode === 'bps'
-                  ? `${spendingLimitBps}% of portfolio per 24h`
-                  : `$${Number(spendingLimitUSD || 0).toLocaleString()} per 24h`}
+                {oracleless
+                  ? `$${Number(spendingLimitUSD || 0).toLocaleString()} per 24h`
+                  : `${spendingLimitBps}% of portfolio per 24h`}
               </span>
             </div>
             <div className="flex justify-between">

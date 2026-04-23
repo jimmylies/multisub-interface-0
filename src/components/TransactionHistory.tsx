@@ -358,7 +358,7 @@ export function TransactionHistory({
         {filteredTransactions.length === 0 ? (
           <EmptyState hasFilters={hasActiveFilters} />
         ) : (
-          <div className="overflow-y-auto max-h-[560px] pr-1">
+          <div className="overflow-y-auto max-h-[560px] pr-1 mr-1 scrollbar-thin">
             <StaggerList className="space-y-2">
               {filteredTransactions.map((tx, index) => (
                 <StaggerItem key={tx.id}>
