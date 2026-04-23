@@ -607,8 +607,9 @@ export function WizardPage() {
     const priceFeedAddresses = PRICE_FEED_ADDRESSES
 
     try {
-      if (presetId !== undefined) {
-        // Deploy from preset (standard presets)
+      if (presetId !== undefined && !oracleless) {
+        // Deploy from on-chain preset — only valid in oracle mode because presets have
+        // hardcoded BPS spending limits that require an oracle to track portfolio value.
         writeContract(
           {
             address: FACTORY_ADDRESS,
@@ -633,13 +634,30 @@ export function WizardPage() {
           }
         )
       } else {
-        // Custom preset — deploy with full config
-        // Oracleless mode: BPS=0 (USD-only). Oracle+BPS mode: use user value. Oracle+USD mode: 100% BPS cap.
+        // Custom preset, OR any preset in oracleless mode.
+        // In oracleless mode we must use deployVault with BPS=0 and an explicit USD limit,
+        // because the on-chain presets rely on BPS limits that require an oracle.
         const maxSpendingBps = oracleless
           ? 0n
           : spendingMode === 'bps'
             ? BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
             : 10000n
+        const maxSpendingUSD = spendingMode === 'bps' && !oracleless
+          ? 0n
+          : parseUnits(spendingLimitUSD || '0', 18)
+
+        // For named presets in oracleless mode, pull protocols/role from PRESET_CONFIG
+        // rather than the user-selected protocol list (which is only populated for custom).
+        const presetCfg = presetId !== undefined ? PRESET_CONFIG[preset.id] : undefined
+        const roleId = presetCfg ? presetCfg.roleId : 1
+        const allowedProtocols = presetCfg
+          ? presetCfg.allowedProtocols
+          : selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
+        const parserProtocols = presetCfg ? presetCfg.parserRegistrations.map(r => r.protocol) : []
+        const parserAddresses = presetCfg ? presetCfg.parserRegistrations.map(r => r.parser) : []
+        const selectors = presetCfg ? presetCfg.selectorRegistrations.map(r => r.selector) : []
+        const selectorTypes = presetCfg ? presetCfg.selectorRegistrations.map(r => r.opType) : []
+
         writeContract(
           {
             address: FACTORY_ADDRESS,
@@ -650,17 +668,15 @@ export function WizardPage() {
                 safe: safeAddress as Address,
                 oracle: effectiveOracle,
                 agentAddress: agentAddress as Address,
-                roleId: 1, // EXECUTE by default for custom
+                roleId,
                 maxSpendingBps,
-                maxSpendingUSD: spendingMode === 'bps' && !oracleless ? 0n : parseUnits(spendingLimitUSD || '0', 18),
+                maxSpendingUSD,
                 windowDuration: 86400n, // 24h
-                allowedProtocols: selectedProtocols.flatMap(
-                  id => getProtocolContractAddresses(id) as Address[]
-                ),
-                parserProtocols: [],
-                parserAddresses: [],
-                selectors: [],
-                selectorTypes: [],
+                allowedProtocols,
+                parserProtocols,
+                parserAddresses,
+                selectors,
+                selectorTypes,
                 priceFeedTokens,
                 priceFeedAddresses,
               },
@@ -668,7 +684,7 @@ export function WizardPage() {
           },
           {
             onSuccess(hash) {
-              console.log('Custom vault deployment tx:', hash)
+              console.log('Vault deployment tx:', hash)
             },
             onError(error) {
               setDeployError(error.message)
@@ -867,7 +883,7 @@ export function WizardPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setOracleless(true); setSpendingMode('usd') }}
+                  onClick={() => { setOracleless(true); setSpendingMode('usd'); setSpendingLimitUSD('') }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     oracleless
                       ? 'border-accent-primary bg-accent-primary/5'

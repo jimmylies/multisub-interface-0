@@ -1,4 +1,5 @@
 import * as React from "react"
+import * as ReactDOM from "react-dom"
 import { cn } from "@/lib/utils"
 
 interface TooltipProps {
@@ -8,40 +9,53 @@ interface TooltipProps {
   align?: "center" | "left" | "right"
 }
 
-export function Tooltip({ content, children, className, align = "center" }: TooltipProps) {
-  const [isVisible, setIsVisible] = React.useState(false)
+export function Tooltip({ content, children, className }: TooltipProps) {
+  const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null)
+  const triggerRef = React.useRef<HTMLDivElement>(null)
 
-  const alignmentClasses = {
-    center: "left-1/2 -translate-x-1/2 after:left-1/2 after:-translate-x-1/2",
-    right: "right-0 after:right-4 after:translate-x-0",
-    left: "left-0 after:left-4 after:translate-x-0"
+  const show = () => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    setCoords({
+      top: rect.top + window.scrollY - 8,
+      left: rect.left + window.scrollX + rect.width / 2,
+    })
   }
 
+  const hide = () => setCoords(null)
+
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" ref={triggerRef}>
       <div
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => setIsVisible(false)}
-        onFocus={() => setIsVisible(true)}
-        onBlur={() => setIsVisible(false)}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
       >
         {children}
       </div>
-      {isVisible && (
-        <div
-          className={cn(
-            "absolute z-50 px-3 py-2 text-xs text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg",
-            "bottom-full mb-2 w-max max-w-xs",
-            "after:content-[''] after:absolute after:top-full",
-            "after:border-4 after:border-transparent after:border-t-slate-900 dark:after:border-t-slate-700",
-            alignmentClasses[align],
-            className
-          )}
-          role="tooltip"
-        >
-          {content}
-        </div>
-      )}
+      {coords &&
+        ReactDOM.createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: "absolute",
+              top: coords.top,
+              left: coords.left,
+              transform: "translate(-50%, -100%)",
+              pointerEvents: "none",
+            }}
+            className={cn(
+              "z-[9999] px-3 py-2 text-xs text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg w-max max-w-xs",
+              "after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2",
+              "after:border-4 after:border-transparent after:border-t-slate-900 dark:after:border-t-slate-700",
+              className
+            )}
+          >
+            {content}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

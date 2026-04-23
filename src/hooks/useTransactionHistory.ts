@@ -45,7 +45,7 @@ export type TransactionFilter = {
   type?: 'all' | 'protocol' | 'transfer'
   opType?: OpType | 'all'
   dateRange?: 'all' | '24h' | '7d' | '30d'
-  token?: string | 'all'
+  tokens?: string[]
   agent?: string | 'all'
 }
 
@@ -85,15 +85,15 @@ function applyFilters(transactions: Transaction[], filter: TransactionFilter): T
   }
 
   // Token filter
-  if (filter.token && filter.token !== 'all') {
-    const tokenLower = filter.token.toLowerCase()
+  if (filter.tokens && filter.tokens.length > 0) {
+    const tokensLower = filter.tokens.map(t => t.toLowerCase())
     filtered = filtered.filter(tx => {
       if (tx.type === 'transfer') {
-        return tx.token?.toLowerCase() === tokenLower
+        return tx.token ? tokensLower.includes(tx.token.toLowerCase()) : false
       }
       if (tx.type === 'protocol') {
-        const hasTokenIn = tx.tokensIn?.some(t => t.toLowerCase() === tokenLower)
-        const hasTokenOut = tx.tokensOut?.some(t => t.toLowerCase() === tokenLower)
+        const hasTokenIn = tx.tokensIn?.some(t => tokensLower.includes(t.toLowerCase()))
+        const hasTokenOut = tx.tokensOut?.some(t => tokensLower.includes(t.toLowerCase()))
         return hasTokenIn || hasTokenOut
       }
       return true
@@ -244,14 +244,12 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
   const filter = options.filter || {}
   const enabled = options.enabled !== false && !!subAccount && !!guardian && !!blockscoutUrl
 
-  const fromTimestamp = getTimestampForRange(filter.dateRange)
-
   return useQuery({
     queryKey: [
       'txHistory',
       subAccount,
       guardian,
-      fromTimestamp,
+      filter.dateRange,
       filter.type,
       filter.opType,
     ],
@@ -263,7 +261,7 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
         guardian,
         subAccount,
         filter,
-        fromTimestamp,
+        fromTimestamp: getTimestampForRange(filter.dateRange),
       })
     },
     enabled,
@@ -293,7 +291,6 @@ export function useMultipleTransactionHistories(
   const subAccounts = options.subAccounts || []
   const filter = options.filter || {}
   const enabled = options.enabled !== false && !!guardian && !!blockscoutUrl && subAccounts.length > 0
-  const fromTimestamp = getTimestampForRange(filter.dateRange)
 
   const queries = useQueries({
     queries: subAccounts.map(subAccount => ({
@@ -301,7 +298,7 @@ export function useMultipleTransactionHistories(
         'txHistory',
         subAccount,
         guardian,
-        fromTimestamp,
+        filter.dateRange,
         filter.type,
         filter.opType,
       ],
@@ -313,7 +310,7 @@ export function useMultipleTransactionHistories(
           guardian,
           subAccount,
           filter,
-          fromTimestamp,
+          fromTimestamp: getTimestampForRange(filter.dateRange),
         })
       },
       enabled: enabled && !!subAccount,

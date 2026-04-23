@@ -164,7 +164,7 @@ export function TransactionHistory({
     type: 'all',
     opType: 'all',
     dateRange: 'all',
-    token: 'all',
+    tokens: [],
     agent: 'all',
   })
   const { getAccountName } = useSubAccountNames()
@@ -242,7 +242,7 @@ export function TransactionHistory({
     filter.type !== 'all' ||
     filter.opType !== 'all' ||
     filter.dateRange !== 'all' ||
-    filter.token !== 'all' ||
+    (filter.tokens?.length ?? 0) > 0 ||
     filter.agent !== 'all'
 
   // Loading state
@@ -358,17 +358,19 @@ export function TransactionHistory({
         {filteredTransactions.length === 0 ? (
           <EmptyState hasFilters={hasActiveFilters} />
         ) : (
-          <StaggerList className="space-y-2">
-            {filteredTransactions.map((tx, index) => (
-              <StaggerItem key={tx.id}>
-                <TransactionRow
-                  transaction={tx}
-                  index={index}
-                  showAgent={isMultiAccount}
-                />
-              </StaggerItem>
-            ))}
-          </StaggerList>
+          <div className="overflow-y-auto max-h-[560px] pr-1">
+            <StaggerList className="space-y-2">
+              {filteredTransactions.map((tx, index) => (
+                <StaggerItem key={tx.id}>
+                  <TransactionRow
+                    transaction={tx}
+                    index={index}
+                    showAgent={isMultiAccount}
+                  />
+                </StaggerItem>
+              ))}
+            </StaggerList>
+          </div>
         )}
       </CardContent>
     </Card>

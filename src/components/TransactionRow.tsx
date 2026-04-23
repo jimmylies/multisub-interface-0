@@ -231,9 +231,14 @@ export function TransactionRow({ transaction, index, showAgent = false }: Transa
             {getTokenSymbol(transaction.token || '')}
           </span>
           <ArrowRightLeft className="w-3 h-3 text-tertiary" />
-          <span className="font-mono text-xs">
+          <a
+            href={`${getExplorerBase(chainId)}/address/${transaction.recipient}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs text-accent-primary hover:underline"
+          >
             {shortenAddress(transaction.recipient || '')}
-          </span>
+          </a>
         </div>
       </div>
 

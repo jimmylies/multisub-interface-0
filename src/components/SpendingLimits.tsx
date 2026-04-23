@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { parseUnits, formatUnits } from 'viem'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,26 +33,43 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   // Get Safe portfolio value from oracle
   const { data: safeValue } = useSafeValue()
 
-  // Calculate USD amount for the current spending limit
+  // Detect mode: oracleless = BPS is 0 and USD > 0
+  const isOracleless = currentLimits
+    ? currentLimits[0] === 0n && currentLimits[1] > 0n
+    : false
+
+  // Oracle-managed: USD equivalent from BPS × portfolio
   const maxAllowanceUSD =
-    safeValue && currentLimits ? (safeValue[0] * BigInt(currentLimits[0])) / 10000n : null
+    !isOracleless && safeValue && currentLimits
+      ? (safeValue[0] * BigInt(currentLimits[0])) / 10000n
+      : null
 
-  const [spendingLimit, setSpendingLimit] = useState('10') // Default 10% - unified limit
+  // Oracleless: direct USD value stored in currentLimits[1] (1e18 scale)
+  const maxAllowanceUSDDirect = isOracleless && currentLimits
+    ? currentLimits[1]
+    : null
 
-  // Calculate USD amount based on user input (real-time)
-  const inputAllowanceUSD = safeValue
+  const [spendingLimit, setSpendingLimit] = useState('10') // % for oracle-managed
+  const [spendingLimitUSD, setSpendingLimitUSD] = useState('') // $ for oracleless
+
+  // Calculate USD amount based on user input (real-time, oracle-managed only)
+  const inputAllowanceUSD = !isOracleless && safeValue
     ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
     : null
-  const [windowHours, setWindowHours] = useState('24') // Default 24 hours
+  const [windowHours, setWindowHours] = useState('24')
   const { toast } = useToast()
   const { showPreview } = useTransactionPreviewContext()
 
   // Sync form values with contract data when available
   useEffect(() => {
-    if (currentLimits) {
+    if (!currentLimits) return
+    const currentWindowHours = Number(currentLimits[2]) / 3600
+    setWindowHours((currentWindowHours > 0 ? currentWindowHours : 24).toString())
+    if (currentLimits[0] === 0n && currentLimits[1] > 0n) {
+      // Oracleless: display the USD value
+      setSpendingLimitUSD(formatUnits(currentLimits[1], 18))
+    } else {
       setSpendingLimit((Number(currentLimits[0]) / 100).toString())
-      const currentWindowHours = Number(currentLimits[2]) / 3600
-      setWindowHours((currentWindowHours > 0 ? currentWindowHours : 24).toString())
     }
   }, [currentLimits])
 
@@ -59,22 +77,32 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
 
   const hasChanges = useMemo(() => {
     if (!currentLimits) return true
-
-    const inputSpendingBps = Math.floor(parseFloat(spendingLimit || '0') * 100)
     const inputWindowSeconds = Math.floor(parseFloat(windowHours || '0') * 3600)
-
+    if (isOracleless) {
+      const inputUSD = parseUnits(spendingLimitUSD || '0', 18)
+      return inputUSD !== currentLimits[1] || inputWindowSeconds !== Number(currentLimits[2])
+    }
+    const inputSpendingBps = Math.floor(parseFloat(spendingLimit || '0') * 100)
     return (
       inputSpendingBps !== Number(currentLimits[0]) ||
       inputWindowSeconds !== Number(currentLimits[2])
     )
-  }, [currentLimits, spendingLimit, windowHours])
+  }, [currentLimits, spendingLimit, spendingLimitUSD, windowHours, isOracleless])
 
   // Increment/decrement handlers for custom spinners
   const incrementSpendingLimit = () => {
-    setSpendingLimit(prev => Math.min(100, parseFloat(prev || '0') + 0.5).toString())
+    if (isOracleless) {
+      setSpendingLimitUSD(prev => (parseFloat(prev || '0') + 100).toString())
+    } else {
+      setSpendingLimit(prev => Math.min(100, parseFloat(prev || '0') + 0.5).toString())
+    }
   }
   const decrementSpendingLimit = () => {
-    setSpendingLimit(prev => Math.max(0, parseFloat(prev || '0') - 0.5).toString())
+    if (isOracleless) {
+      setSpendingLimitUSD(prev => Math.max(0, parseFloat(prev || '0') - 100).toString())
+    } else {
+      setSpendingLimit(prev => Math.max(0, parseFloat(prev || '0') - 0.5).toString())
+    }
   }
   const incrementWindowHours = () => {
     setWindowHours(prev => Math.min(168, parseFloat(prev || '0') + 1).toString())
@@ -84,22 +112,13 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   }
 
   const handleSaveLimits = async () => {
-    const parsedLimit = parseFloat(spendingLimit)
     const parsedWindow = parseFloat(windowHours)
-
-    if (Number.isNaN(parsedLimit) || Number.isNaN(parsedWindow)) {
+    if (Number.isNaN(parsedWindow)) {
       toast.warning('Invalid input values')
       return
     }
 
-    const spendingBps = Math.floor(parsedLimit * 100)
     const windowSeconds = Math.floor(parsedWindow * 3600)
-
-    if (spendingBps < 0 || spendingBps > 10000) {
-      toast.warning('Limit must be 0-100%')
-      return
-    }
-
     if (windowSeconds < 3600) {
       toast.warning('Minimum window: 1 hour')
       return
@@ -108,6 +127,28 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
     if (!addresses.guardian) {
       toast.warning('Contract not configured')
       return
+    }
+
+    let spendingBps = 0
+    let spendingUSD = 0n
+
+    if (isOracleless) {
+      if (!spendingLimitUSD || Number(spendingLimitUSD) <= 0) {
+        toast.warning('Enter a valid USD spending limit')
+        return
+      }
+      spendingUSD = parseUnits(spendingLimitUSD, 18)
+    } else {
+      const parsedLimit = parseFloat(spendingLimit)
+      if (Number.isNaN(parsedLimit)) {
+        toast.warning('Invalid input values')
+        return
+      }
+      spendingBps = Math.floor(parsedLimit * 100)
+      if (spendingBps < 0 || spendingBps > 10000) {
+        toast.warning('Limit must be 0-100%')
+        return
+      }
     }
 
     // Build spending limits change
@@ -126,9 +167,9 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
 
     // Build full state with spending limits change applied
     const fullStateWithChanges = {
-      roles: currentFullState.roles, // Unchanged
+      roles: currentFullState.roles,
       spendingLimits: spendingLimitsChange,
-      protocols: currentFullState.protocols, // Unchanged
+      protocols: currentFullState.protocols,
     }
 
     // Build preview data
@@ -145,7 +186,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
           addresses.guardian!,
           GUARDIAN_ABI as unknown as any[],
           'setSubAccountLimits',
-          [subAccountAddress, BigInt(spendingBps), 0n, BigInt(windowSeconds)]
+          [subAccountAddress, BigInt(spendingBps), spendingUSD, BigInt(windowSeconds)]
         )
 
         const result = await proposeTransaction(
@@ -170,7 +211,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="pb-4">
         <CardTitle>Spending Limits</CardTitle>
         <CardDescription>Set strict limits to control sub-account spending</CardDescription>
@@ -185,11 +226,19 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
               </p>
               <div className="gap-4 grid grid-cols-2">
                 <div className="text-center">
-                  <p className="font-bold text-primary text-2xl">
-                    {(Number(currentLimits[0]) / 100).toFixed(1)}%
-                  </p>
-                  {maxAllowanceUSD !== null && (
-                    <p className="text-muted-foreground text-sm">${formatUSD(maxAllowanceUSD)}</p>
+                  {isOracleless ? (
+                    <p className="font-bold text-primary text-2xl">
+                      ${maxAllowanceUSDDirect !== null ? formatUSD(maxAllowanceUSDDirect) : '—'}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="font-bold text-primary text-2xl">
+                        {(Number(currentLimits[0]) / 100).toFixed(1)}%
+                      </p>
+                      {maxAllowanceUSD !== null && (
+                        <p className="text-muted-foreground text-sm">${formatUSD(maxAllowanceUSD)}</p>
+                      )}
+                    </>
                   )}
                   <p className="mt-1 text-muted-foreground text-xs">Spending Limit</p>
                 </div>
@@ -200,36 +249,38 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                   <p className="mt-1 text-muted-foreground text-xs">Time Window</p>
                 </div>
               </div>
+
             </div>
           )}
 
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-medium text-sm">
-                Spending Limit
-                <TooltipIcon content="Maximum spending (all operations) as a percentage of portfolio value. Oracle tracks actual spending across swaps, deposits, withdrawals, and transfers." />
-                <Badge
-                  variant="destructive"
-                  className="text-xs"
-                >
-                  Per Window
-                </Badge>
+                {isOracleless ? 'USD Spending Limit' : 'Spending Limit'}
+                <TooltipIcon content={isOracleless
+                  ? 'Fixed USD cap enforced on-chain via cumulative spending counter.'
+                  : 'Maximum spending (all operations) as a percentage of portfolio value. Oracle tracks actual spending across swaps, deposits, withdrawals, and transfers.'
+                } />
+                <Badge variant="destructive" className="text-xs">Per Window</Badge>
               </label>
               <div className="flex items-center gap-3">
+                {isOracleless && <span className="font-medium text-small text-tertiary">$</span>}
                 <div className="relative flex-1">
                   <Input
                     type="number"
                     min="0"
-                    max="100"
-                    step="0.5"
-                    value={spendingLimit}
+                    max={isOracleless ? undefined : 100}
+                    step={isOracleless ? 100 : 0.5}
+                    value={isOracleless ? spendingLimitUSD : spendingLimit}
                     onChange={e => {
                       const value = e.target.value
-                      if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
-                        setSpendingLimit(value)
+                      if (isOracleless) {
+                        if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) setSpendingLimitUSD(value)
+                      } else {
+                        if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) setSpendingLimit(value)
                       }
                     }}
-                    placeholder="10"
+                    placeholder={isOracleless ? '1000' : '10'}
                     className="pr-8"
                   />
                   <div className="top-1/2 right-4 absolute flex flex-col gap-0.5 -translate-y-1/2">
@@ -249,11 +300,15 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                     </button>
                   </div>
                 </div>
-                <span className="min-w-[30px] font-medium text-small text-tertiary">%</span>
-                {inputAllowanceUSD !== null && (
-                  <span className="text-muted-foreground text-sm">
-                    ≈ ${formatUSD(inputAllowanceUSD)}
-                  </span>
+                {!isOracleless && (
+                  <>
+                    <span className="min-w-[30px] font-medium text-small text-tertiary">%</span>
+                    {inputAllowanceUSD !== null && (
+                      <span className="text-muted-foreground text-sm">
+                        ≈ ${formatUSD(inputAllowanceUSD)}
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>

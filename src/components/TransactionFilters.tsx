@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Filter, Calendar, Coins, Activity, ChevronDown, X } from 'lucide-react'
+import { Filter, Calendar, Coins, Activity, ChevronDown, X, Check } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { type TransactionFilter, type OpType, OP_TYPES } from '@/hooks/useTransactionHistory'
 import { cn } from '@/lib/utils'
@@ -12,7 +12,7 @@ interface TransactionFiltersProps {
   className?: string
 }
 
-// Dropdown component for filters
+// Single-select dropdown
 function FilterDropdown({
   label,
   value,
@@ -27,7 +27,6 @@ function FilterDropdown({
   icon: typeof Filter
 }) {
   const [isOpen, setIsOpen] = useState(false)
-
   const selectedOption = options.find((opt) => opt.value === value)
 
   return (
@@ -50,10 +49,7 @@ function FilterDropdown({
 
       {isOpen && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-
-          {/* Dropdown menu */}
           <div className="absolute top-full left-0 mt-1 min-w-[160px] py-1 bg-elevated border border-subtle rounded-lg shadow-lg z-20 animate-fade-in">
             {options.map((option) => (
               <button
@@ -65,14 +61,85 @@ function FilterDropdown({
                 className={cn(
                   'w-full px-3 py-2 text-left text-sm transition-colors',
                   'hover:bg-elevated-2',
-                  option.value === value
-                    ? 'text-accent-primary font-medium'
-                    : 'text-primary'
+                  option.value === value ? 'text-accent-primary font-medium' : 'text-primary'
                 )}
               >
                 {option.label}
               </button>
             ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Multi-select dropdown for tokens
+function TokenMultiSelect({
+  selected,
+  options,
+  onChange,
+}: {
+  selected: string[]
+  options: Array<{ value: string; label: string }>
+  onChange: (selected: string[]) => void
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  const toggle = (address: string) => {
+    if (selected.includes(address)) {
+      onChange(selected.filter((a) => a !== address))
+    } else {
+      onChange([...selected, address])
+    }
+  }
+
+  const label =
+    selected.length === 0
+      ? 'All Tokens'
+      : selected.length === 1
+        ? (options.find((o) => o.value === selected[0])?.label ?? selected[0].slice(0, 6))
+        : `${selected.length} tokens`
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors',
+          'bg-elevated border-subtle hover:border-default',
+          (isOpen || selected.length > 0) && 'border-accent-primary'
+        )}
+      >
+        <Coins className="w-4 h-4 text-tertiary" />
+        <span className="text-sm text-secondary">Token:</span>
+        <span className="text-sm font-medium text-primary">{label}</span>
+        <ChevronDown
+          className={cn('w-4 h-4 text-tertiary transition-transform', isOpen && 'rotate-180')}
+        />
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 min-w-[160px] py-1 bg-elevated border border-subtle rounded-lg shadow-lg z-20 animate-fade-in">
+            {options.map((option) => {
+              const isSelected = selected.includes(option.value)
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => toggle(option.value)}
+                  className={cn(
+                    'w-full px-3 py-2 text-left text-sm transition-colors flex items-center justify-between',
+                    'hover:bg-elevated-2',
+                    isSelected ? 'text-accent-primary font-medium' : 'text-primary'
+                  )}
+                >
+                  {option.label}
+                  {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                </button>
+              )
+            })}
           </div>
         </>
       )}
@@ -87,23 +154,19 @@ export function TransactionFilters({
   availableAgents = [],
   className,
 }: TransactionFiltersProps) {
-  // Type options
   const typeOptions = [
     { value: 'all', label: 'All Types' },
     { value: 'protocol', label: 'Protocol' },
     { value: 'transfer', label: 'Transfers' },
   ]
 
-  // Operation type options
   const opTypeOptions = [
     { value: 'all', label: 'All Operations' },
-    ...Object.entries(OP_TYPES).map(([value, label]) => ({
-      value,
-      label,
-    })),
+    ...Object.entries(OP_TYPES)
+      .filter(([value]) => value !== '0')
+      .map(([value, label]) => ({ value, label })),
   ]
 
-  // Date range options
   const dateRangeOptions = [
     { value: 'all', label: 'All Time' },
     { value: '24h', label: 'Last 24h' },
@@ -111,39 +174,35 @@ export function TransactionFilters({
     { value: '30d', label: 'Last 30 days' },
   ]
 
-  // Token options
-  const tokenOptions = [
-    { value: 'all', label: 'All Tokens' },
-    ...availableTokens.map((token) => ({
-      value: token.address,
-      label: token.symbol,
-    })),
-  ]
+  const tokenOptions = availableTokens.map((token) => ({
+    value: token.address,
+    label: token.symbol,
+  }))
 
   const agentOptions = [
     { value: 'all', label: 'All Agents' },
-    ...availableAgents.map(agent => ({
+    ...availableAgents.map((agent) => ({
       value: agent.address,
       label: agent.label,
     })),
   ]
 
-  // Count active filters
+  const selectedTokens = filter.tokens ?? []
+
   const activeFilterCount = [
     filter.type !== 'all' && filter.type,
     filter.opType !== 'all' && filter.opType,
     filter.dateRange !== 'all' && filter.dateRange,
-    filter.token !== 'all' && filter.token,
+    selectedTokens.length > 0 && true,
     filter.agent !== 'all' && filter.agent,
   ].filter(Boolean).length
 
-  // Clear all filters
   const handleClearFilters = () => {
     onFilterChange({
       type: 'all',
       opType: 'all',
       dateRange: 'all',
-      token: 'all',
+      tokens: [],
       agent: 'all',
     })
   }
@@ -185,7 +244,6 @@ export function TransactionFilters({
           icon={Activity}
         />
 
-        {/* Only show opType filter when not filtering to transfers only */}
         {filter.type !== 'transfer' && (
           <FilterDropdown
             label="Operation"
@@ -212,12 +270,10 @@ export function TransactionFilters({
         />
 
         {availableTokens.length > 0 && (
-          <FilterDropdown
-            label="Token"
-            value={filter.token || 'all'}
+          <TokenMultiSelect
+            selected={selectedTokens}
             options={tokenOptions}
-            onChange={(value) => onFilterChange({ ...filter, token: value })}
-            icon={Coins}
+            onChange={(tokens) => onFilterChange({ ...filter, tokens })}
           />
         )}
 
@@ -268,16 +324,19 @@ export function TransactionFilters({
             </Badge>
           )}
 
-          {filter.token && filter.token !== 'all' && (
+          {selectedTokens.map((address) => (
             <Badge
+              key={address}
               variant="outline"
               className="flex items-center gap-1 cursor-pointer hover:bg-elevated-2"
-              onClick={() => onFilterChange({ ...filter, token: 'all' })}
+              onClick={() =>
+                onFilterChange({ ...filter, tokens: selectedTokens.filter((a) => a !== address) })
+              }
             >
-              {availableTokens.find((t) => t.address === filter.token)?.symbol || 'Token'}
+              {availableTokens.find((t) => t.address === address)?.symbol || address.slice(0, 6)}
               <X className="w-3 h-3" />
             </Badge>
-          )}
+          ))}
 
           {filter.agent && filter.agent !== 'all' && (
             <Badge
@@ -285,7 +344,7 @@ export function TransactionFilters({
               className="flex items-center gap-1 cursor-pointer hover:bg-elevated-2"
               onClick={() => onFilterChange({ ...filter, agent: 'all' })}
             >
-              {availableAgents.find(agent => agent.address === filter.agent)?.label || 'Agent'}
+              {availableAgents.find((agent) => agent.address === filter.agent)?.label || 'Agent'}
               <X className="w-3 h-3" />
             </Badge>
           )}

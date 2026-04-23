@@ -120,7 +120,10 @@ export function SubAccountManager() {
     setSelectedPreset(preset.id)
     setGrantExecute(preset.execute)
     setGrantTransfer(preset.transfer)
-    setSetSpendingLimits(preset.autoSetLimits)
+    // Oracleless always requires spending limits — don't let a preset override that
+    if (trustMode !== 'oracleless') {
+      setSetSpendingLimits(preset.autoSetLimits)
+    }
     setSpendingLimit(preset.spendingLimit)
   }
 
@@ -137,20 +140,19 @@ export function SubAccountManager() {
     )
 
     if (!grantExecute && !grantTransfer && allowedProtocolAddresses.length === 0) {
-      toast.warning('Select at least one role')
+      toast.warning('Check at least one role (Execute or Transfer) in the Roles section')
       return
     }
 
-    if (setSpendingLimits) {
-      if (trustMode === 'oracle-managed') {
-        const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
-
-        if (spendingBps < 0 || spendingBps > 10000) {
-          toast.warning('Spending limit must be between 0-100%')
-          return
-        }
-      } else if (!spendingLimitUSD || Number(spendingLimitUSD) <= 0) {
+    if (trustMode === 'oracleless') {
+      if (!spendingLimitUSD || Number(spendingLimitUSD) <= 0) {
         toast.warning('Oracleless mode requires a USD spending limit')
+        return
+      }
+    } else if (setSpendingLimits) {
+      const spendingBps = Math.floor(parseFloat(spendingLimit) * 100)
+      if (spendingBps < 0 || spendingBps > 10000) {
+        toast.warning('Spending limit must be between 0-100%')
         return
       }
     }
@@ -405,7 +407,7 @@ export function SubAccountManager() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTrustMode('oracleless')}
+                    onClick={() => { setTrustMode('oracleless'); setSetSpendingLimits(true); setSpendingLimitUSD('') }}
                     className={cn(
                       'rounded-xl border p-3 text-left transition-all',
                       trustMode === 'oracleless'
@@ -482,15 +484,17 @@ export function SubAccountManager() {
 
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">
-                  Spending Limits (Optional)
+                  Spending Limits {trustMode === 'oracleless' ? '(Required)' : '(Optional)'}
                 </label>
                 <div className="bg-elevated-2 p-3 border border-subtle rounded-xl">
-                  <div className="flex items-start gap-3">
+                  <div className="relative flex items-start gap-3 group">
                     <Checkbox
                       id="set-limits"
                       checked={setSpendingLimits}
                       onChange={e => {
-                        setSetSpendingLimits((e.target as HTMLInputElement).checked)
+                        if (trustMode !== 'oracleless') {
+                          setSetSpendingLimits((e.target as HTMLInputElement).checked)
+                        }
                       }}
                     />
                     <div className="flex-1">
@@ -501,10 +505,16 @@ export function SubAccountManager() {
                         Set spending limits now
                       </label>
                       <p className="mt-0.5 text-caption text-tertiary">
-                        Configure spending restrictions for this agent (can be set later,
-                        default 5%)
+                        {trustMode === 'oracleless'
+                          ? 'Required in oracleless mode.'
+                          : 'Configure spending restrictions for this agent (can be set later, default 5%)'}
                       </p>
                     </div>
+                    {trustMode === 'oracleless' && (
+                      <div className="absolute -top-9 left-0 hidden group-hover:block bg-slate-900 text-white text-xs px-3 py-2 rounded-md shadow-lg w-max max-w-xs z-50 pointer-events-none">
+                        A USD spending limit is required in oracleless mode.
+                      </div>
+                    )}
                   </div>
 
                   {setSpendingLimits && (
@@ -559,7 +569,7 @@ export function SubAccountManager() {
                             ? 'Set a fixed USD cap for each 24-hour window.'
                             : 'Set a percentage cap of portfolio value for each 24-hour window.'}
                           <br />
-                          Time window fixed at 24 hours.
+                          The time window can be updated later.
                         </p>
                       </div>
                     </div>
@@ -680,7 +690,10 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { data: windowStart } = useWindowStart(account)
 
   // Calculate spending progress
-  const maxAllowance = safeValue && limits ? (safeValue[0] * BigInt(limits[0])) / 10000n : null
+  const isAccountOracleless = limits ? limits[0] === 0n && limits[1] > 0n : false
+  const maxAllowance = isAccountOracleless
+    ? (limits?.[1] ?? null)
+    : (safeValue && limits ? (safeValue[0] * BigInt(limits[0])) / 10000n : null)
   const windowDuration = limits?.[2] ?? 0n
   const nowSec = BigInt(Math.floor(Date.now() / 1000))
   const isWindowExpired =
@@ -691,16 +704,20 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
   const remainingBySpent =
     maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
-  const effectiveRemainingAllowance =
-    spendingAllowance !== undefined && spendingAllowance < remainingBySpent
-      ? spendingAllowance
-      : remainingBySpent
+  // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant)
+  const effectiveRemainingAllowance = isAccountOracleless
+    ? remainingBySpent
+    : (spendingAllowance !== undefined && spendingAllowance < remainingBySpent
+        ? spendingAllowance
+        : remainingBySpent)
   const isOracleAllowanceLagging =
+    !isAccountOracleless &&
     spendingAllowance !== undefined &&
     spendingAllowance < remainingBySpent &&
     maxAllowance !== null &&
     effectiveSpent < maxAllowance
   const isPriorSessionConstraint =
+    !isAccountOracleless &&
     !isWindowExpired &&
     effectiveSpent > 0n &&
     spendingAllowance !== undefined &&
@@ -1147,10 +1164,13 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
               <div className="flex justify-between mb-1 text-tertiary text-xs">
                 <span className="flex items-center gap-1">
                   Used: {percentUsed.toFixed(1)}%
-                  {isPriorSessionConstraint && (
+                  {isAccountOracleless && (
                     <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
                   )}
-                  {!isPriorSessionConstraint && isOracleAllowanceLagging && (
+                  {!isAccountOracleless && isPriorSessionConstraint && (
+                    <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
+                  )}
+                  {!isAccountOracleless && !isPriorSessionConstraint && isOracleAllowanceLagging && (
                     <TooltipIcon content="Your spending limit was increased, but the oracle-managed remaining allowance has not fully refreshed yet. The used percentage is based on actual spent amount, not the stale allowance snapshot." />
                   )}
                 </span>

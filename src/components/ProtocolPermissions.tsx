@@ -359,7 +359,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   }
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="pb-4">
         <CardTitle>Protocol Permissions</CardTitle>
         <CardDescription>
