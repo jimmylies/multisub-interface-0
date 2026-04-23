@@ -1117,12 +1117,12 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
 
   return (
     <div
-      className="border border-subtle rounded-xl animate-fade-in-up"
+      className="border border-subtle rounded-xl overflow-hidden animate-fade-in-up"
       style={{ animationDelay: `${index * 50}ms` }}
     >
       <div
         className={cn(
-          'flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 p-3 sm:p-4 rounded-xl transition-all',
+          'flex sm:flex-row flex-col sm:justify-between sm:items-center gap-3 p-3 sm:p-4 transition-all',
           'bg-elevated hover:bg-elevated-2'
         )}
       >
