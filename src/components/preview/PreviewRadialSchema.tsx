@@ -83,6 +83,15 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
   const shouldNestProtocolsUnderExecute = Boolean(
     executeRole && displayData.protocols.length > 0 && executeRole.action !== 'unchanged'
   )
+  const visibleProtocols = useMemo(
+    () =>
+      displayData.protocols.filter(p =>
+        shouldNestProtocolsUnderExecute
+          ? p.isActive
+          : p.contracts.some(c => c.action !== 'unchanged')
+      ),
+    [displayData.protocols, shouldNestProtocolsUnderExecute]
+  )
   // Helper to get center of an element relative to container
   const getElementCenter = useCallback((element: HTMLElement | null, containerRect: DOMRect) => {
     if (!element) return null
@@ -115,21 +124,21 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
     })
 
     // Line to Protocols
-    if (protocolsContainerRef.current && displayData.protocols.length > 0) {
+    if (protocolsContainerRef.current && visibleProtocols.length > 0) {
       const rect = protocolsContainerRef.current.getBoundingClientRect()
       // Determine dominant protocol action
-      const additions = displayData.protocols.reduce(
+      const additions = visibleProtocols.reduce(
         (sum, p) => sum + p.contracts.filter(c => c.action === 'add').length,
         0
       )
-      const removals = displayData.protocols.reduce(
+      const removals = visibleProtocols.reduce(
         (sum, p) => sum + p.contracts.filter(c => c.action === 'remove').length,
         0
       )
       const protocolAction: ChangeAction = additions > removals ? 'add' : removals > 0 ? 'remove' : 'unchanged'
       const protocolAnchor =
         shouldNestProtocolsUnderExecute && executeRole
-          ? getElementCenter(roleRefsMap.current.get(executeRole.roleId), containerRect)
+          ? getElementCenter(roleRefsMap.current.get(executeRole.roleId) ?? null, containerRect)
           : center
       const protocolLineAction =
         shouldNestProtocolsUnderExecute && executeRole ? executeRole.action : protocolAction
@@ -249,7 +258,7 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
       )}
 
       {/* === PROTOCOLS (LEFT OF EXECUTE) === */}
-      {displayData.protocols.length > 0 && (
+      {visibleProtocols.length > 0 && (
         <div
           ref={protocolsContainerRef}
           className="absolute z-10 flex flex-col gap-3"
@@ -260,7 +269,7 @@ export function PreviewRadialSchema({ data }: PreviewRadialSchemaProps) {
             maxWidth: 180,
           }}
         >
-          {displayData.protocols.map((protocol, idx) => (
+          {visibleProtocols.map((protocol, idx) => (
             <ProtocolNode
               key={protocol.protocolId}
               protocol={protocol}

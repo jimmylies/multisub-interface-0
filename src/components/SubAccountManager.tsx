@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
-import { TooltipIcon } from '@/components/ui/tooltip'
+import { Tooltip, TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { ChevronDown, Pencil, ShieldCheck } from 'lucide-react'
 import { GUARDIAN_ABI as GUARDIAN_ABI_CONST, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
@@ -287,9 +287,30 @@ export function SubAccountManager() {
         )
 
         if (result.success) {
-          // Invalidate allowedAddresses queries so Protocol Permissions tab refreshes
-          await queryClient.invalidateQueries({
-            predicate: query => Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+          // Optimistically add the new sub-account to the managed accounts cache
+          // so the list updates immediately without waiting for the RPC refetch
+          queryClient.setQueryData<SubAccount[]>(
+            ['managedAccounts', addresses.guardian],
+            (current = []) => {
+              const alreadyExists = current.some(
+                a => a.address.toLowerCase() === newSubAccount.toLowerCase()
+              )
+              if (alreadyExists) return current
+              return [
+                ...current,
+                {
+                  address: newSubAccount as `0x${string}`,
+                  hasExecuteRole: grantExecute,
+                  hasTransferRole: grantTransfer,
+                },
+              ]
+            }
+          )
+          // Refetch in the background to confirm with on-chain data
+          queryClient.refetchQueries({
+            predicate: query =>
+              Array.isArray(query.queryKey) &&
+              (query.queryKey[0] === 'managedAccounts' || query.queryKey[0] === 'allowedAddresses'),
           })
           setSelectedPreset('manual')
           setNewSubAccount('')
@@ -344,31 +365,42 @@ export function SubAccountManager() {
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Preset</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr items-stretch gap-2">
-                  {DASHBOARD_AGENT_PRESETS.map(preset => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => applyPreset(preset.id)}
-                      className={cn(
-                        'h-full rounded-xl border p-3 text-left transition-all',
-                        selectedPreset === preset.id
-                          ? 'border-accent-primary bg-accent-primary/5'
-                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
-                      )}
-                    >
-                      <div className="flex h-full flex-col">
-                        <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-primary text-small">{preset.name}</span>
-                        {selectedPreset === preset.id && (
-                          <Badge variant="secondary" className="text-[10px] uppercase">
-                            Selected
-                          </Badge>
+                  {DASHBOARD_AGENT_PRESETS.map(preset => {
+                    const isComingSoon = preset.id === 'payment-agent'
+                    const card = (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => !isComingSoon && applyPreset(preset.id)}
+                        disabled={isComingSoon}
+                        className={cn(
+                          'h-full w-full rounded-xl border p-3 text-left transition-all',
+                          isComingSoon
+                            ? 'border-subtle bg-elevated-2 opacity-50 cursor-not-allowed'
+                            : selectedPreset === preset.id
+                              ? 'border-accent-primary bg-accent-primary/5'
+                              : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
                         )}
+                      >
+                        <div className="flex h-full flex-col">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-primary text-small">{preset.name}</span>
+                            {!isComingSoon && selectedPreset === preset.id && (
+                              <Badge variant="secondary" className="text-[10px] uppercase">
+                                Selected
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="mt-1 text-caption text-tertiary">{preset.description}</p>
                         </div>
-                        <p className="mt-1 text-caption text-tertiary">{preset.description}</p>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    )
+                    return isComingSoon ? (
+                      <Tooltip key={preset.id} content="Coming soon" wrapperClassName="block h-full">
+                        {card}
+                      </Tooltip>
+                    ) : card
+                  })}
                 </div>
               </div>
 
@@ -1164,15 +1196,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
               <div className="flex justify-between mb-1 text-tertiary text-xs">
                 <span className="flex items-center gap-1">
                   Used: {percentUsed.toFixed(1)}%
-                  {isAccountOracleless && (
-                    <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
-                  )}
-                  {!isAccountOracleless && isPriorSessionConstraint && (
-                    <TooltipIcon content="This address already spent during the current window. If the agent was deleted and re-added, that earlier spend is still counted until the window expires." />
-                  )}
-                  {!isAccountOracleless && !isPriorSessionConstraint && isOracleAllowanceLagging && (
-                    <TooltipIcon content="Your spending limit was increased, but the oracle-managed remaining allowance has not fully refreshed yet. The used percentage is based on actual spent amount, not the stale allowance snapshot." />
-                  )}
+                  <TooltipIcon content="Prior spending in this window persists even if the agent was deleted and re-added." />
                 </span>
                 <span>${formatUSD(effectiveRemainingAllowance)} remaining</span>
               </div>

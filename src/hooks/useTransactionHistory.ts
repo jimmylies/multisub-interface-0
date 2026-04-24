@@ -81,7 +81,7 @@ function applyFilters(transactions: Transaction[], filter: TransactionFilter): T
 
   // OpType filter (only for protocol transactions)
   if (filter.opType && filter.opType !== 'all') {
-    filtered = filtered.filter(tx => tx.type !== 'protocol' || tx.opType === filter.opType)
+    filtered = filtered.filter(tx => tx.type === 'protocol' && tx.opType === filter.opType)
   }
 
   // Token filter

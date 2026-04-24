@@ -17,10 +17,12 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useRecentAddresses } from '@/hooks/useRecentAddresses'
 import { useSafeAddress } from '@/hooks/useSafe'
 import { usePublicClient } from 'wagmi'
-import { isAddress } from 'viem'
-import { GUARDIAN_ABI } from '@/lib/contracts'
+import { isAddress, zeroAddress, type Address } from 'viem'
+import { AGENT_VAULT_FACTORY_ABI, MODULE_REGISTRY_ABI, GUARDIAN_ABI } from '@/lib/contracts'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
+
+const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 
 export function ContractSetup() {
   const { addresses, setGuardian, clearGuardian, isConfigured } = useContractAddresses()
@@ -35,6 +37,48 @@ export function ContractSetup() {
   const [changeError, setChangeError] = useState('')
   const [isChanging, setIsChanging] = useState(false)
 
+  // Resolve Safe address → Guardian module via on-chain registry
+  const resolveGuardianForSafe = async (safeAddr: `0x${string}`): Promise<`0x${string}` | null> => {
+    if (!publicClient || !FACTORY_ADDRESS) return null
+
+    try {
+      const registryAddress = await publicClient.readContract({
+        address: FACTORY_ADDRESS,
+        abi: AGENT_VAULT_FACTORY_ABI,
+        functionName: 'registry',
+      })
+
+      const moduleAddress = await publicClient.readContract({
+        address: registryAddress,
+        abi: MODULE_REGISTRY_ABI,
+        functionName: 'getModuleForSafe',
+        args: [safeAddr],
+      })
+
+      if (moduleAddress && moduleAddress !== zeroAddress) {
+        return moduleAddress as `0x${string}`
+      }
+    } catch {
+      // Registry lookup failed
+    }
+    return null
+  }
+
+  // Verify a guardian address is valid by calling avatar()
+  const verifyGuardian = async (guardianAddr: `0x${string}`): Promise<boolean> => {
+    if (!publicClient) return false
+    try {
+      await publicClient.readContract({
+        address: guardianAddr,
+        abi: GUARDIAN_ABI,
+        functionName: 'avatar',
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const handleChangeAddress = async () => {
     if (!isAddress(newAddressInput)) {
       setChangeError('Invalid Ethereum address')
@@ -44,25 +88,33 @@ export function ContractSetup() {
     setIsChanging(true)
     setChangeError('')
 
+    const inputAddr = newAddressInput as `0x${string}`
+
     try {
-      // Verify it's a valid Guardian contract by reading avatar
-      await publicClient?.readContract({
-        address: newAddressInput as `0x${string}`,
-        abi: GUARDIAN_ABI,
-        functionName: 'avatar',
-      })
+      // First, try to resolve as a Safe address via the registry
+      const guardian = await resolveGuardianForSafe(inputAddr)
 
-      // Update Guardian (Safe will be automatically fetched via useSafeAddress)
-      setGuardian(newAddressInput as `0x${string}`)
+      if (guardian) {
+        setGuardian(guardian)
+        addAddress(inputAddr)
+        setChangeModalOpen(false)
+        setNewAddressInput('')
+        return
+      }
 
-      // Add to recent history
-      addAddress(newAddressInput as `0x${string}`)
+      // Fallback: try as a direct guardian address (for backward compat)
+      const isValid = await verifyGuardian(inputAddr)
+      if (isValid) {
+        setGuardian(inputAddr)
+        addAddress(inputAddr)
+        setChangeModalOpen(false)
+        setNewAddressInput('')
+        return
+      }
 
-      // Close modal
-      setChangeModalOpen(false)
-      setNewAddressInput('')
+      setChangeError('No Guardian found for this address. Make sure a Guardian module is deployed for this Safe.')
     } catch {
-      setChangeError('Failed to read contract. Is this a valid Guardian contract?')
+      setChangeError('Failed to look up this address. Check your network connection.')
     } finally {
       setIsChanging(false)
     }
@@ -102,7 +154,7 @@ export function ContractSetup() {
           </div>
           {!isConfigured && (
             <CardDescription>
-              Enter a deployed Guardian module address to open the Dashboard.
+              Enter your Safe (multisig) address to load its Guardian.
             </CardDescription>
           )}
         </CardHeader>
@@ -111,7 +163,7 @@ export function ContractSetup() {
             <div className="space-y-4">
               <div>
                 <label className="block mb-2 font-medium text-primary text-small">
-                  Guardian Address
+                  Safe Address
                 </label>
                 <Input
                   type="text"
@@ -127,7 +179,7 @@ export function ContractSetup() {
 
               <div className="bg-elevated-2 p-3 border border-subtle rounded-lg">
                 <p className="text-xs text-tertiary">
-                  The app will verify the address by reading `avatar()` before loading it.
+                  Enter your Safe address. The Guardian module will be looked up automatically from the on-chain registry.
                 </p>
               </div>
 
@@ -136,7 +188,7 @@ export function ContractSetup() {
                 disabled={!newAddressInput || isChanging}
                 className="w-full"
               >
-                {isChanging ? 'Loading...' : 'Load Module'}
+                {isChanging ? 'Looking up...' : 'Load Guardian'}
               </Button>
 
               {recentAddresses.length > 0 && (
@@ -244,13 +296,13 @@ export function ContractSetup() {
         <DialogContent>
           <DialogClose onClose={() => setChangeModalOpen(false)} />
           <DialogHeader>
-            <DialogTitle>Change Guardian</DialogTitle>
+            <DialogTitle>Change Safe</DialogTitle>
           </DialogHeader>
 
           <DialogBody className="space-y-4">
             <div>
               <label className="block mb-2 font-medium text-primary text-small">
-                New Address
+                Safe Address
               </label>
               <Input
                 type="text"
@@ -334,7 +386,7 @@ export function ContractSetup() {
               onClick={handleChangeAddress}
               disabled={!newAddressInput || isChanging}
             >
-              {isChanging ? 'Changing...' : 'Confirm'}
+              {isChanging ? 'Looking up...' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>

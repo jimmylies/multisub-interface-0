@@ -55,7 +55,6 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   const {
     data: allowedAddresses = new Set(),
     isLoading: isLoadingAllowed,
-    refetch: refetchAllowedAddresses,
   } = useAllowedAddresses(subAccountAddress, addressesToCheck)
 
   useEffect(() => {
@@ -339,10 +338,26 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         )
 
         if (result.success) {
-          await queryClient.refetchQueries({
-            predicate: query => Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+          // Optimistically update the allowed addresses cache so the UI reflects
+          // the change immediately without waiting for the RPC refetch
+          const newAllowedSet = new Set<`0x${string}`>()
+          selectedProtocols.forEach((contractIds, protocolId) => {
+            const protocol = PROTOCOLS.find(p => p.id === protocolId)
+            protocol?.contracts.forEach(c => {
+              if (contractIds.has(c.id)) {
+                getContractAddresses(c).forEach(addr => newAllowedSet.add(addr))
+              }
+            })
           })
-          await refetchAllowedAddresses()
+          queryClient.setQueryData(
+            ['allowedAddresses', addresses.guardian, subAccountAddress, addressesToCheck],
+            newAllowedSet
+          )
+          // Refetch in background to confirm with on-chain data
+          queryClient.refetchQueries({
+            predicate: query =>
+              Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+          })
           toast.success('Protocol permissions updated')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing

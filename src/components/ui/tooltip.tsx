@@ -6,30 +6,29 @@ interface TooltipProps {
   content: string
   children: React.ReactNode
   className?: string
+  wrapperClassName?: string
   align?: "center" | "left" | "right"
 }
 
-export function Tooltip({ content, children, className }: TooltipProps) {
+export function Tooltip({ content, children, className, wrapperClassName }: TooltipProps) {
   const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null)
-  const triggerRef = React.useRef<HTMLDivElement>(null)
 
-  const show = () => {
-    if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
+  const handleMouseMove = (e: React.MouseEvent) => {
     setCoords({
-      top: rect.top + window.scrollY - 8,
-      left: rect.left + window.scrollX + rect.width / 2,
+      top: e.clientY + window.scrollY - 36,
+      left: e.clientX + window.scrollX + 12,
     })
   }
 
   const hide = () => setCoords(null)
 
   return (
-    <div className="relative inline-block" ref={triggerRef}>
+    <div className={cn("relative", wrapperClassName)}>
       <div
-        onMouseEnter={show}
+        className="h-full"
+        onMouseMove={handleMouseMove}
         onMouseLeave={hide}
-        onFocus={show}
+        onFocus={handleMouseMove as any}
         onBlur={hide}
       >
         {children}
@@ -42,13 +41,10 @@ export function Tooltip({ content, children, className }: TooltipProps) {
               position: "absolute",
               top: coords.top,
               left: coords.left,
-              transform: "translate(-50%, -100%)",
               pointerEvents: "none",
             }}
             className={cn(
               "z-[9999] px-3 py-2 text-xs text-white bg-slate-900 dark:bg-slate-700 rounded-md shadow-lg w-max max-w-xs",
-              "after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2",
-              "after:border-4 after:border-transparent after:border-t-slate-900 dark:after:border-t-slate-700",
               className
             )}
           >

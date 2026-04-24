@@ -46,7 +46,7 @@ const SafeProviderWrapper = () => {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider
-      defaultTheme="system"
+      defaultTheme="dark"
       storageKey="msw-ui-theme"
     >
       <ToastProvider>

@@ -1,10 +1,11 @@
 import { Outlet, Link, NavLink } from 'react-router-dom'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { ThemeToggle } from '@/components/ThemeToggle'
+
 import { SkipLink, SkipLinkTarget } from '@/components/SkipLink'
 import { useUserRoles } from '@/hooks/useUserRoles'
 import { useAccount } from 'wagmi'
 import { ROUTES } from '@/router/routes'
+import { Tooltip } from '@/components/ui/tooltip'
 
 export function MainLayout() {
   const { isConnected } = useAccount()
@@ -71,24 +72,16 @@ export function MainLayout() {
             >
               Dashboard
             </NavLink>
-            <NavLink
-              to={ROUTES.CHALLENGE}
-              className={({ isActive }) =>
-                [
-                  'px-3 py-1.5 rounded-md font-medium text-sm transition-colors',
-                  isActive
-                    ? 'bg-accent-primary/10 text-primary'
-                    : 'text-accent-primary hover:bg-accent-primary/10',
-                ].join(' ')
-              }
-            >
-              Break the Vault
-            </NavLink>
+            <Tooltip content="Coming soon">
+              <span className="px-3 py-1.5 rounded-md font-medium text-sm text-accent-primary opacity-50 cursor-not-allowed select-none">
+                Break the Vault
+              </span>
+            </Tooltip>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-2 md:gap-3">
-            <ThemeToggle />
+
             {isConnected ? (
               <ConnectButton
                 accountStatus="address"

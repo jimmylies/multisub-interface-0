@@ -163,7 +163,7 @@ export function ChallengePage() {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-primary">Break the Vault</h1>
         <p className="text-secondary mt-2 max-w-2xl mx-auto">
-          A real AI agent manages a vault with real funds on Base. On-chain guardrails protect it.
+          A real AI agent manages a Guardian with real funds on Base. On-chain guardrails protect it.
           <span className="text-accent-primary font-medium"> Can you break through?</span>
         </p>
       </div>
@@ -255,7 +255,7 @@ export function ChallengePage() {
         <div className="space-y-4">
           {/* Vault Stats */}
           <div className="bg-elevated rounded-xl border border-subtle p-5">
-            <h3 className="text-sm font-semibold text-primary mb-4">Vault Status</h3>
+            <h3 className="text-sm font-semibold text-primary mb-4">Guardian Status</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm text-secondary">Balance</span>

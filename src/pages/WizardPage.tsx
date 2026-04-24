@@ -30,6 +30,7 @@ import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI as GUARDIAN_ABI_CONST, MODULE_REG
 const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
+import { Tooltip } from '@/components/ui/tooltip'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 
 // Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
@@ -396,7 +397,6 @@ export function WizardPage() {
             oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
             oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
-            true,
           ]),
         },
         {
@@ -531,7 +531,6 @@ export function WizardPage() {
             oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
             oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
-            true,
           ]),
         },
         {
@@ -718,9 +717,9 @@ export function WizardPage() {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 py-20">
-        <h1 className="text-2xl font-semibold text-primary">Deploy an Agent Vault</h1>
+        <h1 className="text-2xl font-semibold text-primary">Deploy an Agent Guardian</h1>
         <p className="text-secondary text-center max-w-md">
-          Connect your wallet to deploy a new vault with on-chain guardrails for your AI agent.
+          Connect your wallet to deploy a new Guardian with on-chain guardrails for your AI agent.
         </p>
         <ConnectButton />
       </div>
@@ -770,41 +769,53 @@ export function WizardPage() {
             point, you can still add custom protocols and adjust the guardrails afterward.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {PRESETS.map(p => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setSelectedPreset(p.id)
-                  setSpendingLimitBps(String(p.defaultBps / 100))
-                }}
-                className={`text-left p-5 rounded-xl border transition-all ${
-                  selectedPreset === p.id
-                    ? 'border-accent-primary bg-accent-primary/5 shadow-glow'
-                    : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl w-10 h-10 rounded-lg bg-elevated-2 flex items-center justify-center font-mono text-accent-primary">
-                    {p.icon}
-                  </span>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-primary">{p.name}</h3>
-                    <p className="text-sm text-secondary mt-1">{p.description}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-3">
-                      {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
-                        <span
-                          key={proto}
-                          className="text-xs px-2 py-0.5 rounded-full bg-elevated-2 text-tertiary"
-                        >
-                          {proto}
-                        </span>
-                      ))}
+            {PRESETS.map(p => {
+              const isComingSoon = p.id === 'payment-agent'
+              const card = (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    if (isComingSoon) return
+                    setSelectedPreset(p.id)
+                    setSpendingLimitBps(String(p.defaultBps / 100))
+                  }}
+                  disabled={isComingSoon}
+                  className={`w-full text-left p-5 rounded-xl border transition-all ${
+                    isComingSoon
+                      ? 'border-subtle bg-elevated opacity-50 cursor-not-allowed'
+                      : selectedPreset === p.id
+                        ? 'border-accent-primary bg-accent-primary/5 shadow-glow'
+                        : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl w-10 h-10 rounded-lg bg-elevated-2 flex items-center justify-center font-mono text-accent-primary">
+                      {p.icon}
+                    </span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-primary">{p.name}</h3>
+                      <p className="text-sm text-secondary mt-1">{p.description}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
+                          <span
+                            key={proto}
+                            className="text-xs px-2 py-0.5 rounded-full bg-elevated-2 text-tertiary"
+                          >
+                            {proto}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-xs text-tertiary">Role: {p.roleLabel}</div>
                     </div>
-                    <div className="mt-2 text-xs text-tertiary">Role: {p.roleLabel}</div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+              return isComingSoon ? (
+                <Tooltip key={p.id} content="Coming soon">
+                  {card}
+                </Tooltip>
+              ) : card
+            })}
           </div>
           <div className="flex justify-end mt-8">
             <Button
@@ -892,7 +903,7 @@ export function WizardPage() {
                   </div>
                   <p className="text-xs text-tertiary">
                     Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
-                    counter. Worst-case damage = your USD limit.
+                    counter.
                   </p>
                 </button>
               </div>
@@ -1052,7 +1063,7 @@ export function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary mb-2">Review & Deploy</h1>
           <p className="text-secondary mb-8">
-            Confirm your vault configuration. This will deploy a Guardian module configured for
+            Confirm your Guardian configuration. This will deploy a Guardian module configured for
             your agent.
           </p>
 
@@ -1151,7 +1162,7 @@ export function WizardPage() {
           {showExistingModuleWarning && existingModuleAddress && (
             <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <p className="text-sm font-medium text-yellow-400">
-                This Safe already has a registered vault
+                This Safe already has a registered Guardian
               </p>
               <div className="flex items-center gap-1.5 mt-2">
                 <span className="text-xs text-yellow-400/80 font-mono">
@@ -1170,7 +1181,7 @@ export function WizardPage() {
               </div>
               <p className="text-xs text-yellow-400/80 mt-2">
                 `AgentVaultFactory` allows only one registered module per Safe. Instead of creating
-                a second module, this wizard will add the new agent to the existing vault with the
+                a second module, this wizard will add the new agent to the existing Guardian with the
                 selected preset.
               </p>
               <div className="flex gap-2 mt-3">
@@ -1196,7 +1207,7 @@ export function WizardPage() {
           {isConfiguringExistingVault && (
             <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-              <p className="text-sm text-blue-400">Configuring the existing vault...</p>
+              <p className="text-sm text-blue-400">Configuring the existing Guardian...</p>
             </div>
           )}
 
@@ -1260,7 +1271,7 @@ export function WizardPage() {
           {(usedExistingVault || (isSuccess && !txReverted && txHash)) && (
             <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
               <p className="text-sm font-medium text-green-400">
-                {usedExistingVault ? 'The agent has been added to the existing vault successfully!' : 'Vault deployed successfully!'}
+                {usedExistingVault ? 'The agent has been added to the existing Guardian successfully!' : 'Guardian deployed successfully!'}
               </p>
 
               <div>
@@ -1305,7 +1316,7 @@ export function WizardPage() {
               <div className="pt-1">
                 <p className="text-xs text-green-400/70 mb-2">
                   {usedExistingVault
-                    ? 'The new agent is now configured on the existing vault.'
+                    ? 'The new agent is now configured on the existing Guardian.'
                     : 'Next: enable this module in your Safe to activate the agent.'}
                 </p>
                 <Button
@@ -1332,7 +1343,7 @@ export function WizardPage() {
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
               {isConfiguringExistingVault
-                ? 'Configuring Existing Vault...'
+                ? 'Configuring Existing Guardian...'
                 : isWriting
                 ? 'Confirm in Wallet...'
                 : isConfirming && !txFailed
@@ -1342,8 +1353,8 @@ export function WizardPage() {
                     : txFailed
                       ? 'Retry Deploy'
                       : showExistingModuleWarning
-                        ? 'Add Agent To Existing Vault'
-                        : 'Deploy Vault'}
+                        ? 'Add Agent To Existing Guardian'
+                        : 'Deploy Guardian'}
             </Button>
           </div>
         </div>
@@ -1370,20 +1381,7 @@ export function WizardPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogBody>
-            <div className="rounded-lg border border-subtle bg-elevated-2 p-3">
-              <p className="text-sm text-secondary">
-                <span className="font-medium text-primary">{pendingExistingVaultTransactions.length} setup step{pendingExistingVaultTransactions.length === 1 ? '' : 's'}</span>
-                {' '}
-                {(() => {
-                  const titles = [...new Set(pendingExistingVaultExplanations.map(e => e.title))]
-                  return titles.join(', ').toLowerCase()
-                })()}
-              </p>
-            </div>
-          </DialogBody>
-
-          <DialogFooter>
+<DialogFooter>
             <Button
               variant="ghost"
               disabled={isConfiguringExistingVault}

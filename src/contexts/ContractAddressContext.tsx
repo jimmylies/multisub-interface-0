@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
+import { useAccount } from 'wagmi'
 import { isAddress } from 'viem'
 
 interface ContractAddresses {
@@ -25,6 +26,8 @@ export function ContractAddressProvider({ children }: ContractAddressProviderPro
     guardian: undefined,
     safe: undefined,
   })
+  const { address: connectedAddress } = useAccount()
+  const prevAddressRef = useRef(connectedAddress)
 
   // Parse URL parameters on mount
   useEffect(() => {
@@ -47,6 +50,20 @@ export function ContractAddressProvider({ children }: ContractAddressProviderPro
     // Note: Safe is derived from Guardian via useSafeAddress() hook
     setAddresses({ guardian, safe: undefined })
   }, [])
+
+  // Clear guardian when the connected wallet account changes so auto-discovery
+  // can find the correct module for the new account.
+  useEffect(() => {
+    if (prevAddressRef.current && connectedAddress && prevAddressRef.current !== connectedAddress) {
+      // Only clear if there's no explicit guardian in the URL
+      const params = new URLSearchParams(window.location.search)
+      if (!params.get('guardian')) {
+        setAddresses({ guardian: undefined, safe: undefined })
+        localStorage.removeItem('guardian')
+      }
+    }
+    prevAddressRef.current = connectedAddress
+  }, [connectedAddress])
 
   const setGuardian = (address: `0x${string}`) => {
     setAddresses(prev => ({ ...prev, guardian: address, safe: undefined }))

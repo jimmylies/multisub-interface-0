@@ -40,7 +40,7 @@ export function DashboardPage() {
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold text-primary">Dashboard</h1>
           <p className="text-secondary mt-1">
-            Load a deployed module address to access owner and agent controls.
+            Enter your Safe address to load the associated Guardian and access controls.
           </p>
         </div>
         {isConnected && (

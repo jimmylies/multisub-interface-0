@@ -6,4 +6,11 @@ export const MODULE_REGISTRY_ABI = [
     outputs: [{ name: '', type: 'address', internalType: 'address' }],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'getActiveModules',
+    inputs: [],
+    outputs: [{ name: '', type: 'address[]', internalType: 'address[]' }],
+    stateMutability: 'view',
+  },
 ] as const
