@@ -1075,7 +1075,7 @@ export function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary mb-2">Review & Deploy</h1>
           <p className="text-secondary mb-8">
-            Confirm your Guardian configuration. This will deploy a Guardian module configured for
+            Confirm your Guardian configuration. This will deploy a Guardian contract configured for
             your agent.
           </p>
 
@@ -1153,8 +1153,8 @@ export function WizardPage() {
 
           <div className="mt-6 p-4 rounded-lg bg-accent-primary/5 border border-accent-primary/20">
             <p className="text-sm text-secondary">
-              After deployment, you will need to enable the module on your Safe (1 multisig
-              transaction). The agent cannot operate until the module is enabled.
+              After deployment, you will need to enable the Guardian on your Safe (1 multisig
+              transaction). The agent cannot operate until the Guardian is enabled.
             </p>
           </div>
 
@@ -1165,7 +1165,7 @@ export function WizardPage() {
               </p>
               <p className="text-xs text-yellow-400/80 mt-1">
                 The custom preset deploys without calldata parsers or function selectors. After
-                deployment, you may need to configure these via the module owner functions
+                deployment, you may need to configure these via the Guardian owner functions
                 (addParser, addSelector) to enable specific operations.
               </p>
             </div>
@@ -1186,14 +1186,14 @@ export function WizardPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center w-5 h-5 rounded text-yellow-400/70 hover:text-yellow-400 transition-colors"
-                  title="View module"
+                  title="View Guardian"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
               <p className="text-xs text-yellow-400/80 mt-2">
-                `AgentVaultFactory` allows only one registered module per Safe. Instead of creating
-                a second module, this wizard will add the new agent to the existing Guardian with the
+                Only one Guardian is allowed per Safe. Instead of creating
+                a second one, this wizard will add the new agent to the existing Guardian with the
                 selected preset.
               </p>
               <div className="flex gap-2 mt-3">
@@ -1308,7 +1308,7 @@ export function WizardPage() {
 
               {deployedModule && deployedModule !== 'unknown' && (
                 <div>
-                  <p className="text-xs text-green-400/70 mb-1">Module address</p>
+                  <p className="text-xs text-green-400/70 mb-1">Guardian address</p>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm text-green-400 font-mono">{deployedModule}</span>
                     <CopyButton value={deployedModule} />
@@ -1329,7 +1329,7 @@ export function WizardPage() {
                 <p className="text-xs text-green-400/70 mb-2">
                   {usedExistingVault
                     ? 'The new agent is now configured on the existing Guardian.'
-                    : 'Next: enable this module in your Safe to activate the agent.'}
+                    : 'Next: enable this Guardian in your Safe to activate the agent.'}
                 </p>
                 <Button
                   variant="outline"

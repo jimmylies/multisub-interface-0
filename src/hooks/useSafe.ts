@@ -371,8 +371,10 @@ export function useSpendingAllowance(subAccountAddress?: `0x${string}`) {
     args: subAccountAddress ? [subAccountAddress] : undefined,
     query: {
       enabled: Boolean(subAccountAddress && addresses.guardian),
-      staleTime: 30 * 1000, // 30s — changes after each spending op
-      gcTime: 2 * 60 * 1000,
+      staleTime: 10 * 1000, // 10s — depends on oracle-updated safe value
+      gcTime: 60 * 1000,
+      refetchOnWindowFocus: true,
+      refetchInterval: 30 * 1000, // Poll every 30s to stay in sync with oracle updates
     },
     chainId,
   })

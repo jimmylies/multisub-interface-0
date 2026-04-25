@@ -125,7 +125,17 @@ export function MainLayout() {
         role="contentinfo"
       >
         <div className="mx-auto px-6 py-6 text-center container">
-          <p className="text-caption text-tertiary">Secured by Safe • Built for DeFi</p>
+          <p className="text-caption text-tertiary">
+            Secured by Safe • Built for DeFi •{' '}
+            <a
+              href="https://docs.multiclaws.xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent-primary hover:underline"
+            >
+              Docs
+            </a>
+          </p>
         </div>
       </footer>
     </div>

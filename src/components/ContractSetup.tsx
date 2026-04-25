@@ -112,7 +112,7 @@ export function ContractSetup() {
         return
       }
 
-      setChangeError('No Guardian found for this address. Make sure a Guardian module is deployed for this Safe.')
+      setChangeError('No Guardian found for this address. Make sure a Guardian is deployed for this Safe.')
     } catch {
       setChangeError('Failed to look up this address. Check your network connection.')
     } finally {
@@ -179,7 +179,7 @@ export function ContractSetup() {
 
               <div className="bg-elevated-2 p-3 border border-subtle rounded-lg">
                 <p className="text-xs text-tertiary">
-                  Enter your Safe address. The Guardian module will be looked up automatically from the on-chain registry.
+                  Enter your Safe address. The Guardian will be looked up automatically from the on-chain registry.
                 </p>
               </div>
 

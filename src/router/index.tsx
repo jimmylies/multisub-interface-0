@@ -6,14 +6,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ROUTES } from './routes'
 
 // Lazy load pages for code splitting
-const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })))
 const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage }))
 )
 const WizardPage = lazy(() => import('@/pages/WizardPage').then(m => ({ default: m.WizardPage })))
-const ChallengePage = lazy(() =>
-  import('@/pages/ChallengePage').then(m => ({ default: m.ChallengePage }))
-)
 
 function LegacyAgentsRedirect() {
   const location = useLocation()
@@ -42,11 +38,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <LazyPage>
-            <ChallengePage />
-          </LazyPage>
-        ),
+        element: <Navigate to={ROUTES.DASHBOARD} replace />,
       },
       {
         path: 'dashboard',
@@ -74,11 +66,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'challenge',
-        element: (
-          <LazyPage>
-            <ChallengePage />
-          </LazyPage>
-        ),
+        element: <Navigate to={ROUTES.DASHBOARD} replace />,
       },
       // Catch all - redirect to home
       {
