@@ -8,7 +8,7 @@ interface SummaryBarProps {
 }
 
 export function SummaryBar({ data }: SummaryBarProps) {
-  const { additions, removals, unchanged } = useMemo(() => countChanges(data), [data])
+  const { additions, removals } = useMemo(() => countChanges(data), [data])
 
   return (
     <motion.div
@@ -45,16 +45,7 @@ export function SummaryBar({ data }: SummaryBarProps) {
         </div>
       )}
 
-      {unchanged > 0 && (
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-tertiary opacity-50" />
-          <span className="text-small text-tertiary">
-            {unchanged} unchanged
-          </span>
-        </div>
-      )}
-
-      {additions === 0 && removals === 0 && unchanged === 0 && (
+      {additions === 0 && removals === 0 && (
         <span className="text-small text-tertiary">No changes detected</span>
       )}
     </motion.div>

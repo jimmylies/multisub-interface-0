@@ -142,7 +142,7 @@ export function ProtocolNode({ protocol, delay = 0, forceAction }: ProtocolNodeP
           >
             <div className="mt-1.5 bg-elevated border border-subtle rounded-lg overflow-hidden">
               <div className="p-1 max-h-[120px] overflow-y-auto">
-                {protocol.contracts.map((contract, idx) => {
+                {protocol.contracts.filter(c => c.action !== 'unchanged').map((contract, idx) => {
                   const ActionIcon = getActionIcon(contract.action)
                   return (
                     <motion.div

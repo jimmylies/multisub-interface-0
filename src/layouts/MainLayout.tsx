@@ -14,8 +14,8 @@ export function MainLayout() {
     [
       'px-3 py-1.5 rounded-md text-sm transition-colors',
       isActive
-        ? 'bg-elevated-1 text-primary'
-        : 'text-secondary hover:text-primary hover:bg-elevated-1',
+        ? 'bg-elevated-1 text-primary font-medium'
+        : 'text-tertiary hover:text-primary hover:bg-elevated-1',
     ].join(' ')
 
   return (
