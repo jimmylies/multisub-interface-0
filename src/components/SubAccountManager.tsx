@@ -409,7 +409,7 @@ export function SubAccountManager() {
 
               <div>
                 <label className="block mb-2 font-medium text-primary text-small">
-                  Wallet Address
+                  Agent Address
                 </label>
                 <Input
                   type="text"
