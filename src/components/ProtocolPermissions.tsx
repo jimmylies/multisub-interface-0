@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip } from '@/components/ui/tooltip'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import { GUARDIAN_ABI, ROLES, ROLE_DESCRIPTIONS, ROLE_NAMES } from '@/lib/contracts'
 import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/lib/protocols'
@@ -353,11 +354,13 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
             ['allowedAddresses', addresses.guardian, subAccountAddress, addressesToCheck],
             newAllowedSet
           )
-          // Refetch in background to confirm with on-chain data
-          queryClient.refetchQueries({
-            predicate: query =>
-              Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
-          })
+          // Refetch after a delay to let the RPC index the new block
+          setTimeout(() => {
+            queryClient.refetchQueries({
+              predicate: query =>
+                Array.isArray(query.queryKey) && query.queryKey[0] === 'allowedAddresses',
+            })
+          }, 4000)
           toast.success('Protocol permissions updated')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing
@@ -390,6 +393,32 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         ) : (
           <div className="space-y-4">
             {PROTOCOLS.map(protocol => {
+              const isComingSoon = protocol.id === 'merkl'
+
+              if (isComingSoon) {
+                return (
+                  <Tooltip key={protocol.id} content="Coming soon">
+                    <div className="rounded-xl border overflow-hidden border-subtle bg-elevated opacity-50 cursor-not-allowed">
+                      <div className="flex justify-between items-center p-4">
+                        <div className="flex flex-1 gap-3">
+                          <Checkbox
+                            id={`protocol-${protocol.id}`}
+                            checked={false}
+                            onChange={() => {}}
+                            label=""
+                            disabled
+                          />
+                          <div className="flex-1">
+                            <p className="font-medium text-primary text-small">{protocol.name}</p>
+                            <p className="mt-0.5 text-caption text-tertiary">{protocol.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Tooltip>
+                )
+              }
+
               const selectedContracts = selectedProtocols.get(protocol.id)
               const hasSelectedContracts = selectedContracts && selectedContracts.size > 0
               const isExpanded = expandedProtocol === protocol.id

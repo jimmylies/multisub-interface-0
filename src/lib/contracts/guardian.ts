@@ -596,6 +596,6 @@ export const ROLE_NAMES = {
 
 export const ROLE_DESCRIPTIONS = {
   [ROLES.DEFI_EXECUTE_ROLE]:
-    'Can execute protocol interactions (limited by spending allowance tracked by oracle)',
+    'Can execute protocol interactions (limited by spending allowance)',
   [ROLES.DEFI_TRANSFER_ROLE]: 'Can transfer tokens from Safe (costs spending allowance)',
 } as const

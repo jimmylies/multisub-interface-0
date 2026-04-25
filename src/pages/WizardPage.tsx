@@ -45,8 +45,8 @@ const PRESETS = [
   {
     id: 'defi-trader',
     name: 'DeFi Trader',
-    description: 'Swap tokens on Uniswap, 1inch, and Paraswap. Supply to Aave V3.',
-    protocols: ['Uniswap V3/V4', 'Universal Router', 'Aave V3', '1inch'],
+    description: 'Swap tokens on Uniswap. Supply to Aave V3.',
+    protocols: ['Uniswap V3/V4', 'Aave V3'],
     defaultBps: 500,
     roleLabel: 'EXECUTE',
     icon: '~',
@@ -966,22 +966,27 @@ export function WizardPage() {
               </div>
               <div className="space-y-2">
                 {PROTOCOLS.map(protocol => {
-                  const isSelected = selectedProtocols.includes(protocol.id)
-                  return (
+                  const isComingSoon = protocol.id === 'merkl'
+                  const isSelected = !isComingSoon && selectedProtocols.includes(protocol.id)
+                  const card = (
                     <button
                       key={protocol.id}
                       type="button"
-                      onClick={() =>
+                      disabled={isComingSoon}
+                      onClick={() => {
+                        if (isComingSoon) return
                         setSelectedProtocols(prev =>
                           isSelected
                             ? prev.filter(id => id !== protocol.id)
                             : [...prev, protocol.id]
                         )
-                      }
+                      }}
                       className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        isSelected
-                          ? 'border-accent-primary bg-accent-primary/5'
-                          : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                        isComingSoon
+                          ? 'border-subtle bg-elevated opacity-50 cursor-not-allowed'
+                          : isSelected
+                            ? 'border-accent-primary bg-accent-primary/5'
+                            : 'border-subtle bg-elevated hover:border-accent-primary/30'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -989,15 +994,17 @@ export function WizardPage() {
                           <span className="text-sm font-medium text-primary">{protocol.name}</span>
                           <span className="text-xs text-tertiary ml-2">{protocol.description}</span>
                         </div>
-                        <div
-                          className={`w-5 h-5 rounded border flex items-center justify-center text-xs ${
-                            isSelected
-                              ? 'border-accent-primary bg-accent-primary text-black'
-                              : 'border-subtle'
-                          }`}
-                        >
-                          {isSelected && '✓'}
-                        </div>
+                        {!isComingSoon && (
+                          <div
+                            className={`w-5 h-5 rounded border flex items-center justify-center text-xs ${
+                              isSelected
+                                ? 'border-accent-primary bg-accent-primary text-black'
+                                : 'border-subtle'
+                            }`}
+                          >
+                            {isSelected && '✓'}
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {protocol.contracts.map(c => (
@@ -1011,6 +1018,11 @@ export function WizardPage() {
                       </div>
                     </button>
                   )
+                  return isComingSoon ? (
+                    <Tooltip key={protocol.id} content="Coming soon">
+                      {card}
+                    </Tooltip>
+                  ) : card
                 })}
               </div>
               {selectedProtocols.length === 0 && (

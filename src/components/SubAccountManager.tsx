@@ -54,7 +54,7 @@ const DASHBOARD_AGENT_PRESETS = [
   {
     id: 'defi-trader',
     name: 'DeFi Trader',
-    description: 'Swap tokens on Uniswap, 1inch, and Paraswap. Supply to Aave V3.',
+    description: 'Swap tokens on Uniswap. Supply to Aave V3.',
     execute: true,
     transfer: false,
     spendingLimit: '5',
@@ -306,12 +306,15 @@ export function SubAccountManager() {
               ]
             }
           )
-          // Refetch in the background to confirm with on-chain data
-          queryClient.refetchQueries({
-            predicate: query =>
-              Array.isArray(query.queryKey) &&
-              (query.queryKey[0] === 'managedAccounts' || query.queryKey[0] === 'allowedAddresses'),
-          })
+          // Refetch after a delay to let the RPC index the new block,
+          // avoiding overwriting the optimistic update with stale data.
+          setTimeout(() => {
+            queryClient.refetchQueries({
+              predicate: query =>
+                Array.isArray(query.queryKey) &&
+                (query.queryKey[0] === 'managedAccounts' || query.queryKey[0] === 'allowedAddresses'),
+            })
+          }, 4000)
           setSelectedPreset('manual')
           setNewSubAccount('')
           setGrantExecute(false)

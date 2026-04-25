@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { SubAccountManager } from '@/components/SubAccountManager'
 import { EmergencyControls } from '@/components/EmergencyControls'
@@ -13,26 +12,17 @@ import { DisconnectedDashboard } from '@/components/DisconnectedDashboard'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useViewMode } from '@/contexts/ViewModeContext'
 import { FadeInUp } from '@/components/ui/motion'
-import { useModulesForEOA } from '@/hooks/useModulesForEOA'
-import { Button } from '@/components/ui/button'
 import { useIsSafeOwner, useManagedAccounts } from '@/hooks/useSafe'
 
 export function DashboardPage() {
-  const { isConfigured, setGuardian } = useContractAddresses()
+  const { isConfigured } = useContractAddresses()
   const { viewMode } = useViewMode()
   const { isConnected, address } = useAccount()
-  const { data: discoveredModules, isLoading: isDiscovering } = useModulesForEOA()
   const { isSafeOwner } = useIsSafeOwner()
   const { data: managedAccounts } = useManagedAccounts()
 
   const managedSubAccounts = managedAccounts?.map(account => account.address as `0x${string}`) ?? []
   const shouldShowVaultHistory = isSafeOwner && managedSubAccounts.length > 0
-
-  useEffect(() => {
-    if (!isConfigured && discoveredModules?.length === 1) {
-      setGuardian(discoveredModules[0].module)
-    }
-  }, [discoveredModules, isConfigured, setGuardian])
 
   if (!isConfigured) {
     return (
@@ -43,42 +33,6 @@ export function DashboardPage() {
             Enter your Safe address to load the associated Guardian and access controls.
           </p>
         </div>
-        {isConnected && (
-          <div className="max-w-2xl space-y-4">
-            {isDiscovering ? (
-              <div className="rounded-xl border border-subtle bg-elevated-1 p-4 text-secondary">
-                Looking for vaults linked to {address?.slice(0, 6)}...{address?.slice(-4)}...
-              </div>
-            ) : discoveredModules && discoveredModules.length > 0 ? (
-              <div className="space-y-3">
-                <p className="text-sm text-secondary">
-                  Found {discoveredModules.length} vault{discoveredModules.length > 1 ? 's' : ''}{' '}
-                  for this wallet:
-                </p>
-                {discoveredModules.map(({ module, safe }) => (
-                  <div
-                    key={module}
-                    className="flex items-center justify-between rounded-xl border border-subtle bg-elevated-1 p-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-mono text-sm text-primary truncate">{module}</p>
-                      <p className="mt-1 text-xs text-tertiary">
-                        Safe: {safe.slice(0, 8)}...{safe.slice(-6)}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="ml-4 shrink-0 bg-accent-primary text-black"
-                      onClick={() => setGuardian(module)}
-                    >
-                      Open
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
         <div className="max-w-md">
           <ContractSetup />
         </div>
