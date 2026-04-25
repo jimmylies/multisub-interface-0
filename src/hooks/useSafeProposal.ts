@@ -155,11 +155,14 @@ export function useSafeProposal() {
           }
 
           if (options?.transactionType) {
-            try {
-              await invalidateQueriesForTransaction(options.transactionType);
-            } catch (invalidationError) {
-              console.warn('Failed to invalidate queries after direct owner transaction', invalidationError)
-            }
+            // Delay invalidation to let RPC nodes sync after confirmation
+            setTimeout(async () => {
+              try {
+                await invalidateQueriesForTransaction(options.transactionType!);
+              } catch (invalidationError) {
+                console.warn('Failed to invalidate queries after direct owner transaction', invalidationError)
+              }
+            }, 4000)
           }
 
           return {
@@ -224,13 +227,15 @@ export function useSafeProposal() {
           throw new Error('Transaction reverted on chain');
         }
 
-        // Invalidate relevant queries AFTER confirmation
+        // Invalidate relevant queries after a delay to let RPC nodes sync
         if (options?.transactionType) {
-          try {
-            await invalidateQueriesForTransaction(options.transactionType);
-          } catch (invalidationError) {
-            console.warn('Failed to invalidate queries after Safe transaction', invalidationError)
-          }
+          setTimeout(async () => {
+            try {
+              await invalidateQueriesForTransaction(options.transactionType!);
+            } catch (invalidationError) {
+              console.warn('Failed to invalidate queries after Safe transaction', invalidationError)
+            }
+          }, 4000)
         }
 
         return {

@@ -11,6 +11,7 @@ export const QUERY_KEYS = {
 export const WAGMI_READ_FUNCTIONS = {
   HAS_ROLE: 'hasRole',
   GET_SUB_ACCOUNT_LIMITS: 'getSubAccountLimits',
+  GET_SPENDING_ALLOWANCE: 'getSpendingAllowance',
   PAUSED: 'paused',
   ALLOWED_ADDRESSES: 'allowedAddresses',
 } as const
@@ -33,7 +34,7 @@ export const INVALIDATION_MAP: Record<
   },
   [TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS]: {
     reactQueryKeys: [],
-    wagmiFunctions: [WAGMI_READ_FUNCTIONS.GET_SUB_ACCOUNT_LIMITS],
+    wagmiFunctions: [WAGMI_READ_FUNCTIONS.GET_SUB_ACCOUNT_LIMITS, WAGMI_READ_FUNCTIONS.GET_SPENDING_ALLOWANCE],
   },
   [TRANSACTION_TYPES.SET_ALLOWED_ADDRESSES]: {
     reactQueryKeys: [QUERY_KEYS.ALLOWED_ADDRESSES],
