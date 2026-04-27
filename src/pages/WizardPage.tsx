@@ -401,6 +401,52 @@ export function WizardPage() {
       explanations.push(explanation)
     }
 
+    // Auto-detect the guardian's actual on-chain mode instead of relying on UI toggle
+    let guardianIsOracleless = oracleless
+    try {
+      guardianIsOracleless = await publicClient.readContract({
+        address: existingModuleAddress,
+        abi: GUARDIAN_ABI,
+        functionName: 'isOracleless',
+      }) as boolean
+    } catch {
+      // Fallback to UI toggle if call fails
+    }
+
+    // Register any missing price feeds on the existing guardian
+    const feedStatuses = await Promise.all(
+      BASE_SEPOLIA_PRICE_FEEDS.map(async ({ token, feed }) => {
+        try {
+          const currentFeed = await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: GUARDIAN_ABI,
+            functionName: 'tokenPriceFeeds',
+            args: [token],
+          }) as string
+          return { token, feed, needsRegistration: currentFeed.toLowerCase() === '0x0000000000000000000000000000000000000000' }
+        } catch {
+          return { token, feed, needsRegistration: true }
+        }
+      })
+    )
+
+    const missingFeeds = feedStatuses.filter(f => f.needsRegistration)
+    missingFeeds.forEach(({ token, feed }) => {
+      addTransaction(
+        {
+          to: existingModuleAddress,
+          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setTokenPriceFeed', [
+            token,
+            feed,
+          ]),
+        },
+        {
+          title: 'Register token price feed',
+          description: `Sets the Chainlink price feed for token ${token.slice(0, 6)}…${token.slice(-4)} so the guardian can value it on-chain.`,
+        }
+      )
+    })
+
     if (preset.id === 'custom') {
       addTransaction(
         {
@@ -420,8 +466,8 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
-            oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
+            guardianIsOracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
+            guardianIsOracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
           ]),
         },
@@ -554,8 +600,8 @@ export function WizardPage() {
           to: existingModuleAddress,
           data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setSubAccountLimits', [
             agentAddress as Address,
-            oracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
-            oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
+            guardianIsOracleless ? 0n : BigInt(Math.round(Number(spendingLimitBps || '0') * 100)),
+            guardianIsOracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n,
             86400n,
           ]),
         },
@@ -631,55 +677,27 @@ export function WizardPage() {
     const priceFeedAddresses = PRICE_FEED_ADDRESSES
 
     try {
-      if (presetId !== undefined && !oracleless) {
-        // Deploy from on-chain preset — only valid in oracle mode because presets have
-        // hardcoded BPS spending limits that require an oracle to track portfolio value.
-        writeContract(
-          {
-            address: FACTORY_ADDRESS,
-            abi: AGENT_VAULT_FACTORY_ABI,
-            functionName: 'deployVaultFromPreset',
-            args: [
-              safeAddress as Address,
-              effectiveOracle,
-              agentAddress as Address,
-              BigInt(presetId),
-              priceFeedTokens,
-              priceFeedAddresses,
-            ],
-          },
-          {
-            onSuccess(hash) {
-              console.log('Vault deployment tx:', hash)
-            },
-            onError(error) {
-              setDeployError(error.message)
-            },
-          }
-        )
-      } else {
-        // Custom preset, OR any preset in oracleless mode.
-        // In oracleless mode we must use deployVault with BPS=0 and an explicit USD limit,
-        // because the on-chain presets rely on BPS limits that require an oracle.
-        const maxSpendingBps = oracleless
-          ? 0n
-          : BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
-        const maxSpendingUSD = oracleless
-          ? parseUnits(spendingLimitUSD || '0', 18)
-          : 0n
+      // Always use deployVault so the user's spending limit input is respected.
+      // (deployVaultFromPreset uses hardcoded on-chain BPS values, ignoring user input.)
+      const maxSpendingBps = oracleless
+        ? 0n
+        : BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
+      const maxSpendingUSD = oracleless
+        ? parseUnits(spendingLimitUSD || '0', 18)
+        : 0n
 
-        // For named presets in oracleless mode, pull protocols/role from PRESET_CONFIG
-        // rather than the user-selected protocol list (which is only populated for custom).
-        const presetCfg = presetId !== undefined ? PRESET_CONFIG[preset.id] : undefined
-        const roleId = presetCfg ? presetCfg.roleId : 1
-        const allowedProtocols = presetCfg
-          ? presetCfg.allowedProtocols
-          : selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
-        const parserProtocols = presetCfg ? presetCfg.parserRegistrations.map(r => r.protocol) : []
-        const parserAddresses = presetCfg ? presetCfg.parserRegistrations.map(r => r.parser) : []
-        const selectors = presetCfg ? presetCfg.selectorRegistrations.map(r => r.selector) : []
-        const selectorTypes = presetCfg ? presetCfg.selectorRegistrations.map(r => r.opType) : []
+      // For named presets, pull protocols/role from PRESET_CONFIG
+      const presetCfg = presetId !== undefined ? PRESET_CONFIG[preset.id] : undefined
+      const roleId = presetCfg ? presetCfg.roleId : 1
+      const allowedProtocols = presetCfg
+        ? presetCfg.allowedProtocols
+        : selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
+      const parserProtocols = presetCfg ? presetCfg.parserRegistrations.map(r => r.protocol) : []
+      const parserAddresses = presetCfg ? presetCfg.parserRegistrations.map(r => r.parser) : []
+      const selectors = presetCfg ? presetCfg.selectorRegistrations.map(r => r.selector) : []
+      const selectorTypes = presetCfg ? presetCfg.selectorRegistrations.map(r => r.opType) : []
 
+      {
         writeContract(
           {
             address: FACTORY_ADDRESS,

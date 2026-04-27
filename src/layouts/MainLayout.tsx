@@ -128,7 +128,7 @@ export function MainLayout() {
           <p className="text-caption text-tertiary">
             Secured by Safe • Built for DeFi •{' '}
             <a
-              href="https://docs.multiclaws.xyz"
+              href="https://multiclaw-docs.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent-primary hover:underline"
