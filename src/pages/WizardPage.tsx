@@ -1339,13 +1339,6 @@ export function WizardPage() {
             </div>
           </div>
 
-          <div className="mt-6 p-4 rounded-lg bg-accent-primary/5 border border-accent-primary/20">
-            <p className="text-sm text-secondary">
-              After deployment, you will need to enable the Guardian on your Safe (1 multisig
-              transaction). The agent cannot operate until the Guardian is enabled.
-            </p>
-          </div>
-
           {selectedPreset === 'custom' && (
             <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <p className="text-sm font-medium text-yellow-400">
