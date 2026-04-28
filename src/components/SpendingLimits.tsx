@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { GUARDIAN_ABI } from '@/lib/contracts'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
-import { useSubAccountLimits, useSafeValue } from '@/hooks/useSafe'
+import { useIsOracleless, useSubAccountLimits, useSafeValue } from '@/hooks/useSafe'
 import { useSubAccountFullState } from '@/hooks/useSubAccountFullState'
 import { formatUSD } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
@@ -33,10 +33,13 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   // Get Safe portfolio value from oracle
   const { data: safeValue } = useSafeValue()
 
-  // Detect mode: oracleless = BPS is 0 and USD > 0
-  const isOracleless = currentLimits
-    ? currentLimits[0] === 0n && currentLimits[1] > 0n
-    : false
+  // Read module mode — authoritative when true, since BPS limits would revert
+  // with OraclelessRequiresUSDMode on an oracleless module. The per-sub-account
+  // heuristic still kicks in for USD-mode sub-accounts on oracle modules.
+  const { data: isModuleOracleless } = useIsOracleless()
+  const isOracleless =
+    Boolean(isModuleOracleless) ||
+    (currentLimits ? currentLimits[0] === 0n && currentLimits[1] > 0n : false)
 
   // Oracle-managed: USD equivalent from BPS × portfolio
   const maxAllowanceUSD =
@@ -45,17 +48,16 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       : null
 
   // Oracleless: direct USD value stored in currentLimits[1] (1e18 scale)
-  const maxAllowanceUSDDirect = isOracleless && currentLimits
-    ? currentLimits[1]
-    : null
+  const maxAllowanceUSDDirect = isOracleless && currentLimits ? currentLimits[1] : null
 
   const [spendingLimit, setSpendingLimit] = useState('10') // % for oracle-managed
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('') // $ for oracleless
 
   // Calculate USD amount based on user input (real-time, oracle-managed only)
-  const inputAllowanceUSD = !isOracleless && safeValue
-    ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
-    : null
+  const inputAllowanceUSD =
+    !isOracleless && safeValue
+      ? (safeValue[0] * BigInt(Math.floor(parseFloat(spendingLimit || '0') * 100))) / 10000n
+      : null
   const [windowHours, setWindowHours] = useState('24')
   const { toast } = useToast()
   const { showPreview } = useTransactionPreviewContext()
@@ -236,7 +238,9 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                         {(Number(currentLimits[0]) / 100).toFixed(1)}%
                       </p>
                       {maxAllowanceUSD !== null && (
-                        <p className="text-muted-foreground text-sm">${formatUSD(maxAllowanceUSD)}</p>
+                        <p className="text-muted-foreground text-sm">
+                          ${formatUSD(maxAllowanceUSD)}
+                        </p>
                       )}
                     </>
                   )}
@@ -249,7 +253,6 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                   <p className="mt-1 text-muted-foreground text-xs">Time Window</p>
                 </div>
               </div>
-
             </div>
           )}
 
@@ -257,11 +260,19 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-medium text-sm">
                 {isOracleless ? 'USD Spending Limit' : 'Spending Limit'}
-                <TooltipIcon content={isOracleless
-                  ? 'Fixed USD cap enforced on-chain via cumulative spending counter.'
-                  : 'Maximum spending (all operations) as a percentage of portfolio value. Oracle tracks actual spending across swaps, deposits, withdrawals, and transfers.'
-                } />
-                <Badge variant="destructive" className="text-xs">Per Window</Badge>
+                <TooltipIcon
+                  content={
+                    isOracleless
+                      ? 'Fixed USD cap enforced on-chain via cumulative spending counter.'
+                      : 'Maximum spending (all operations) as a percentage of portfolio value. Oracle tracks actual spending across swaps, deposits, withdrawals, and transfers.'
+                  }
+                />
+                <Badge
+                  variant="destructive"
+                  className="text-xs"
+                >
+                  Per Window
+                </Badge>
               </label>
               <div className="flex items-center gap-3">
                 {isOracleless && <span className="font-medium text-small text-tertiary">$</span>}
@@ -275,7 +286,8 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                     onChange={e => {
                       const value = e.target.value
                       if (isOracleless) {
-                        if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) setSpendingLimitUSD(value)
+                        if (value === '' || /^\d*\.?\d{0,2}$/.test(value))
+                          setSpendingLimitUSD(value)
                       } else {
                         if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) setSpendingLimit(value)
                       }

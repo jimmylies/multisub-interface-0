@@ -9,7 +9,12 @@ import { CopyButton } from '@/components/ui/copy-button'
 import { Tooltip, TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { ChevronDown, Pencil, ShieldCheck } from 'lucide-react'
-import { GUARDIAN_ABI as GUARDIAN_ABI_CONST, ROLES, ROLE_NAMES, ROLE_DESCRIPTIONS } from '@/lib/contracts'
+import {
+  GUARDIAN_ABI as GUARDIAN_ABI_CONST,
+  ROLES,
+  ROLE_NAMES,
+  ROLE_DESCRIPTIONS,
+} from '@/lib/contracts'
 const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
@@ -19,6 +24,7 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import {
   useIsSafeOwner,
   useHasRole,
+  useIsOracleless,
   useManagedAccounts,
   useSpendingAllowance,
   useSafeValue,
@@ -87,7 +93,8 @@ export function SubAccountManager() {
   const { addresses } = useContractAddresses()
   const queryClient = useQueryClient()
   const { isSafeOwner } = useIsSafeOwner()
-  const [selectedPreset, setSelectedPreset] = useState<(typeof DASHBOARD_AGENT_PRESETS)[number]['id']>('manual')
+  const [selectedPreset, setSelectedPreset] =
+    useState<(typeof DASHBOARD_AGENT_PRESETS)[number]['id']>('manual')
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
   const [grantTransfer, setGrantTransfer] = useState(false)
@@ -100,6 +107,16 @@ export function SubAccountManager() {
 
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
+
+  // Read the module's actual oracleless flag — locks the trust-mode picker on oracleless modules.
+  // Picking BPS on an oracleless module would revert with OraclelessRequiresUSDMode at submission.
+  const { data: isModuleOracleless } = useIsOracleless()
+  useEffect(() => {
+    if (isModuleOracleless && trustMode !== 'oracleless') {
+      setTrustMode('oracleless')
+      setSetSpendingLimits(true)
+    }
+  }, [isModuleOracleless, trustMode])
 
   // Get Safe portfolio value for USD calculations
   const { data: safeValue } = useSafeValue()
@@ -186,21 +203,24 @@ export function SubAccountManager() {
         roleId: ROLES.DEFI_EXECUTE_ROLE,
         roleName: ROLE_NAMES[ROLES.DEFI_EXECUTE_ROLE],
         description: ROLE_DESCRIPTIONS[ROLES.DEFI_EXECUTE_ROLE],
-        action: rolesToGrant.includes(ROLES.DEFI_EXECUTE_ROLE) ? 'add' as const : 'unchanged' as const,
+        action: rolesToGrant.includes(ROLES.DEFI_EXECUTE_ROLE)
+          ? ('add' as const)
+          : ('unchanged' as const),
       },
       {
         roleId: ROLES.DEFI_TRANSFER_ROLE,
         roleName: ROLE_NAMES[ROLES.DEFI_TRANSFER_ROLE],
         description: ROLE_DESCRIPTIONS[ROLES.DEFI_TRANSFER_ROLE],
-        action: rolesToGrant.includes(ROLES.DEFI_TRANSFER_ROLE) ? 'add' as const : 'unchanged' as const,
+        action: rolesToGrant.includes(ROLES.DEFI_TRANSFER_ROLE)
+          ? ('add' as const)
+          : ('unchanged' as const),
       },
     ].filter(r => r.action !== 'unchanged') as RoleChange[]
 
     // Build protocol changes for preview
-    const protocolChanges = presetProtocolIds.length > 0
-      ? PROTOCOLS
-          .filter(p => presetProtocolIds.includes(p.id))
-          .map(protocol => ({
+    const protocolChanges =
+      presetProtocolIds.length > 0
+        ? PROTOCOLS.filter(p => presetProtocolIds.includes(p.id)).map(protocol => ({
             protocolId: protocol.id,
             protocolName: protocol.name,
             contracts: protocol.contracts.map(c => ({
@@ -211,7 +231,7 @@ export function SubAccountManager() {
               action: 'add' as const,
             })),
           }))
-      : undefined
+        : undefined
 
     const previewData: TransactionPreviewData = {
       type: 'add-subaccount',
@@ -224,7 +244,9 @@ export function SubAccountManager() {
               maxSpendingBps:
                 trustMode === 'oracle-managed' ? Math.floor(parseFloat(spendingLimit) * 100) : 0,
               maxSpendingUSD:
-                trustMode === 'oracleless' ? parseUnits(spendingLimitUSD || '0', 18).toString() : '0',
+                trustMode === 'oracleless'
+                  ? parseUnits(spendingLimitUSD || '0', 18).toString()
+                  : '0',
               mode: trustMode === 'oracleless' ? 'usd' : 'bps',
               windowDuration: 24 * 3600,
             },
@@ -259,12 +281,12 @@ export function SubAccountManager() {
 
           transactions.push({
             to: addresses.guardian!,
-            data: encodeContractCall(
-              addresses.guardian!,
-              GUARDIAN_ABI,
-              'setSubAccountLimits',
-              [newSubAccount as `0x${string}`, BigInt(spendingBps), spendingUSD, BigInt(windowSeconds)]
-            ),
+            data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setSubAccountLimits', [
+              newSubAccount as `0x${string}`,
+              BigInt(spendingBps),
+              spendingUSD,
+              BigInt(windowSeconds),
+            ]),
           })
         }
 
@@ -272,12 +294,11 @@ export function SubAccountManager() {
         if (allowedProtocolAddresses.length > 0) {
           transactions.push({
             to: addresses.guardian!,
-            data: encodeContractCall(
-              addresses.guardian!,
-              GUARDIAN_ABI,
-              'setAllowedAddresses',
-              [newSubAccount as `0x${string}`, allowedProtocolAddresses, true]
-            ),
+            data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setAllowedAddresses', [
+              newSubAccount as `0x${string}`,
+              allowedProtocolAddresses,
+              true,
+            ]),
           })
         }
 
@@ -312,7 +333,8 @@ export function SubAccountManager() {
             queryClient.refetchQueries({
               predicate: query =>
                 Array.isArray(query.queryKey) &&
-                (query.queryKey[0] === 'managedAccounts' || query.queryKey[0] === 'allowedAddresses'),
+                (query.queryKey[0] === 'managedAccounts' ||
+                  query.queryKey[0] === 'allowedAddresses'),
             })
           }, 4000)
           setSelectedPreset('manual')
@@ -387,9 +409,14 @@ export function SubAccountManager() {
                       >
                         <div className="flex h-full flex-col">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-primary text-small">{preset.name}</span>
+                            <span className="font-medium text-primary text-small">
+                              {preset.name}
+                            </span>
                             {!isComingSoon && selectedPreset === preset.id && (
-                              <Badge variant="secondary" className="text-[10px] uppercase">
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] uppercase"
+                              >
                                 Selected
                               </Badge>
                             )}
@@ -399,10 +426,16 @@ export function SubAccountManager() {
                       </button>
                     )
                     return isComingSoon ? (
-                      <Tooltip key={preset.id} content="Coming soon" wrapperClassName="block h-full">
+                      <Tooltip
+                        key={preset.id}
+                        content="Coming soon"
+                        wrapperClassName="block h-full"
+                      >
                         {card}
                       </Tooltip>
-                    ) : card
+                    ) : (
+                      card
+                    )
                   })}
                 </div>
               </div>
@@ -424,12 +457,22 @@ export function SubAccountManager() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setTrustMode('oracle-managed')}
+                    onClick={() => {
+                      if (isModuleOracleless) return
+                      setTrustMode('oracle-managed')
+                    }}
+                    disabled={Boolean(isModuleOracleless)}
+                    title={
+                      isModuleOracleless
+                        ? 'This module is configured oracleless; only USD limits are accepted on-chain.'
+                        : undefined
+                    }
                     className={cn(
                       'rounded-xl border p-3 text-left transition-all',
                       trustMode === 'oracle-managed'
                         ? 'border-accent-primary bg-accent-primary/5'
-                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30',
+                      isModuleOracleless && 'opacity-50 cursor-not-allowed hover:border-subtle'
                     )}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -442,7 +485,11 @@ export function SubAccountManager() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setTrustMode('oracleless'); setSetSpendingLimits(true); setSpendingLimitUSD('') }}
+                    onClick={() => {
+                      setTrustMode('oracleless')
+                      setSetSpendingLimits(true)
+                      setSpendingLimitUSD('')
+                    }}
                     className={cn(
                       'rounded-xl border p-3 text-left transition-all',
                       trustMode === 'oracleless'
@@ -459,6 +506,11 @@ export function SubAccountManager() {
                     </p>
                   </button>
                 </div>
+                {isModuleOracleless && (
+                  <p className="text-caption text-tertiary">
+                    This module is oracleless — sub-accounts must use USD spending limits.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -647,9 +699,7 @@ export function SubAccountManager() {
                 <div className="flex justify-center items-center bg-elevated-2 mx-auto mb-3 rounded-full w-12 h-12">
                   <span className="text-2xl">👤</span>
                 </div>
-                <p className="text-small text-tertiary">
-                  No agents yet. Add one to get started.
-                </p>
+                <p className="text-small text-tertiary">No agents yet. Add one to get started.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -689,10 +739,8 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { isSafeOwner } = useIsSafeOwner()
 
   // Get full sub-account state for preview context
-  const {
-    fullState: currentFullState,
-    allowedAddresses: currentAllowedAddresses,
-  } = useSubAccountFullState(account)
+  const { fullState: currentFullState, allowedAddresses: currentAllowedAddresses } =
+    useSubAccountFullState(account)
   const { getAccountName, setAccountName, removeAccountName } = useSubAccountNames()
   const accountName = getAccountName(account)
 
@@ -728,7 +776,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const isAccountOracleless = limits ? limits[0] === 0n && limits[1] > 0n : false
   const maxAllowance = isAccountOracleless
     ? (limits?.[1] ?? null)
-    : (safeValue && limits ? (safeValue[0] * BigInt(limits[0])) / 10000n : null)
+    : safeValue && limits
+      ? (safeValue[0] * BigInt(limits[0])) / 10000n
+      : null
   const windowDuration = limits?.[2] ?? 0n
   const nowSec = BigInt(Math.floor(Date.now() / 1000))
   const isWindowExpired =
@@ -742,9 +792,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant)
   const effectiveRemainingAllowance = isAccountOracleless
     ? remainingBySpent
-    : (spendingAllowance !== undefined && spendingAllowance < remainingBySpent
-        ? spendingAllowance
-        : remainingBySpent)
+    : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
+      ? spendingAllowance
+      : remainingBySpent
   const isOracleAllowanceLagging =
     !isAccountOracleless &&
     spendingAllowance !== undefined &&
@@ -759,7 +809,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     effectiveRemainingAllowance < spendingAllowance
   const percentUsed =
     maxAllowance && maxAllowance > 0n
-      ? Number(((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance) / 100
+      ? Number(
+          ((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance
+        ) / 100
       : 0
 
   // Get necessary dependencies for handlers
@@ -768,12 +820,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const { proposeTransaction, isPending: isUpdating } = useSafeProposal()
   const { showPreview } = useTransactionPreviewContext()
 
-  const updateManagedAccountsCache = (
-    updater: (accounts: SubAccount[]) => SubAccount[]
-  ) => {
-    queryClient.setQueryData<SubAccount[]>(
-      ['managedAccounts', addresses.guardian],
-      current => updater(current ?? [])
+  const updateManagedAccountsCache = (updater: (accounts: SubAccount[]) => SubAccount[]) => {
+    queryClient.setQueryData<SubAccount[]>(['managedAccounts', addresses.guardian], current =>
+      updater(current ?? [])
     )
   }
 
