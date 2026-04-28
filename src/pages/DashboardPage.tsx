@@ -9,6 +9,7 @@ import { SubAccountDashboard } from '@/components/SubAccountDashboard'
 import { SpendingAllowanceCard } from '@/components/SpendingAllowanceCard'
 import { AcquiredBalancesCard } from '@/components/AcquiredBalancesCard'
 import { DisconnectedDashboard } from '@/components/DisconnectedDashboard'
+import { ModuleActivationBanner } from '@/components/ModuleActivationBanner'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useViewMode } from '@/contexts/ViewModeContext'
 import { FadeInUp } from '@/components/ui/motion'
@@ -49,6 +50,7 @@ export function DashboardPage() {
   if (viewMode === 'owner') {
     return (
       <FadeInUp className="space-y-6">
+        <ModuleActivationBanner />
         <StatsBar />
         <SubAccountManager />
         <div className="gap-6 grid grid-cols-1 lg:grid-cols-3">
@@ -58,9 +60,15 @@ export function DashboardPage() {
           <ContractSetup />
         </div>
         {shouldShowVaultHistory ? (
-          <TransactionHistory key="multi" subAccounts={managedSubAccounts} />
+          <TransactionHistory
+            key="multi"
+            subAccounts={managedSubAccounts}
+          />
         ) : (
-          <TransactionHistory key="single" subAccount={address as `0x${string}` | undefined} />
+          <TransactionHistory
+            key="single"
+            subAccount={address as `0x${string}` | undefined}
+          />
         )}
       </FadeInUp>
     )
@@ -69,6 +77,7 @@ export function DashboardPage() {
   // Sub-account view
   return (
     <FadeInUp className="space-y-6">
+      <ModuleActivationBanner />
       <StatsBar />
       <div className="gap-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         <MyPermissionsCard />

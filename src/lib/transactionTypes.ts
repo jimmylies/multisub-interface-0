@@ -10,6 +10,9 @@ export const TRANSACTION_TYPES = {
   // Emergency controls
   PAUSE: 'pause',
   UNPAUSE: 'unpause',
+
+  // Safe module management
+  ENABLE_MODULE: 'enableModule',
 } as const
 
 export type TransactionType = (typeof TRANSACTION_TYPES)[keyof typeof TRANSACTION_TYPES]

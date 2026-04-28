@@ -26,7 +26,13 @@ import {
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase, selectedChain } from '@/lib/chains'
-import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI as GUARDIAN_ABI_CONST, MODULE_REGISTRY_ABI, ROLES } from '@/lib/contracts'
+import {
+  AGENT_VAULT_FACTORY_ABI,
+  GUARDIAN_ABI as GUARDIAN_ABI_CONST,
+  MODULE_REGISTRY_ABI,
+  ROLES,
+  SAFE_ABI,
+} from '@/lib/contracts'
 const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
@@ -124,32 +130,76 @@ const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefine
 // Major tokens on Base Sepolia with Chainlink price feeds
 const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
   // WETH → ETH/USD
-  { token: '0x4200000000000000000000000000000000000006', feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1' },
+  {
+    token: '0x4200000000000000000000000000000000000006',
+    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
+  },
   // USDC (Circle) → USDC/USD
-  { token: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165' },
+  {
+    token: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
+  },
   // USDC (Aave) → USDC/USD
-  { token: '0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f', feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165' },
+  {
+    token: '0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f',
+    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
+  },
   // USDT → USDT/USD
-  { token: '0x0a215D8ba66387DCA84B284D18c3B4ec3de6E54a', feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f' },
+  {
+    token: '0x0a215D8ba66387DCA84B284D18c3B4ec3de6E54a',
+    feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f',
+  },
   // WBTC → BTC/USD
-  { token: '0x54114591963CF60EF3aA63bEfD6eC263D98145a4', feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298' },
+  {
+    token: '0x54114591963CF60EF3aA63bEfD6eC263D98145a4',
+    feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298',
+  },
   // LINK → LINK/USD
-  { token: '0x810D46F9a9027E28F9B01F75E2bdde839dA61115', feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61' },
+  {
+    token: '0x810D46F9a9027E28F9B01F75E2bdde839dA61115',
+    feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61',
+  },
   // cbETH → ETH/USD (pegged)
-  { token: '0xD171b9694f7A2597Ed006D41f7509aaD4B485c4B', feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1' },
+  {
+    token: '0xD171b9694f7A2597Ed006D41f7509aaD4B485c4B',
+    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
+  },
+  // EURC → USDC/USD (proxy: no native EUR/USD feed on Base Sepolia testnet)
+  {
+    token: '0x808456652fdb597867f38412077A9182bf77359F',
+    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
+  },
   // Aave V3 aTokens (1:1 with underlying)
   // aWETH → ETH/USD
-  { token: '0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb', feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1' },
+  {
+    token: '0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb',
+    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
+  },
   // aUSDC → USDC/USD
-  { token: '0x10F1A9D11CDf50041f3f8cB7191CBE2f31750ACC', feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165' },
+  {
+    token: '0x10F1A9D11CDf50041f3f8cB7191CBE2f31750ACC',
+    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
+  },
   // aUSDT → USDT/USD
-  { token: '0xcE3CAae5Ed17A7AafCEEbc897DE843fA6CC0c018', feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f' },
+  {
+    token: '0xcE3CAae5Ed17A7AafCEEbc897DE843fA6CC0c018',
+    feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f',
+  },
   // aWBTC → BTC/USD
-  { token: '0x47Db195BAf46898302C06c31bCF46c01C64ACcF9', feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298' },
+  {
+    token: '0x47Db195BAf46898302C06c31bCF46c01C64ACcF9',
+    feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298',
+  },
   // aLINK → LINK/USD
-  { token: '0x0aD46dE765522399d7b25B438b230A894d72272B', feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61' },
+  {
+    token: '0x0aD46dE765522399d7b25B438b230A894d72272B',
+    feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61',
+  },
   // acbETH → ETH/USD
-  { token: '0x9Fd6d1DBAd7c052e0c43f46df36eEc6a68814B63', feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1' },
+  {
+    token: '0x9Fd6d1DBAd7c052e0c43f46df36eEc6a68814B63',
+    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
+  },
 ]
 const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.token)
 const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.feed)
@@ -218,7 +268,6 @@ const PRESET_CONFIG: Record<
       '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
       '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
       '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
-      '0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245',
     ],
     parserRegistrations: [
       {
@@ -278,6 +327,10 @@ export function WizardPage() {
   const [pendingExistingVaultExplanations, setPendingExistingVaultExplanations] = useState<
     ExistingVaultTransactionExplanation[]
   >([])
+  // Enable-module flow (post-deploy): track tx hash so the success card can render its state
+  const [enableModuleTxHash, setEnableModuleTxHash] = useState<`0x${string}` | null>(null)
+  const [enableModuleError, setEnableModuleError] = useState<string | null>(null)
+  const [isEnablingModule, setIsEnablingModule] = useState(false)
 
   // Effective oracle: real address in oracle mode, zeroAddress in oracleless mode
   const effectiveOracle: Address | undefined = oracleless ? zeroAddress : ORACLE_ADDRESS
@@ -324,7 +377,34 @@ export function WizardPage() {
     },
   })
 
-  const existingModuleAddress = existingModule && existingModule !== zeroAddress ? existingModule as `0x${string}` : null
+  const existingModuleAddress =
+    existingModule && existingModule !== zeroAddress ? (existingModule as `0x${string}`) : null
+
+  // Safe owner check — connected wallet must be a Safe signer to call enableModule
+  const { data: safeOwners } = useReadContract({
+    address: hasValidSafeAddress ? (safeAddress as Address) : undefined,
+    abi: SAFE_ABI,
+    functionName: 'getOwners',
+    query: { enabled: hasValidSafeAddress },
+  })
+  const isConnectedSafeOwner = Boolean(
+    connectedAddress &&
+    (safeOwners as Address[] | undefined)?.some(
+      owner => owner.toLowerCase() === connectedAddress.toLowerCase()
+    )
+  )
+
+  // Module activation check — re-runs after the activation tx is mined
+  const moduleToCheck =
+    deployedModule && deployedModule !== 'unknown' ? (deployedModule as Address) : undefined
+  const { data: isModuleEnabledOnSafe, refetch: refetchModuleEnabled } = useReadContract({
+    address: hasValidSafeAddress ? (safeAddress as Address) : undefined,
+    abi: SAFE_ABI,
+    functionName: 'isModuleEnabled',
+    args: moduleToCheck ? [moduleToCheck] : undefined,
+    query: { enabled: hasValidSafeAddress && Boolean(moduleToCheck) },
+  })
+
   const justDeployedRegisteredModule =
     Boolean(deployedModule) &&
     deployedModule !== 'unknown' &&
@@ -381,6 +461,41 @@ export function WizardPage() {
     }
   }
 
+  async function handleEnableModule() {
+    if (!moduleToCheck || !hasValidSafeAddress) return
+    setEnableModuleError(null)
+    setIsEnablingModule(true)
+    try {
+      const result = await proposeTransaction(
+        {
+          to: safeAddress as Address,
+          data: encodeContractCall(safeAddress as Address, SAFE_ABI as any[], 'enableModule', [
+            moduleToCheck,
+          ]),
+        },
+        {
+          transactionType: TRANSACTION_TYPES.ENABLE_MODULE,
+          safeAddressOverride: safeAddress as Address,
+          moduleOwnerOverride: safeAddress as Address,
+        }
+      )
+      if (result.success) {
+        setEnableModuleTxHash(result.transactionHash as `0x${string}`)
+        await refetchModuleEnabled()
+      } else if ('cancelled' in result && result.cancelled) {
+        return
+      } else {
+        throw result.error || new Error('Transaction failed')
+      }
+    } catch (error) {
+      setEnableModuleError(
+        error instanceof Error ? error.message : 'Failed to enable module on Safe'
+      )
+    } finally {
+      setIsEnablingModule(false)
+    }
+  }
+
   async function handleConfigureExistingVault() {
     if (!preset || !existingModuleAddress || !isAddress(agentAddress)) {
       return
@@ -404,11 +519,11 @@ export function WizardPage() {
     // Auto-detect the guardian's actual on-chain mode instead of relying on UI toggle
     let guardianIsOracleless = oracleless
     try {
-      guardianIsOracleless = await publicClient.readContract({
+      guardianIsOracleless = (await publicClient.readContract({
         address: existingModuleAddress,
         abi: GUARDIAN_ABI,
         functionName: 'isOracleless',
-      }) as boolean
+      })) as boolean
     } catch {
       // Fallback to UI toggle if call fails
     }
@@ -417,13 +532,18 @@ export function WizardPage() {
     const feedStatuses = await Promise.all(
       BASE_SEPOLIA_PRICE_FEEDS.map(async ({ token, feed }) => {
         try {
-          const currentFeed = await publicClient.readContract({
+          const currentFeed = (await publicClient.readContract({
             address: existingModuleAddress,
             abi: GUARDIAN_ABI,
             functionName: 'tokenPriceFeeds',
             args: [token],
-          }) as string
-          return { token, feed, needsRegistration: currentFeed.toLowerCase() === '0x0000000000000000000000000000000000000000' }
+          })) as string
+          return {
+            token,
+            feed,
+            needsRegistration:
+              currentFeed.toLowerCase() === '0x0000000000000000000000000000000000000000',
+          }
         } catch {
           return { token, feed, needsRegistration: true }
         }
@@ -458,7 +578,8 @@ export function WizardPage() {
         },
         {
           title: 'Grant agent role',
-          description: 'Gives this agent the EXECUTE permission needed to operate inside the vault.',
+          description:
+            'Gives this agent the EXECUTE permission needed to operate inside the vault.',
         }
       )
       addTransaction(
@@ -477,7 +598,9 @@ export function WizardPage() {
         }
       )
 
-      const allowedProtocols = selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
+      const allowedProtocols = selectedProtocols.flatMap(
+        id => getProtocolContractAddresses(id) as Address[]
+      )
       if (allowedProtocols.length > 0) {
         addTransaction(
           {
@@ -490,7 +613,8 @@ export function WizardPage() {
           },
           {
             title: 'Whitelist allowed protocols',
-            description: 'Restricts this agent to the protocol addresses you selected for the custom setup.',
+            description:
+              'Restricts this agent to the protocol addresses you selected for the custom setup.',
           }
         )
       }
@@ -498,7 +622,9 @@ export function WizardPage() {
       const presetConfig = chainId === selectedChain.id ? PRESET_CONFIG[preset.id] : undefined
 
       if (!presetConfig) {
-        setDeployError('Adding preset agents to an existing vault is not supported on this network.')
+        setDeployError(
+          'Adding preset agents to an existing vault is not supported on this network.'
+        )
         return
       }
 
@@ -623,14 +749,17 @@ export function WizardPage() {
           },
           {
             title: 'Whitelist allowed protocols',
-            description: 'Allows this agent to call only the protocol contracts included in the preset.',
+            description:
+              'Allows this agent to call only the protocol contracts included in the preset.',
           }
         )
       }
     }
 
     if (transactions.length === 0) {
-      setDeployError('This agent already appears to be configured for the selected preset on the existing vault.')
+      setDeployError(
+        'This agent already appears to be configured for the selected preset on the existing vault.'
+      )
       return
     }
 
@@ -652,7 +781,9 @@ export function WizardPage() {
       try {
         await handleConfigureExistingVault()
       } catch (error) {
-        setDeployError(error instanceof Error ? error.message : 'Failed to configure existing vault')
+        setDeployError(
+          error instanceof Error ? error.message : 'Failed to configure existing vault'
+        )
       }
       return
     }
@@ -682,9 +813,7 @@ export function WizardPage() {
       const maxSpendingBps = oracleless
         ? 0n
         : BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
-      const maxSpendingUSD = oracleless
-        ? parseUnits(spendingLimitUSD || '0', 18)
-        : 0n
+      const maxSpendingUSD = oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n
 
       // For named presets, pull protocols/role from PRESET_CONFIG
       const presetCfg = presetId !== undefined ? PRESET_CONFIG[preset.id] : undefined
@@ -809,8 +938,8 @@ export function WizardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-primary mb-2">Choose a Preset</h1>
           <p className="text-secondary mb-8">
-            Select a template that matches your agent's use case. Presets are just a starting
-            point, you can still add custom protocols and adjust the guardrails afterward.
+            Select a template that matches your agent's use case. Presets are just a starting point,
+            you can still add custom protocols and adjust the guardrails afterward.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {PRESETS.map(p => {
@@ -855,10 +984,15 @@ export function WizardPage() {
                 </button>
               )
               return isComingSoon ? (
-                <Tooltip key={p.id} content="Coming soon">
+                <Tooltip
+                  key={p.id}
+                  content="Coming soon"
+                >
                   {card}
                 </Tooltip>
-              ) : card
+              ) : (
+                card
+              )
             })}
           </div>
           <div className="flex justify-end mt-8">
@@ -916,7 +1050,9 @@ export function WizardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => { setOracleless(false) }}
+                  onClick={() => {
+                    setOracleless(false)
+                  }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     !oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -934,7 +1070,10 @@ export function WizardPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setOracleless(true); setSpendingLimitUSD('') }}
+                  onClick={() => {
+                    setOracleless(true)
+                    setSpendingLimitUSD('')
+                  }}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
@@ -1063,10 +1202,15 @@ export function WizardPage() {
                     </button>
                   )
                   return isComingSoon ? (
-                    <Tooltip key={protocol.id} content="Coming soon">
+                    <Tooltip
+                      key={protocol.id}
+                      content="Coming soon"
+                    >
                       {card}
                     </Tooltip>
-                  ) : card
+                  ) : (
+                    card
+                  )
                 })}
               </div>
               {selectedProtocols.length === 0 && (
@@ -1236,9 +1380,8 @@ export function WizardPage() {
                 </a>
               </div>
               <p className="text-xs text-yellow-400/80 mt-2">
-                Only one Guardian is allowed per Safe. Instead of creating
-                a second one, this wizard will add the new agent to the existing Guardian with the
-                selected preset.
+                Only one Guardian is allowed per Safe. Instead of creating a second one, this wizard
+                will add the new agent to the existing Guardian with the selected preset.
               </p>
               <div className="flex gap-2 mt-3">
                 <Button
@@ -1327,7 +1470,9 @@ export function WizardPage() {
           {(usedExistingVault || (isSuccess && !txReverted && txHash)) && (
             <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
               <p className="text-sm font-medium text-green-400">
-                {usedExistingVault ? 'The agent has been added to the existing Guardian successfully!' : 'Guardian deployed successfully!'}
+                {usedExistingVault
+                  ? 'The agent has been added to the existing Guardian successfully!'
+                  : 'Guardian deployed successfully!'}
               </p>
 
               <div>
@@ -1369,11 +1514,65 @@ export function WizardPage() {
                 </div>
               )}
 
+              {!usedExistingVault &&
+                deployedModule &&
+                deployedModule !== 'unknown' &&
+                (isModuleEnabledOnSafe ? (
+                  <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-300">
+                    Guardian is enabled on the Safe — the agent is ready to operate.
+                    {enableModuleTxHash && (
+                      <a
+                        href={`${getExplorerBase(chainId)}/tx/${enableModuleTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-1 underline hover:text-green-200"
+                      >
+                        View tx
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
+                    <p className="text-xs font-medium text-yellow-300">
+                      Activate the Guardian on your Safe
+                    </p>
+                    <p className="text-xs text-yellow-300/80">
+                      One Safe transaction calls <code className="font-mono">enableModule</code>.
+                      The signer must be a Safe owner.
+                    </p>
+                    {!isConnectedSafeOwner && (
+                      <p className="text-xs text-red-400">
+                        Connected wallet is not a Safe owner — switch to a signer of{' '}
+                        {safeAddress.slice(0, 6)}…{safeAddress.slice(-4)} to continue.
+                      </p>
+                    )}
+                    {enableModuleError && (
+                      <p className="text-xs text-red-400 break-words">{enableModuleError}</p>
+                    )}
+                    <Button
+                      onClick={handleEnableModule}
+                      disabled={isEnablingModule || !isConnectedSafeOwner}
+                      className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+                    >
+                      {isEnablingModule ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Enabling…
+                        </>
+                      ) : (
+                        'Enable Guardian on Safe'
+                      )}
+                    </Button>
+                  </div>
+                ))}
+
               <div className="pt-1">
                 <p className="text-xs text-green-400/70 mb-2">
                   {usedExistingVault
                     ? 'The new agent is now configured on the existing Guardian.'
-                    : 'Next: enable this Guardian in your Safe to activate the agent.'}
+                    : isModuleEnabledOnSafe
+                      ? 'You can now go to the Dashboard to manage the Guardian.'
+                      : 'Activate the Guardian above, then proceed to the Dashboard.'}
                 </p>
                 <Button
                   variant="outline"
@@ -1395,22 +1594,27 @@ export function WizardPage() {
             </Button>
             <Button
               onClick={handleDeploy}
-              disabled={isDeploying || isConfiguringExistingVault || usedExistingVault || (isSuccess && !txReverted && !usedExistingVault)}
+              disabled={
+                isDeploying ||
+                isConfiguringExistingVault ||
+                usedExistingVault ||
+                (isSuccess && !txReverted && !usedExistingVault)
+              }
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
               {isConfiguringExistingVault
                 ? 'Configuring Existing Guardian...'
                 : isWriting
-                ? 'Confirm in Wallet...'
-                : isConfirming && !txFailed
-                  ? 'Deploying...'
-                  : usedExistingVault || (isSuccess && !txReverted)
-                    ? 'Deployed!'
-                    : txFailed
-                      ? 'Retry Deploy'
-                      : showExistingModuleWarning
-                        ? 'Add Agent To Existing Guardian'
-                        : 'Deploy Guardian'}
+                  ? 'Confirm in Wallet...'
+                  : isConfirming && !txFailed
+                    ? 'Deploying...'
+                    : usedExistingVault || (isSuccess && !txReverted)
+                      ? 'Deployed!'
+                      : txFailed
+                        ? 'Retry Deploy'
+                        : showExistingModuleWarning
+                          ? 'Add Agent To Existing Guardian'
+                          : 'Deploy Guardian'}
             </Button>
           </div>
         </div>
@@ -1428,7 +1632,8 @@ export function WizardPage() {
           <DialogClose onClose={() => setIsExistingVaultFlowModalOpen(false)} />
           <DialogHeader>
             <DialogTitle>
-              Approve {expectedExistingVaultWalletApprovals} transaction{expectedExistingVaultWalletApprovals === 1 ? '' : 's'}
+              Approve {expectedExistingVaultWalletApprovals} transaction
+              {expectedExistingVaultWalletApprovals === 1 ? '' : 's'}
             </DialogTitle>
             <DialogDescription>
               {isExistingVaultDirectOwnerFlow
@@ -1437,7 +1642,7 @@ export function WizardPage() {
             </DialogDescription>
           </DialogHeader>
 
-<DialogFooter>
+          <DialogFooter>
             <Button
               variant="ghost"
               disabled={isConfiguringExistingVault}

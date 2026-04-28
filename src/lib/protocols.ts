@@ -84,12 +84,6 @@ const BASE_PROTOCOLS: Protocol[] = [
         address: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
         description: 'Core lending and borrowing market',
       },
-      {
-        id: 'morpho-bundler3',
-        name: 'Bundler3',
-        address: '0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245',
-        description: 'Morpho Blue bundler for batched market actions',
-      },
     ],
   },
   {
@@ -169,12 +163,6 @@ const BASE_SEPOLIA_PROTOCOLS: Protocol[] = [
         name: 'Morpho Blue',
         address: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
         description: 'Core lending and borrowing market',
-      },
-      {
-        id: 'morpho-bundler3',
-        name: 'Bundler3',
-        address: '0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245',
-        description: 'Morpho Blue bundler for batched market actions',
       },
     ],
   },
