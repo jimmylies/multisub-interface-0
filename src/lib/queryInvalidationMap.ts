@@ -34,7 +34,10 @@ export const INVALIDATION_MAP: Record<
   },
   [TRANSACTION_TYPES.SET_SUB_ACCOUNT_LIMITS]: {
     reactQueryKeys: [],
-    wagmiFunctions: [WAGMI_READ_FUNCTIONS.GET_SUB_ACCOUNT_LIMITS, WAGMI_READ_FUNCTIONS.GET_SPENDING_ALLOWANCE],
+    wagmiFunctions: [
+      WAGMI_READ_FUNCTIONS.GET_SUB_ACCOUNT_LIMITS,
+      WAGMI_READ_FUNCTIONS.GET_SPENDING_ALLOWANCE,
+    ],
   },
   [TRANSACTION_TYPES.SET_ALLOWED_ADDRESSES]: {
     reactQueryKeys: [QUERY_KEYS.ALLOWED_ADDRESSES],
@@ -47,5 +50,12 @@ export const INVALIDATION_MAP: Record<
   [TRANSACTION_TYPES.UNPAUSE]: {
     reactQueryKeys: [],
     wagmiFunctions: [WAGMI_READ_FUNCTIONS.PAUSED],
+  },
+  // enableModule changes the Safe's module list, which the dashboard banner
+  // reads via Safe.isModuleEnabled. The banner already uses its own refetch()
+  // on success, so nothing extra needs invalidating here.
+  [TRANSACTION_TYPES.ENABLE_MODULE]: {
+    reactQueryKeys: [],
+    wagmiFunctions: [],
   },
 }

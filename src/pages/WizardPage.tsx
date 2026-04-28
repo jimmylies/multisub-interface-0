@@ -25,7 +25,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
-import { getExplorerBase, selectedChain } from '@/lib/chains'
+import { getExplorerBase, selectedChain, selectedNetworkName } from '@/lib/chains'
+import { composeBindings, getSupportedProtocolIds } from '@/lib/protocolBindings'
 import {
   AGENT_VAULT_FACTORY_ABI,
   GUARDIAN_ABI as GUARDIAN_ABI_CONST,
@@ -34,7 +35,7 @@ import {
   SAFE_ABI,
 } from '@/lib/contracts'
 const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
-import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
+import { PROTOCOLS } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
 import { Tooltip } from '@/components/ui/tooltip'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
@@ -113,13 +114,10 @@ function getPresetProtocolLabels(
     return [...fallbackLabels]
   }
 
-  const matchingProtocols = PROTOCOLS.filter(protocol => {
-    const protocolAddresses = new Set(
-      getProtocolContractAddresses(protocol.id).map(addr => addr.toLowerCase())
-    )
-
-    return presetConfig.allowedProtocols.some(addr => protocolAddresses.has(addr.toLowerCase()))
-  }).map(protocol => protocol.name)
+  const presetIds = new Set(presetConfig.protocolIds)
+  const matchingProtocols = PROTOCOLS.filter(protocol => presetIds.has(protocol.id)).map(
+    protocol => protocol.name
+  )
 
   return matchingProtocols.length > 0 ? matchingProtocols : [...fallbackLabels]
 }
@@ -127,6 +125,9 @@ function getPresetProtocolLabels(
 // Fixed deployment config — set via environment variables
 const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefined
+// Protocol ids with parser+selector bindings on the active network.
+// Anything not in here is shown as "coming soon" in the Custom picker.
+const supportedProtocolIds = getSupportedProtocolIds(selectedNetworkName)
 // Major tokens on Base Sepolia with Chainlink price feeds
 const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
   // WETH → ETH/USD
@@ -210,96 +211,30 @@ const PRESET_ROLE_IDS: Record<string, number> = {
   'payment-agent': ROLES.DEFI_TRANSFER_ROLE,
 }
 
-const PRESET_CONFIG: Record<
-  string,
-  {
-    roleId: number
-    maxSpendingBps: number
-    allowedProtocols: Address[]
-    parserRegistrations: Array<{ protocol: Address; parser: Address }>
-    selectorRegistrations: Array<{ selector: `0x${string}`; opType: number }>
-  }
-> = {
+// Named-preset metadata: which protocols + role + default limit. Parsers
+// and selectors are derived at deploy time via composeBindings, so adding
+// a new protocol to a preset is a one-line change here.
+interface NamedPresetConfig {
+  roleId: number
+  maxSpendingBps: number
+  protocolIds: readonly string[]
+}
+
+const PRESET_CONFIG: Record<string, NamedPresetConfig> = {
   'defi-trader': {
     roleId: ROLES.DEFI_EXECUTE_ROLE,
     maxSpendingBps: 500,
-    allowedProtocols: [
-      '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
-      '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
-      '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
-      '0x492E6456D9528771018DeB9E87ef7750EF184104',
-    ],
-    parserRegistrations: [
-      {
-        protocol: '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
-        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
-      },
-      {
-        protocol: '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
-        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
-      },
-      {
-        protocol: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
-        parser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
-      },
-      {
-        protocol: '0x492E6456D9528771018DeB9E87ef7750EF184104',
-        parser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
-      },
-    ],
-    selectorRegistrations: [
-      { selector: '0x095ea7b3', opType: 5 },
-      { selector: '0x617ba037', opType: 2 },
-      { selector: '0x69328dec', opType: 3 },
-      { selector: '0xa415bcad', opType: 3 },
-      { selector: '0x573ade81', opType: 6 },
-      { selector: '0x236300dc', opType: 4 },
-      { selector: '0xbb492bf5', opType: 4 },
-      { selector: '0x04e45aaf', opType: 1 },
-      { selector: '0xb858183f', opType: 1 },
-      { selector: '0x5023b4df', opType: 1 },
-      { selector: '0x3593564c', opType: 1 },
-    ],
+    protocolIds: ['aave', 'uniswap'],
   },
   'yield-farmer': {
     roleId: ROLES.DEFI_EXECUTE_ROLE,
     maxSpendingBps: 1000,
-    allowedProtocols: [
-      '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
-      '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
-      '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
-    ],
-    parserRegistrations: [
-      {
-        protocol: '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27',
-        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
-      },
-      {
-        protocol: '0x71B448405c803A3982aBa448133133D2DEAFBE5F',
-        parser: '0x36683D4a7A8561911b0c00138D943b0CF61a437C',
-      },
-    ],
-    selectorRegistrations: [
-      { selector: '0x095ea7b3', opType: 5 },
-      { selector: '0x617ba037', opType: 2 },
-      { selector: '0x69328dec', opType: 3 },
-      { selector: '0xa415bcad', opType: 3 },
-      { selector: '0x573ade81', opType: 6 },
-      { selector: '0x236300dc', opType: 4 },
-      { selector: '0xbb492bf5', opType: 4 },
-      { selector: '0xa99aad89', opType: 2 },
-      { selector: '0x5c2bea49', opType: 3 },
-      { selector: '0x20b76e81', opType: 6 },
-      { selector: '0x238d6579', opType: 2 },
-      { selector: '0x8720316d', opType: 3 },
-    ],
+    protocolIds: ['aave', 'morpho'],
   },
   'payment-agent': {
     roleId: ROLES.DEFI_TRANSFER_ROLE,
     maxSpendingBps: 100,
-    allowedProtocols: [],
-    parserRegistrations: [],
-    selectorRegistrations: [],
+    protocolIds: [],
   },
 }
 
@@ -469,9 +404,12 @@ export function WizardPage() {
       const result = await proposeTransaction(
         {
           to: safeAddress as Address,
-          data: encodeContractCall(safeAddress as Address, SAFE_ABI as any[], 'enableModule', [
-            moduleToCheck,
-          ]),
+          data: encodeContractCall(
+            safeAddress as Address,
+            SAFE_ABI as unknown as any[],
+            'enableModule',
+            [moduleToCheck]
+          ),
         },
         {
           transactionType: TRANSACTION_TYPES.ENABLE_MODULE,
@@ -598,23 +536,94 @@ export function WizardPage() {
         }
       )
 
-      const allowedProtocols = selectedProtocols.flatMap(
-        id => getProtocolContractAddresses(id) as Address[]
+      // Custom path: derive parsers + selectors + protocol whitelist from
+      // the user's protocol selection (same composeBindings used at deploy).
+      // This makes Custom usable post-deploy too, not just at fresh deploy.
+      const composed = composeBindings(selectedNetworkName, selectedProtocols)
+
+      // Register any missing parsers
+      const parserStatuses = await Promise.all(
+        composed.parserProtocols.map(async (protocol, i) => {
+          const currentParser = await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: GUARDIAN_ABI,
+            functionName: 'protocolParsers',
+            args: [protocol],
+          })
+          return {
+            protocol,
+            parser: composed.parserAddresses[i],
+            needsRegistration:
+              (currentParser as string).toLowerCase() !== composed.parserAddresses[i].toLowerCase(),
+          }
+        })
       )
-      if (allowedProtocols.length > 0) {
+      parserStatuses
+        .filter(p => p.needsRegistration)
+        .forEach(({ protocol, parser }) => {
+          addTransaction(
+            {
+              to: existingModuleAddress,
+              data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'registerParser', [
+                protocol,
+                parser,
+              ]),
+            },
+            {
+              title: 'Register protocol parser',
+              description: `Lets the vault validate interactions with ${protocol.slice(0, 6)}…${protocol.slice(-4)}.`,
+            }
+          )
+        })
+
+      // Register any missing selectors
+      const selectorStatuses = await Promise.all(
+        composed.selectors.map(async (selector, i) => {
+          const currentOpType = await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: GUARDIAN_ABI,
+            functionName: 'selectorType',
+            args: [selector],
+          })
+          return {
+            selector,
+            opType: composed.selectorTypes[i],
+            needsRegistration: Number(currentOpType) !== composed.selectorTypes[i],
+          }
+        })
+      )
+      selectorStatuses
+        .filter(s => s.needsRegistration)
+        .forEach(({ selector, opType }) => {
+          addTransaction(
+            {
+              to: existingModuleAddress,
+              data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'registerSelector', [
+                selector,
+                opType,
+              ]),
+            },
+            {
+              title: 'Register operation selector',
+              description: `Maps selector ${selector} so the agent can call it.`,
+            }
+          )
+        })
+
+      if (composed.allowedProtocols.length > 0) {
         addTransaction(
           {
             to: existingModuleAddress,
             data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setAllowedAddresses', [
               agentAddress as Address,
-              allowedProtocols,
+              composed.allowedProtocols,
               true,
             ]),
           },
           {
             title: 'Whitelist allowed protocols',
             description:
-              'Restricts this agent to the protocol addresses you selected for the custom setup.',
+              'Restricts this agent to the protocol addresses derived from your selection.',
           }
         )
       }
@@ -628,19 +637,24 @@ export function WizardPage() {
         return
       }
 
+      // Compose the same parser/selector/whitelist arrays the factory would
+      // have written at fresh deploy. Then diff vs on-chain state and only
+      // queue the missing pieces.
+      const composed = composeBindings(selectedNetworkName, presetConfig.protocolIds)
+
       const parserStatuses = await Promise.all(
-        presetConfig.parserRegistrations.map(async ({ protocol, parser }) => {
+        composed.parserProtocols.map(async (protocol, i) => {
           const currentParser = await publicClient.readContract({
             address: existingModuleAddress,
             abi: GUARDIAN_ABI,
             functionName: 'protocolParsers',
             args: [protocol],
           })
-
           return {
             protocol,
-            parser,
-            needsRegistration: (currentParser as string).toLowerCase() !== parser.toLowerCase(),
+            parser: composed.parserAddresses[i],
+            needsRegistration:
+              (currentParser as string).toLowerCase() !== composed.parserAddresses[i].toLowerCase(),
           }
         })
       )
@@ -664,7 +678,7 @@ export function WizardPage() {
         })
 
       const selectorStatuses = await Promise.all(
-        presetConfig.selectorRegistrations.map(async ({ selector, opType }) => {
+        composed.selectors.map(async (selector, i) => {
           const currentOpType = await publicClient.readContract({
             address: existingModuleAddress,
             abi: GUARDIAN_ABI,
@@ -674,8 +688,8 @@ export function WizardPage() {
 
           return {
             selector,
-            opType,
-            needsRegistration: Number(currentOpType) !== opType,
+            opType: composed.selectorTypes[i],
+            needsRegistration: Number(currentOpType) !== composed.selectorTypes[i],
           }
         })
       )
@@ -737,13 +751,13 @@ export function WizardPage() {
         }
       )
 
-      if (presetConfig.allowedProtocols.length > 0) {
+      if (composed.allowedProtocols.length > 0) {
         addTransaction(
           {
             to: existingModuleAddress,
             data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setAllowedAddresses', [
               agentAddress as Address,
-              presetConfig.allowedProtocols,
+              composed.allowedProtocols,
               true,
             ]),
           },
@@ -815,16 +829,19 @@ export function WizardPage() {
         : BigInt(Math.round(Number(spendingLimitBps || '0') * 100))
       const maxSpendingUSD = oracleless ? parseUnits(spendingLimitUSD || '0', 18) : 0n
 
-      // For named presets, pull protocols/role from PRESET_CONFIG
+      // Compose parsers + selectors + protocol whitelist from PROTOCOL_BINDINGS.
+      // Named presets supply their own protocolIds; Custom uses what the user
+      // selected. Either way Custom now ships a working vault (with parsers
+      // and selectors) instead of a half-configured one.
       const presetCfg = presetId !== undefined ? PRESET_CONFIG[preset.id] : undefined
-      const roleId = presetCfg ? presetCfg.roleId : 1
-      const allowedProtocols = presetCfg
-        ? presetCfg.allowedProtocols
-        : selectedProtocols.flatMap(id => getProtocolContractAddresses(id) as Address[])
-      const parserProtocols = presetCfg ? presetCfg.parserRegistrations.map(r => r.protocol) : []
-      const parserAddresses = presetCfg ? presetCfg.parserRegistrations.map(r => r.parser) : []
-      const selectors = presetCfg ? presetCfg.selectorRegistrations.map(r => r.selector) : []
-      const selectorTypes = presetCfg ? presetCfg.selectorRegistrations.map(r => r.opType) : []
+      const roleId = presetCfg ? presetCfg.roleId : ROLES.DEFI_EXECUTE_ROLE
+      const protocolIds = presetCfg ? presetCfg.protocolIds : selectedProtocols
+      const composed = composeBindings(selectedNetworkName, protocolIds)
+      const allowedProtocols = composed.allowedProtocols
+      const parserProtocols = composed.parserProtocols
+      const parserAddresses = composed.parserAddresses
+      const selectors = composed.selectors
+      const selectorTypes = composed.selectorTypes
 
       {
         writeContract(
@@ -1149,7 +1166,10 @@ export function WizardPage() {
               </div>
               <div className="space-y-2">
                 {PROTOCOLS.map(protocol => {
-                  const isComingSoon = protocol.id === 'merkl'
+                  // A protocol is selectable only if it has parser+selector
+                  // bindings on the active network. Anything else would deploy
+                  // a half-configured vault that can't actually call it.
+                  const isComingSoon = !supportedProtocolIds.includes(protocol.id)
                   const isSelected = !isComingSoon && selectedProtocols.includes(protocol.id)
                   const card = (
                     <button
@@ -1217,7 +1237,7 @@ export function WizardPage() {
                 <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                   <p className="text-xs text-yellow-400">
                     No protocols selected. The agent will not be able to interact with any DeFi
-                    protocol. You can add protocols after deployment via addAllowedProtocol().
+                    protocol. You can add more protocols later from the dashboard.
                   </p>
                 </div>
               )}
@@ -1338,19 +1358,6 @@ export function WizardPage() {
               </span>
             </div>
           </div>
-
-          {selectedPreset === 'custom' && (
-            <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-              <p className="text-sm font-medium text-yellow-400">
-                Custom preset: additional setup required
-              </p>
-              <p className="text-xs text-yellow-400/80 mt-1">
-                The custom preset deploys without calldata parsers or function selectors. After
-                deployment, you may need to configure these via the Guardian owner functions
-                (addParser, addSelector) to enable specific operations.
-              </p>
-            </div>
-          )}
 
           {showExistingModuleWarning && existingModuleAddress && (
             <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">

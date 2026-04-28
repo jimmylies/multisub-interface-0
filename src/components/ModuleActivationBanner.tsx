@@ -51,7 +51,7 @@ export function ModuleActivationBanner() {
       const result = await proposeTransaction(
         {
           to: safe,
-          data: encodeContractCall(safe, SAFE_ABI as any[], 'enableModule', [guardian]),
+          data: encodeContractCall(safe, SAFE_ABI as unknown as any[], 'enableModule', [guardian]),
         },
         {
           transactionType: TRANSACTION_TYPES.ENABLE_MODULE,
@@ -98,7 +98,7 @@ export function ModuleActivationBanner() {
             </p>
           )}
           {enableError && <p className="text-xs text-red-400 break-words">{enableError}</p>}
-          {enableTxHash && (
+          {enableTxHash && chainId !== undefined && (
             <p className="text-xs text-yellow-200/80">
               Activation transaction sent.{' '}
               <a

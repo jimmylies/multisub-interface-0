@@ -62,6 +62,7 @@ if (!NETWORK_MAP[networkName]) {
 }
 
 export const selectedChain = NETWORK_MAP[networkName]
+export const selectedNetworkName: NetworkName = networkName
 
 function getRpcUrl(): string | undefined {
   return RPC_MAP[networkName]
