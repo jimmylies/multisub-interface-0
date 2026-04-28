@@ -419,7 +419,12 @@ export function WizardPage() {
       )
       if (result.success) {
         setEnableModuleTxHash(result.transactionHash as `0x${string}`)
-        await refetchModuleEnabled()
+        // Poll until the RPC reflects the module activation (up to ~20s)
+        for (let i = 0; i < 5; i++) {
+          await new Promise(res => setTimeout(res, 3000))
+          const { data: enabled } = await refetchModuleEnabled()
+          if (enabled) break
+        }
       } else if ('cancelled' in result && result.cancelled) {
         return
       } else {
