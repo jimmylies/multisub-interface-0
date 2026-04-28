@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { usePublicClient } from 'wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -11,6 +12,8 @@ import { PROTOCOLS, Protocol, ProtocolContract, getContractAddresses } from '@/l
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { useAllowedAddresses } from '@/hooks/useSafe'
+import { composeBindings } from '@/lib/protocolBindings'
+import { selectedNetworkName } from '@/lib/chains'
 import {
   useSubAccountFullState,
   mergeProtocolsWithChanges,
@@ -32,6 +35,7 @@ interface ProtocolPermissionsProps {
 export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsProps) {
   const { addresses } = useContractAddresses()
   const queryClient = useQueryClient()
+  const publicClient = usePublicClient()
   const [selectedProtocols, setSelectedProtocols] = useState<Map<string, Set<string>>>(new Map())
   const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null)
   const { toast } = useToast()
@@ -275,17 +279,24 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
 
       // Addresses to ADD (selected but not yet allowed)
       const addressesToAdd: `0x${string}`[] = []
+      // Track which protocol IDs are being newly added so we can register
+      // their parsers and selectors (required for the guardian to validate calls)
+      const newlyAddedProtocolIds: string[] = []
       selectedProtocols.forEach((contractIds, protocolId) => {
         const protocol = PROTOCOLS.find(p => p.id === protocolId)
-        protocol?.contracts.forEach(c => {
+        if (!protocol) return
+        let hasNew = false
+        protocol.contracts.forEach(c => {
           if (contractIds.has(c.id)) {
             getContractAddresses(c).forEach(addr => {
               if (!allowedAddresses.has(addr)) {
                 addressesToAdd.push(addr)
+                hasNew = true
               }
             })
           }
         })
+        if (hasNew) newlyAddedProtocolIds.push(protocolId)
       })
 
       // Addresses to REMOVE (currently allowed but deselected)
@@ -296,12 +307,66 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         }
       })
 
+      // Register parsers + selectors for newly added protocols.
+      // Without these the guardian module cannot parse or classify calls,
+      // so the agent's transactions would revert even though the addresses
+      // are whitelisted.
+      // addresses.guardian is guaranteed non-null here — checked at the top
+      // of handleSavePermissions before showPreview was called.
+      const guardian = addresses.guardian!
+
+      if (newlyAddedProtocolIds.length > 0 && publicClient) {
+        const composed = composeBindings(selectedNetworkName, newlyAddedProtocolIds)
+
+        // Parsers: check on-chain, register only what's missing
+        for (let i = 0; i < composed.parserProtocols.length; i++) {
+          const protocol = composed.parserProtocols[i]
+          const parser = composed.parserAddresses[i]
+          const currentParser = await publicClient.readContract({
+            address: guardian,
+            abi: GUARDIAN_ABI,
+            functionName: 'protocolParsers',
+            args: [protocol],
+          })
+          if ((currentParser as string).toLowerCase() !== parser.toLowerCase()) {
+            transactions.push({
+              to: guardian,
+              data: encodeContractCall(guardian, GUARDIAN_ABI as unknown as any[], 'registerParser', [
+                protocol,
+                parser,
+              ]),
+            })
+          }
+        }
+
+        // Selectors: check on-chain, register only what's missing
+        for (let i = 0; i < composed.selectors.length; i++) {
+          const selector = composed.selectors[i]
+          const opType = composed.selectorTypes[i]
+          const currentOpType = await publicClient.readContract({
+            address: guardian,
+            abi: GUARDIAN_ABI,
+            functionName: 'selectorType',
+            args: [selector],
+          })
+          if (Number(currentOpType) !== opType) {
+            transactions.push({
+              to: guardian,
+              data: encodeContractCall(guardian, GUARDIAN_ABI as unknown as any[], 'registerSelector', [
+                selector,
+                opType,
+              ]),
+            })
+          }
+        }
+      }
+
       // Build transaction to ADD addresses
       if (addressesToAdd.length > 0) {
         if (!hasExecuteRole) {
           transactions.push({
-            to: addresses.guardian,
-            data: encodeContractCall(addresses.guardian, GUARDIAN_ABI, 'grantRole', [
+            to: guardian,
+            data: encodeContractCall(guardian, GUARDIAN_ABI as unknown as any[], 'grantRole', [
               subAccountAddress,
               ROLES.DEFI_EXECUTE_ROLE,
             ]),
@@ -309,9 +374,9 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         }
 
         transactions.push({
-          to: addresses.guardian,
+          to: guardian,
           data: encodeContractCall(
-            addresses.guardian,
+            guardian,
             GUARDIAN_ABI as unknown as any[],
             'setAllowedAddresses',
             [subAccountAddress, addressesToAdd, true]
@@ -322,9 +387,9 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       // Build transaction to REMOVE addresses
       if (addressesToRemove.length > 0) {
         transactions.push({
-          to: addresses.guardian,
+          to: guardian,
           data: encodeContractCall(
-            addresses.guardian,
+            guardian,
             GUARDIAN_ABI as unknown as any[],
             'setAllowedAddresses',
             [subAccountAddress, addressesToRemove, false]
