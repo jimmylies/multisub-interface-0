@@ -789,14 +789,18 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
   const remainingBySpent =
     maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
-  // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant)
-  const effectiveRemainingAllowance = isAccountOracleless
+  // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant).
+  // Also skip oracle's value when no spending has occurred yet (windowStart === 0 &&
+  // cumulativeSpent === 0) — the oracle may hold a stale allowance from a prior config.
+  const noSpendingYet = (windowStart === undefined || windowStart === 0n) && effectiveSpent === 0n
+  const effectiveRemainingAllowance = isAccountOracleless || noSpendingYet
     ? remainingBySpent
     : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
       ? spendingAllowance
       : remainingBySpent
   const isOracleAllowanceLagging =
     !isAccountOracleless &&
+    !noSpendingYet &&
     spendingAllowance !== undefined &&
     spendingAllowance < remainingBySpent &&
     maxAllowance !== null &&
