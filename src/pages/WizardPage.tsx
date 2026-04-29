@@ -350,8 +350,14 @@ export function WizardPage() {
 
   // Module activation check — re-runs after the activation tx is mined
   const moduleToCheck =
-    deployedModule && deployedModule !== 'unknown' ? (deployedModule as Address) : undefined
-  const { data: isModuleEnabledOnSafe, refetch: refetchModuleEnabled } = useReadContract({
+    deployedModule && deployedModule !== 'unknown'
+      ? (deployedModule as Address)
+      : (existingModuleAddress ?? undefined)
+  const {
+    data: isModuleEnabledOnSafe,
+    isLoading: isModuleEnabledLoading,
+    refetch: refetchModuleEnabled,
+  } = useReadContract({
     address: hasValidSafeAddress ? (safeAddress as Address) : undefined,
     abi: SAFE_ABI,
     functionName: 'isModuleEnabled',
@@ -364,6 +370,8 @@ export function WizardPage() {
     deployedModule !== 'unknown' &&
     existingModuleAddress?.toLowerCase() === deployedModule?.toLowerCase()
   const showExistingModuleWarning = Boolean(existingModuleAddress) && !justDeployedRegisteredModule
+  const existingModuleNeedsActivation = showExistingModuleWarning && isModuleEnabledOnSafe === false
+  const existingModuleIsActive = showExistingModuleWarning && isModuleEnabledOnSafe === true
   const isExistingVaultDirectOwnerFlow =
     Boolean(connectedAddress) &&
     Boolean(safeAddress) &&
@@ -855,6 +863,18 @@ export function WizardPage() {
 
     // Existing vault flow doesn't need factory or oracle — handle it first
     if (showExistingModuleWarning) {
+      if (existingModuleNeedsActivation) {
+        await handleEnableModule()
+        return
+      }
+
+      if (!existingModuleIsActive) {
+        setDeployError(
+          'Checking whether the Guardian is enabled on this Safe. Try again in a moment.'
+        )
+        return
+      }
+
       try {
         await handleConfigureExistingVault()
       } catch (error) {
@@ -938,7 +958,7 @@ export function WizardPage() {
         })
         if (registeredModule && registeredModule !== zeroAddress) {
           setDeployError(
-            `This Safe already has a Guardian registered in the module registry (${registeredModule}). Use "Open In Dashboard" above to manage it instead.`
+            `This Safe already has a Guardian in the module registry (${registeredModule}). If it was just deployed, enable it on the Safe before deploying or configuring another agent.`
           )
           return
         }
@@ -1486,7 +1506,11 @@ export function WizardPage() {
           {showExistingModuleWarning && existingModuleAddress && (
             <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <p className="text-sm font-medium text-yellow-400">
-                This Safe already has a registered Guardian
+                {isModuleEnabledLoading
+                  ? 'Checking Guardian activation status'
+                  : existingModuleNeedsActivation
+                    ? 'Guardian deployed but not enabled on this Safe'
+                    : 'This Safe already has an active Guardian'}
               </p>
               <div className="flex items-center gap-1.5 mt-2">
                 <span className="text-xs text-yellow-400/80 font-mono">
@@ -1504,19 +1528,61 @@ export function WizardPage() {
                 </a>
               </div>
               <p className="text-xs text-yellow-400/80 mt-2">
-                Only one Guardian is allowed per Safe. Instead of creating a second one, this wizard
-                will add the new agent to the existing Guardian with the selected preset.
+                {existingModuleNeedsActivation
+                  ? 'The Guardian was created and registered by the first transaction. One Safe transaction still needs to call enableModule before the agent can operate.'
+                  : existingModuleIsActive
+                    ? 'Only one Guardian is allowed per Safe. Instead of creating a second one, this wizard will add the new agent to the existing Guardian with the selected preset.'
+                    : 'The Guardian is registered for this Safe. The wizard is checking whether it is enabled before choosing the next action.'}
               </p>
+              {existingModuleNeedsActivation && !isConnectedSafeOwner && (
+                <p className="text-xs text-red-400 mt-2">
+                  Connected wallet is not a Safe owner — switch to a signer of{' '}
+                  {safeAddress.slice(0, 6)}…{safeAddress.slice(-4)} to activate the Guardian.
+                </p>
+              )}
+              {existingModuleNeedsActivation && enableModuleError && (
+                <p className="text-xs text-red-400 mt-2 break-words">{enableModuleError}</p>
+              )}
+              {existingModuleNeedsActivation && enableModuleTxHash && (
+                <p className="text-xs text-yellow-400/80 mt-2">
+                  Activation transaction sent.{' '}
+                  <a
+                    href={`${getExplorerBase(chainId)}/tx/${enableModuleTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    View tx
+                  </a>
+                </p>
+              )}
               <div className="flex gap-2 mt-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setGuardian(existingModuleAddress as `0x${string}`)
-                    navigate(`${ROUTES.DASHBOARD}?guardian=${existingModuleAddress}`)
-                  }}
-                >
-                  Open In Dashboard
-                </Button>
+                {existingModuleNeedsActivation ? (
+                  <Button
+                    onClick={handleEnableModule}
+                    disabled={isEnablingModule || !isConnectedSafeOwner}
+                    className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+                  >
+                    {isEnablingModule ? (
+                      <span className="inline-flex items-center">
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Enabling…
+                      </span>
+                    ) : (
+                      'Enable Guardian on Safe'
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setGuardian(existingModuleAddress as `0x${string}`)
+                      navigate(`${ROUTES.DASHBOARD}?guardian=${existingModuleAddress}`)
+                    }}
+                  >
+                    Open In Dashboard
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1754,26 +1820,31 @@ export function WizardPage() {
                 isSimulating ||
                 isDeploying ||
                 isConfiguringExistingVault ||
+                isEnablingModule ||
                 usedExistingVault ||
                 (isSuccess && !txReverted && !usedExistingVault)
               }
               className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
             >
-              {isConfiguringExistingVault
-                ? 'Configuring Existing Guardian...'
-                : isSimulating
-                  ? 'Validating...'
-                  : isWriting
-                    ? 'Confirm in Wallet...'
-                    : isConfirming && !txFailed
-                      ? 'Deploying...'
-                      : usedExistingVault || (isSuccess && !txReverted)
-                        ? 'Deployed!'
-                        : txFailed
-                          ? 'Retry Deploy'
-                          : showExistingModuleWarning
-                            ? 'Add Agent To Existing Guardian'
-                            : 'Deploy Guardian'}
+              {isEnablingModule
+                ? 'Enabling Guardian...'
+                : isConfiguringExistingVault
+                  ? 'Configuring Existing Guardian...'
+                  : isSimulating
+                    ? 'Validating...'
+                    : isWriting
+                      ? 'Confirm in Wallet...'
+                      : isConfirming && !txFailed
+                        ? 'Deploying...'
+                        : usedExistingVault || (isSuccess && !txReverted)
+                          ? 'Deployed!'
+                          : txFailed
+                            ? 'Retry Deploy'
+                            : existingModuleNeedsActivation
+                              ? 'Enable Guardian on Safe'
+                              : showExistingModuleWarning
+                                ? 'Add Agent To Existing Guardian'
+                                : 'Deploy Guardian'}
             </Button>
           </div>
         </div>
