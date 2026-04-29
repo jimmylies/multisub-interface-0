@@ -91,7 +91,9 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
   uniswap: {
     protocols: [
       '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4', // SwapRouter02 (V3)
+      '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2', // NonfungiblePositionManager (V3)
       '0x492E6456D9528771018DeB9E87ef7750EF184104', // Universal Router
+      '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80', // PositionManager (V4)
     ],
     parsers: [
       {
@@ -107,7 +109,12 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
       { selector: '0x04e45aaf', opType: OP_SWAP }, // exactInputSingle (V3)
       { selector: '0xb858183f', opType: OP_SWAP }, // exactInput (V3)
       { selector: '0x5023b4df', opType: OP_SWAP }, // exactOutputSingle (V3)
-      { selector: '0x3593564c', opType: OP_SWAP }, // execute (Universal)
+      { selector: '0x3593564c', opType: OP_SWAP }, // execute (Universal Router)
+      { selector: '0x88316456', opType: OP_DEPOSIT }, // mint (NonfungiblePositionManager V3)
+      { selector: '0x219f5d17', opType: OP_DEPOSIT }, // increaseLiquidity (V3)
+      { selector: '0x0c49ccbe', opType: OP_WITHDRAW }, // decreaseLiquidity (V3)
+      { selector: '0xfc6f7865', opType: OP_CLAIM }, // collect (V3)
+      { selector: '0xa0ca4234', opType: OP_DEPOSIT }, // modifyLiquidities (PositionManager V4)
     ],
   },
   // merkl: Distributor parser/selectors not deployed — intentionally absent

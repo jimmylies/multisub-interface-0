@@ -27,7 +27,9 @@ const MORPHO_BLUE_BASE_SEPOLIA = '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb'
 
 const UNI_BASE_SEPOLIA = {
   swapRouter: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
+  positionManagerV3: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2',
   universal: '0x492E6456D9528771018DeB9E87ef7750EF184104',
+  positionManagerV4: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
   swapRouterParser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
   universalParser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
 } as const
@@ -58,7 +60,9 @@ describe('composeBindings (base-sepolia)', () => {
       AAVE_BASE_SEPOLIA.pool,
       AAVE_BASE_SEPOLIA.rewards,
       UNI_BASE_SEPOLIA.swapRouter,
+      UNI_BASE_SEPOLIA.positionManagerV3,
       UNI_BASE_SEPOLIA.universal,
+      UNI_BASE_SEPOLIA.positionManagerV4,
     ])
 
     expect(result.parserProtocols).toEqual([
@@ -86,7 +90,12 @@ describe('composeBindings (base-sepolia)', () => {
       '0x04e45aaf', // uni exactInputSingle
       '0xb858183f', // uni exactInput
       '0x5023b4df', // uni exactOutputSingle
-      '0x3593564c', // uni execute
+      '0x3593564c', // uni execute (Universal Router)
+      '0x88316456', // uni mint (NonfungiblePositionManager V3)
+      '0x219f5d17', // uni increaseLiquidity (V3)
+      '0x0c49ccbe', // uni decreaseLiquidity (V3)
+      '0xfc6f7865', // uni collect (V3)
+      '0xa0ca4234', // uni modifyLiquidities (PositionManager V4)
     ])
     expect(result.selectorTypes).toEqual([
       OP_APPROVE,
@@ -100,6 +109,11 @@ describe('composeBindings (base-sepolia)', () => {
       OP_SWAP,
       OP_SWAP,
       OP_SWAP,
+      OP_DEPOSIT,
+      OP_DEPOSIT,
+      OP_WITHDRAW,
+      OP_CLAIM,
+      OP_DEPOSIT,
     ])
   })
 

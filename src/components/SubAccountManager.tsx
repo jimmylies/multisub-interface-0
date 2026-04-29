@@ -811,10 +811,21 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     effectiveSpent > 0n &&
     spendingAllowance !== undefined &&
     effectiveRemainingAllowance < spendingAllowance
+  // When the oracle's spendingAllowance is the binding constraint, derive
+  // percentUsed from it so the bar stays consistent with the "remaining" figure.
+  const effectiveSpentForBar =
+    !isAccountOracleless &&
+    !noSpendingYet &&
+    spendingAllowance !== undefined &&
+    spendingAllowance < remainingBySpent &&
+    maxAllowance !== null
+      ? maxAllowance - spendingAllowance
+      : effectiveSpent
   const percentUsed =
     maxAllowance && maxAllowance > 0n
       ? Number(
-          ((effectiveSpent > maxAllowance ? maxAllowance : effectiveSpent) * 10000n) / maxAllowance
+          ((effectiveSpentForBar > maxAllowance ? maxAllowance : effectiveSpentForBar) * 10000n) /
+            maxAllowance
         ) / 100
       : 0
 
