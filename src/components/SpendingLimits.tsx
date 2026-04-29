@@ -33,7 +33,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   // Get Safe portfolio value from oracle
   const { data: safeValue } = useSafeValue()
 
-  // Read module mode — authoritative when true, since BPS limits would revert
+  // Read module mode - authoritative when true, since BPS limits would revert
   // with OraclelessRequiresUSDMode on an oracleless module. The per-sub-account
   // heuristic still kicks in for USD-mode sub-accounts on oracle modules.
   const { data: isModuleOracleless } = useIsOracleless()
@@ -230,7 +230,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                 <div className="text-center">
                   {isOracleless ? (
                     <p className="font-bold text-primary text-2xl">
-                      ${maxAllowanceUSDDirect !== null ? formatUSD(maxAllowanceUSDDirect) : '—'}
+                      ${maxAllowanceUSDDirect !== null ? formatUSD(maxAllowanceUSDDirect) : '-'}
                     </p>
                   ) : (
                     <>
@@ -390,7 +390,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                   </p>
                 )}
                 {isOracleless ? (
-                  <p>• On-chain cumulative spending tracker — no oracle required</p>
+                  <p>• On-chain cumulative spending tracker - no oracle required</p>
                 ) : (
                   <p>• Oracle tracks real-time spending across all transactions</p>
                 )}

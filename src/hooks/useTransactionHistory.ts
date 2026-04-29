@@ -127,9 +127,7 @@ async function fetchHistoryFromBlockscout(
 
     // Only keep txs sent TO the guardian module
     const moduleTxs = items.filter(
-      (tx: any) =>
-        tx.to?.hash?.toLowerCase() === guardian.toLowerCase() &&
-        tx.status === 'ok'
+      (tx: any) => tx.to?.hash?.toLowerCase() === guardian.toLowerCase() && tx.status === 'ok'
     )
 
     const transactions: Transaction[] = []
@@ -139,9 +137,7 @@ async function fetchHistoryFromBlockscout(
         const timestamp = Math.floor(new Date(tx.timestamp).getTime() / 1000)
         if (timestamp < fromTimestamp) continue
 
-        const logsRes = await fetch(
-          `${blockscoutUrl}/api/v2/transactions/${tx.hash}/logs`
-        )
+        const logsRes = await fetch(`${blockscoutUrl}/api/v2/transactions/${tx.hash}/logs`)
         if (!logsRes.ok) continue
         const logsData = await logsRes.json()
         const logs: any[] = logsData.items || []
@@ -172,9 +168,9 @@ async function fetchHistoryFromBlockscout(
                 target: args.target,
                 opType: Number(args.opType) as OpType,
                 tokensIn: args.tokensIn as string[],
-                amountsIn: (args.amountsIn as bigint[]),
+                amountsIn: args.amountsIn as bigint[],
                 tokensOut: args.tokensOut as string[],
-                amountsOut: (args.amountsOut as bigint[]),
+                amountsOut: args.amountsOut as bigint[],
                 spendingCost: args.spendingCost as bigint,
               })
             } else if (decoded.eventName === 'TransferExecuted') {
@@ -221,7 +217,10 @@ async function fetchTransactionHistoryForSubAccount({
   fromTimestamp: number
 }): Promise<Transaction[]> {
   const transactions = await fetchHistoryFromBlockscout(
-    blockscoutUrl, guardian, subAccount, fromTimestamp
+    blockscoutUrl,
+    guardian,
+    subAccount,
+    fromTimestamp
   )
 
   return applyFilters(
@@ -236,23 +235,15 @@ export function useTransactionHistory(options: UseTransactionHistoryOptions = {}
   const guardian = addresses.guardian
   const blockscoutUrl = chainId ? getBlockscoutApiUrl(chainId) : undefined
 
-  // Don't fall back to connectedAddress when explicitly disabled — avoids
+  // Don't fall back to connectedAddress when explicitly disabled - avoids
   // polluting the query cache with a key that may collide with a multi-account query.
-  const subAccount = options.enabled !== false
-    ? (options.subAccount || connectedAddress)
-    : options.subAccount
+  const subAccount =
+    options.enabled !== false ? options.subAccount || connectedAddress : options.subAccount
   const filter = options.filter || {}
   const enabled = options.enabled !== false && !!subAccount && !!guardian && !!blockscoutUrl
 
   return useQuery({
-    queryKey: [
-      'txHistory',
-      subAccount,
-      guardian,
-      filter.dateRange,
-      filter.type,
-      filter.opType,
-    ],
+    queryKey: ['txHistory', subAccount, guardian, filter.dateRange, filter.type, filter.opType],
     queryFn: async () => {
       if (!subAccount || !guardian || !blockscoutUrl) return []
 
@@ -290,18 +281,12 @@ export function useMultipleTransactionHistories(
   const blockscoutUrl = chainId ? getBlockscoutApiUrl(chainId) : undefined
   const subAccounts = options.subAccounts || []
   const filter = options.filter || {}
-  const enabled = options.enabled !== false && !!guardian && !!blockscoutUrl && subAccounts.length > 0
+  const enabled =
+    options.enabled !== false && !!guardian && !!blockscoutUrl && subAccounts.length > 0
 
   const queries = useQueries({
     queries: subAccounts.map(subAccount => ({
-      queryKey: [
-        'txHistory',
-        subAccount,
-        guardian,
-        filter.dateRange,
-        filter.type,
-        filter.opType,
-      ],
+      queryKey: ['txHistory', subAccount, guardian, filter.dateRange, filter.type, filter.opType],
       queryFn: async () => {
         if (!guardian || !blockscoutUrl) return []
 

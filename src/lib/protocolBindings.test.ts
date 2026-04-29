@@ -11,7 +11,7 @@ import {
   OP_SWAP,
 } from './protocolBindings'
 
-// Snapshot of what PRESET_CONFIG used to ship — kept here so any divergence in
+// Snapshot of what PRESET_CONFIG used to ship - kept here so any divergence in
 // composeBindings output is caught the moment it happens. If you change a
 // binding intentionally, update both this snapshot and the named-preset deploy
 // path together.
@@ -184,13 +184,13 @@ describe('composeBindings (base-sepolia)', () => {
   })
 
   it('dedupes selectors when two protocols share one (idempotent)', () => {
-    // Compose aave twice — should not produce duplicate selectors
+    // Compose aave twice - should not produce duplicate selectors
     const single = composeBindings('base-sepolia', ['aave'])
     const doubled = composeBindings('base-sepolia', ['aave', 'aave'])
     expect(doubled.selectors).toEqual(single.selectors)
     expect(doubled.selectorTypes).toEqual(single.selectorTypes)
     // But protocol/parser arrays still duplicate (different storage keys per
-    // address — `setAllowedAddresses` and `registerParser` are address-keyed,
+    // address - `setAllowedAddresses` and `registerParser` are address-keyed,
     // so duplicates are wasted gas but not wrong).
     expect(doubled.allowedProtocols.length).toBe(single.allowedProtocols.length * 2)
     expect(doubled.parserProtocols.length).toBe(single.parserProtocols.length * 2)
@@ -199,7 +199,7 @@ describe('composeBindings (base-sepolia)', () => {
   it('throws SelectorCollisionError when same selector maps to different opTypes', () => {
     // We can't easily induce this from the production data, so we test by
     // calling composeBindings against a hand-rolled bindings map. Inline
-    // by re-importing — keep this test self-contained.
+    // by re-importing - keep this test self-contained.
     // (If composeBindings ever stops being pure, revisit.)
     const localCompose = (selectors: { selector: `0x${string}`; opType: number }[]) => {
       const seen = new Map<string, number>()
@@ -235,7 +235,7 @@ describe('composeBindings (base-sepolia)', () => {
       allowedProtocols: [],
       parserProtocols: [],
       parserAddresses: [],
-      // Common selectors still added because protocolIds is non-empty —
+      // Common selectors still added because protocolIds is non-empty -
       // see comment in composeBindings. This is harmless: the resulting
       // vault would whitelist nothing so the agent can't call anything.
       selectors: [APPROVE],

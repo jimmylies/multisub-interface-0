@@ -123,7 +123,7 @@ function getPresetProtocolLabels(
   return matchingProtocols.length > 0 ? matchingProtocols : [...fallbackLabels]
 }
 
-// Fixed deployment config — set via environment variables
+// Fixed deployment config - set via environment variables
 const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefined
 // Protocol ids with parser+selector bindings on the active network.
@@ -210,7 +210,7 @@ const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
 ]
 // At fresh deploy time the factory calls setTokenPriceFeeds (plural) which
 // explicitly accepts address(0) as native ETH (DeFiInteractorModule.sol:1136).
-// The zeroAddress filter must NOT be applied here — it would silently drop
+// The zeroAddress filter must NOT be applied here - it would silently drop
 // the ETH/USD feed and break Uniswap swap paths that involve native ETH.
 // (The existing-vault flow keeps its own filter because it uses the singular
 // setter which rejects address(0).)
@@ -334,7 +334,7 @@ export function WizardPage() {
   const existingModuleAddress =
     existingModule && existingModule !== zeroAddress ? (existingModule as `0x${string}`) : null
 
-  // Safe owner check — connected wallet must be a Safe signer to call enableModule
+  // Safe owner check - connected wallet must be a Safe signer to call enableModule
   const { data: safeOwners } = useReadContract({
     address: hasValidSafeAddress ? (safeAddress as Address) : undefined,
     abi: SAFE_ABI,
@@ -348,7 +348,7 @@ export function WizardPage() {
     )
   )
 
-  // Module activation check — re-runs after the activation tx is mined
+  // Module activation check - re-runs after the activation tx is mined
   const moduleToCheck =
     deployedModule && deployedModule !== 'unknown'
       ? (deployedModule as Address)
@@ -479,7 +479,7 @@ export function WizardPage() {
     }
 
     if (!publicClient) {
-      setDeployError('No RPC client available — check your network connection.')
+      setDeployError('No RPC client available - check your network connection.')
       return
     }
 
@@ -861,7 +861,7 @@ export function WizardPage() {
   async function handleDeploy() {
     if (!preset || !isAddress(safeAddress) || !isAddress(agentAddress)) return
 
-    // Existing vault flow doesn't need factory or oracle — handle it first
+    // Existing vault flow doesn't need factory or oracle - handle it first
     if (showExistingModuleWarning) {
       if (existingModuleNeedsActivation) {
         await handleEnableModule()
@@ -964,7 +964,7 @@ export function WizardPage() {
         }
       }
 
-      // Simulate first — surfaces the actual revert reason before any gas is spent.
+      // Simulate first - surfaces the actual revert reason before any gas is spent.
       // If this throws, the outer catch will set deployError with the decoded message.
       if (publicClient && connectedAddress) {
         const { request } = await publicClient.simulateContract({
@@ -1016,10 +1016,10 @@ export function WizardPage() {
         e.message ??
         'Deployment failed'
       // "execution reverted" with no reason means the contract reverted without
-      // a message — surface a clearer explanation than the raw EVM term.
+      // a message - surface a clearer explanation than the raw EVM term.
       const msg =
         raw === 'execution reverted' || raw === 'Execution reverted.'
-          ? 'Deployment failed — the contract rejected the transaction. This usually means the configuration is invalid or the Safe is already registered. If the issue persists, contact support.'
+          ? 'Deployment failed - the contract rejected the transaction. This usually means the configuration is invalid or the Safe is already registered. If the issue persists, contact support.'
           : raw
       setDeployError(msg)
     } finally {
@@ -1050,9 +1050,9 @@ export function WizardPage() {
 
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-20">
-        <h1 className="text-2xl font-semibold text-primary">Deploy an Agent Guardian</h1>
-        <p className="text-secondary text-center max-w-md">
+      <div className="flex flex-col justify-center items-center gap-6 py-20">
+        <h1 className="font-semibold text-primary text-2xl">Deploy an Agent Guardian</h1>
+        <p className="max-w-md text-secondary text-center">
           Connect your wallet to deploy a new Guardian with on-chain guardrails for your AI agent.
         </p>
         <ConnectButton />
@@ -1061,7 +1061,7 @@ export function WizardPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl">
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-8">
         {stepOrder.map((s, i) => (
@@ -1088,21 +1088,21 @@ export function WizardPage() {
             >
               {i + 1}
             </button>
-            {i < 2 && <div className="w-12 h-px bg-elevated-2" />}
+            {i < 2 && <div className="bg-elevated-2 w-12 h-px" />}
           </div>
         ))}
-        <span className="ml-3 text-sm text-secondary capitalize">{step}</span>
+        <span className="ml-3 text-secondary text-sm capitalize">{step}</span>
       </div>
 
       {/* Step 1: Pick Preset */}
       {step === 'preset' && (
         <div>
-          <h1 className="text-2xl font-semibold text-primary mb-2">Choose a Preset</h1>
-          <p className="text-secondary mb-8">
+          <h1 className="mb-2 font-semibold text-primary text-2xl">Choose a Preset</h1>
+          <p className="mb-8 text-secondary">
             Select a template that matches your agent's use case. Presets are just a starting point,
             you can still add custom protocols and adjust the guardrails afterward.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="gap-4 grid grid-cols-1 md:grid-cols-2">
             {PRESETS.map(p => {
               const isComingSoon = p.id === 'payment-agent'
               const card = (
@@ -1123,23 +1123,23 @@ export function WizardPage() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl w-10 h-10 rounded-lg bg-elevated-2 flex items-center justify-center font-mono text-accent-primary">
+                    <span className="flex justify-center items-center bg-elevated-2 rounded-lg w-10 h-10 font-mono text-2xl text-accent-primary">
                       {p.icon}
                     </span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-primary">{p.name}</h3>
-                      <p className="text-sm text-secondary mt-1">{p.description}</p>
+                      <p className="mt-1 text-secondary text-sm">{p.description}</p>
                       <div className="flex flex-wrap gap-1.5 mt-3">
                         {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
                           <span
                             key={proto}
-                            className="text-xs px-2 py-0.5 rounded-full bg-elevated-2 text-tertiary"
+                            className="bg-elevated-2 px-2 py-0.5 rounded-full text-tertiary text-xs"
                           >
                             {proto}
                           </span>
                         ))}
                       </div>
-                      <div className="mt-2 text-xs text-tertiary">Role: {p.roleLabel}</div>
+                      <div className="mt-2 text-tertiary text-xs">Role: {p.roleLabel}</div>
                     </div>
                   </div>
                 </button>
@@ -1160,7 +1160,7 @@ export function WizardPage() {
             <Button
               onClick={() => setStep('configure')}
               disabled={!selectedPreset}
-              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+              className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
             >
               Next: Configure
             </Button>
@@ -1171,14 +1171,14 @@ export function WizardPage() {
       {/* Step 2: Configure */}
       {step === 'configure' && preset && (
         <div>
-          <h1 className="text-2xl font-semibold text-primary mb-2">Configure: {preset.name}</h1>
-          <p className="text-secondary mb-8">
+          <h1 className="mb-2 font-semibold text-primary text-2xl">Configure: {preset.name}</h1>
+          <p className="mb-8 text-secondary">
             Set the Safe address, agent signer, and spending limit.
           </p>
 
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5">Safe Address</label>
+              <label className="block mb-1.5 font-medium text-primary text-sm">Safe Address</label>
               <Input
                 value={safeAddress}
                 onChange={e => setSafeAddress(e.target.value)}
@@ -1186,12 +1186,12 @@ export function WizardPage() {
                 className="bg-elevated-2 border-subtle"
               />
               {safeAddress && !isAddress(safeAddress) && (
-                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+                <p className="mt-1 text-red-400 text-xs">Invalid address</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5">
+              <label className="block mb-1.5 font-medium text-primary text-sm">
                 Agent Signer Address
               </label>
               <Input
@@ -1201,14 +1201,14 @@ export function WizardPage() {
                 className="bg-elevated-2 border-subtle"
               />
               {agentAddress && !isAddress(agentAddress) && (
-                <p className="text-red-400 text-xs mt-1">Invalid address</p>
+                <p className="mt-1 text-red-400 text-xs">Invalid address</p>
               )}
             </div>
 
             {/* Trust mode toggle */}
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5">Trust Mode</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block mb-1.5 font-medium text-primary text-sm">Trust Mode</label>
+              <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1222,9 +1222,9 @@ export function WizardPage() {
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                    <span className="text-sm font-medium text-primary">Oracle-managed</span>
+                    <span className="font-medium text-primary text-sm">Oracle-managed</span>
                   </div>
-                  <p className="text-xs text-tertiary">
+                  <p className="text-tertiary text-xs">
                     Off-chain oracle tracks portfolio value &amp; spending. Supports both BPS and
                     USD limits. Worst-case oracle compromise: ~40% per window.
                   </p>
@@ -1243,9 +1243,9 @@ export function WizardPage() {
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                    <span className="text-sm font-medium text-primary">Oracleless</span>
+                    <span className="font-medium text-primary text-sm">Oracleless</span>
                   </div>
-                  <p className="text-xs text-tertiary">
+                  <p className="text-tertiary text-xs">
                     Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
                     counter.
                   </p>
@@ -1255,7 +1255,7 @@ export function WizardPage() {
 
             {/* Spending limit */}
             <div>
-              <label className="block text-sm font-medium text-primary mb-1.5">
+              <label className="block mb-1.5 font-medium text-primary text-sm">
                 Spending Limit per 24h
               </label>
 
@@ -1289,7 +1289,7 @@ export function WizardPage() {
                 </div>
               )}
 
-              <p className="text-xs text-tertiary mt-1.5">
+              <p className="mt-1.5 text-tertiary text-xs">
                 {oracleless
                   ? 'The agent cannot spend more than this USD amount in any rolling 24-hour period. Enforced on-chain.'
                   : 'Percentage of the total portfolio value the agent can spend per 24-hour window. Tracked by the oracle.'}
@@ -1298,12 +1298,12 @@ export function WizardPage() {
           </div>
 
           {selectedPreset === 'custom' && (
-            <div className="mt-8 space-y-4">
+            <div className="space-y-4 mt-8">
               <div>
-                <label className="block text-sm font-medium text-primary mb-1.5">
+                <label className="block mb-1.5 font-medium text-primary text-sm">
                   Allowed Protocols
                 </label>
-                <p className="text-xs text-tertiary mb-3">
+                <p className="mb-3 text-tertiary text-xs">
                   Select which protocols the agent is allowed to interact with. All contract
                   addresses for each protocol will be whitelisted.
                 </p>
@@ -1336,10 +1336,10 @@ export function WizardPage() {
                             : 'border-subtle bg-elevated hover:border-accent-primary/30'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex justify-between items-center">
                         <div>
-                          <span className="text-sm font-medium text-primary">{protocol.name}</span>
-                          <span className="text-xs text-tertiary ml-2">{protocol.description}</span>
+                          <span className="font-medium text-primary text-sm">{protocol.name}</span>
+                          <span className="ml-2 text-tertiary text-xs">{protocol.description}</span>
                         </div>
                         {!isComingSoon && (
                           <div
@@ -1357,7 +1357,7 @@ export function WizardPage() {
                         {protocol.contracts.map(c => (
                           <span
                             key={c.id}
-                            className="text-xs px-1.5 py-0.5 rounded bg-elevated-2 text-tertiary"
+                            className="bg-elevated-2 px-1.5 py-0.5 rounded text-tertiary text-xs"
                           >
                             {c.name}
                           </span>
@@ -1378,8 +1378,8 @@ export function WizardPage() {
                 })}
               </div>
               {selectedProtocols.length === 0 && (
-                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                  <p className="text-xs text-yellow-400">
+                <div className="bg-yellow-500/10 p-3 border border-yellow-500/20 rounded-lg">
+                  <p className="text-yellow-400 text-xs">
                     No protocols selected. The agent will not be able to interact with any DeFi
                     protocol. You can add more protocols later from the dashboard.
                   </p>
@@ -1389,8 +1389,8 @@ export function WizardPage() {
           )}
 
           {(!FACTORY_ADDRESS || !oracleConfigOk) && (
-            <div className="mt-6 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-              <p className="text-xs text-red-400">
+            <div className="bg-red-500/10 mt-6 p-3 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 text-xs">
                 Missing deployment config. Set VITE_AGENT_VAULT_FACTORY_ADDRESS
                 {!oracleless && ' and VITE_ORACLE_ADDRESS'} in your environment.
                 {!oracleless && ' Or enable Oracleless mode above.'}
@@ -1414,7 +1414,7 @@ export function WizardPage() {
                 !oracleConfigOk ||
                 (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0))
               }
-              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+              className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
             >
               Next: Review
             </Button>
@@ -1425,21 +1425,21 @@ export function WizardPage() {
       {/* Step 3: Review & Deploy */}
       {step === 'review' && preset && (
         <div>
-          <h1 className="text-2xl font-semibold text-primary mb-2">Review & Deploy</h1>
-          <p className="text-secondary mb-8">
+          <h1 className="mb-2 font-semibold text-primary text-2xl">Review & Deploy</h1>
+          <p className="mb-8 text-secondary">
             Confirm your Guardian configuration. This will deploy a Guardian contract configured for
             your agent.
           </p>
 
-          <div className="bg-elevated rounded-xl border border-subtle p-6 space-y-4">
+          <div className="space-y-4 bg-elevated p-6 border border-subtle rounded-xl">
             <div className="flex justify-between">
               <span className="text-secondary">Preset</span>
-              <span className="text-primary font-medium">{preset.name}</span>
+              <span className="font-medium text-primary">{preset.name}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-secondary">Safe</span>
               <div className="flex items-center gap-1">
-                <span className="text-primary font-mono text-sm">
+                <span className="font-mono text-primary text-sm">
                   {safeAddress.slice(0, 6)}...{safeAddress.slice(-4)}
                 </span>
                 <CopyButton value={safeAddress} />
@@ -1447,7 +1447,7 @@ export function WizardPage() {
                   href={`${getExplorerBase(chainId)}/address/${safeAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  className="inline-flex justify-center items-center hover:bg-elevated-2 rounded w-6 h-6 text-tertiary hover:text-secondary transition-colors"
                   title="View on explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1457,7 +1457,7 @@ export function WizardPage() {
             <div className="flex justify-between items-center">
               <span className="text-secondary">Agent Signer</span>
               <div className="flex items-center gap-1">
-                <span className="text-primary font-mono text-sm">
+                <span className="font-mono text-primary text-sm">
                   {agentAddress.slice(0, 6)}...{agentAddress.slice(-4)}
                 </span>
                 <CopyButton value={agentAddress} />
@@ -1465,7 +1465,7 @@ export function WizardPage() {
                   href={`${getExplorerBase(chainId)}/address/${agentAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-6 h-6 rounded text-tertiary hover:text-secondary hover:bg-elevated-2 transition-colors"
+                  className="inline-flex justify-center items-center hover:bg-elevated-2 rounded w-6 h-6 text-tertiary hover:text-secondary transition-colors"
                   title="View on explorer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1504,8 +1504,8 @@ export function WizardPage() {
           </div>
 
           {showExistingModuleWarning && existingModuleAddress && (
-            <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-              <p className="text-sm font-medium text-yellow-400">
+            <div className="bg-yellow-500/10 mt-4 p-4 border border-yellow-500/20 rounded-lg">
+              <p className="font-medium text-yellow-400 text-sm">
                 {isModuleEnabledLoading
                   ? 'Checking Guardian activation status'
                   : existingModuleNeedsActivation
@@ -1513,7 +1513,7 @@ export function WizardPage() {
                     : 'This Safe already has an active Guardian'}
               </p>
               <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-xs text-yellow-400/80 font-mono">
+                <span className="font-mono text-yellow-400/80 text-xs">
                   {existingModuleAddress}
                 </span>
                 <CopyButton value={existingModuleAddress} />
@@ -1521,13 +1521,13 @@ export function WizardPage() {
                   href={`${getExplorerBase(chainId)}/address/${existingModuleAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-5 h-5 rounded text-yellow-400/70 hover:text-yellow-400 transition-colors"
+                  className="inline-flex justify-center items-center rounded w-5 h-5 text-yellow-400/70 hover:text-yellow-400 transition-colors"
                   title="View Guardian"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-              <p className="text-xs text-yellow-400/80 mt-2">
+              <p className="mt-2 text-yellow-400/80 text-xs">
                 {existingModuleNeedsActivation
                   ? 'The Guardian was created and registered by the first transaction. One Safe transaction still needs to call enableModule before the agent can operate.'
                   : existingModuleIsActive
@@ -1535,16 +1535,16 @@ export function WizardPage() {
                     : 'The Guardian is registered for this Safe. The wizard is checking whether it is enabled before choosing the next action.'}
               </p>
               {existingModuleNeedsActivation && !isConnectedSafeOwner && (
-                <p className="text-xs text-red-400 mt-2">
-                  Connected wallet is not a Safe owner — switch to a signer of{' '}
+                <p className="mt-2 text-red-400 text-xs">
+                  Connected wallet is not a Safe owner - switch to a signer of{' '}
                   {safeAddress.slice(0, 6)}…{safeAddress.slice(-4)} to activate the Guardian.
                 </p>
               )}
               {existingModuleNeedsActivation && enableModuleError && (
-                <p className="text-xs text-red-400 mt-2 break-words">{enableModuleError}</p>
+                <p className="mt-2 text-red-400 text-xs break-words">{enableModuleError}</p>
               )}
               {existingModuleNeedsActivation && enableModuleTxHash && (
-                <p className="text-xs text-yellow-400/80 mt-2">
+                <p className="mt-2 text-yellow-400/80 text-xs">
                   Activation transaction sent.{' '}
                   <a
                     href={`${getExplorerBase(chainId)}/tx/${enableModuleTxHash}`}
@@ -1561,11 +1561,11 @@ export function WizardPage() {
                   <Button
                     onClick={handleEnableModule}
                     disabled={isEnablingModule || !isConnectedSafeOwner}
-                    className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+                    className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
                   >
                     {isEnablingModule ? (
                       <span className="inline-flex items-center">
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <Loader2 className="mr-2 w-4 h-4 animate-spin" />
                         Enabling…
                       </span>
                     ) : (
@@ -1588,11 +1588,11 @@ export function WizardPage() {
           )}
 
           {deployError && !isSimulating && (
-            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
-              <p className="text-sm text-red-400">{deployError}</p>
+            <div className="space-y-2 bg-red-500/10 mt-4 p-4 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 text-sm">{deployError}</p>
               {FACTORY_ADDRESS && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-red-400/70 font-mono">
+                  <span className="font-mono text-red-400/70 text-xs">
                     Factory: {FACTORY_ADDRESS.slice(0, 10)}...{FACTORY_ADDRESS.slice(-8)}
                   </span>
                   <CopyButton value={FACTORY_ADDRESS} />
@@ -1600,7 +1600,7 @@ export function WizardPage() {
                     href={`${getExplorerBase(chainId)}/address/${FACTORY_ADDRESS}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 transition-colors"
+                    className="inline-flex justify-center items-center rounded w-5 h-5 text-red-400/70 hover:text-red-400 transition-colors"
                     title="View factory contract"
                   >
                     <ExternalLink className="w-3 h-3" />
@@ -1611,36 +1611,36 @@ export function WizardPage() {
           )}
 
           {isConfiguringExistingVault && (
-            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
-              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-              <p className="text-sm text-blue-400">Configuring the existing Guardian...</p>
+            <div className="flex items-center gap-3 bg-blue-500/10 mt-4 p-4 border border-blue-500/20 rounded-lg">
+              <Loader2 className="flex-shrink-0 w-4 h-4 text-blue-400 animate-spin" />
+              <p className="text-blue-400 text-sm">Configuring the existing Guardian...</p>
             </div>
           )}
 
           {isSimulating && (
-            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
-              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-              <p className="text-sm text-blue-400">Validating configuration...</p>
+            <div className="flex items-center gap-3 bg-blue-500/10 mt-4 p-4 border border-blue-500/20 rounded-lg">
+              <Loader2 className="flex-shrink-0 w-4 h-4 text-blue-400 animate-spin" />
+              <p className="text-blue-400 text-sm">Validating configuration...</p>
             </div>
           )}
 
           {!isSimulating && isWriting && (
-            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
-              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-              <p className="text-sm text-blue-400">Waiting for wallet confirmation...</p>
+            <div className="flex items-center gap-3 bg-blue-500/10 mt-4 p-4 border border-blue-500/20 rounded-lg">
+              <Loader2 className="flex-shrink-0 w-4 h-4 text-blue-400 animate-spin" />
+              <p className="text-blue-400 text-sm">Waiting for wallet confirmation...</p>
             </div>
           )}
 
           {!isSimulating && isConfirming && !txFailed && txHash && (
-            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <div className="bg-blue-500/10 mt-4 p-4 border border-blue-500/20 rounded-lg">
               <div className="flex items-center gap-3 mb-2">
-                <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-                <p className="text-sm text-blue-400 font-medium">
-                  Transaction submitted — waiting for confirmation...
+                <Loader2 className="flex-shrink-0 w-4 h-4 text-blue-400 animate-spin" />
+                <p className="font-medium text-blue-400 text-sm">
+                  Transaction submitted - waiting for confirmation...
                 </p>
               </div>
               <div className="flex items-center gap-1.5 ml-7">
-                <span className="text-xs text-blue-400/70 font-mono">
+                <span className="font-mono text-blue-400/70 text-xs">
                   {txHash.slice(0, 10)}...{txHash.slice(-8)}
                 </span>
                 <CopyButton value={txHash} />
@@ -1648,7 +1648,7 @@ export function WizardPage() {
                   href={`${getExplorerBase(chainId)}/tx/${txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-5 h-5 rounded text-blue-400/70 hover:text-blue-400 transition-colors"
+                  className="inline-flex justify-center items-center rounded w-5 h-5 text-blue-400/70 hover:text-blue-400 transition-colors"
                   title="View transaction"
                 >
                   <ExternalLink className="w-3 h-3" />
@@ -1658,13 +1658,13 @@ export function WizardPage() {
           )}
 
           {!isSimulating && txFailed && txHash && (
-            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
-              <p className="text-sm font-medium text-red-400">Transaction failed</p>
+            <div className="space-y-2 bg-red-500/10 mt-4 p-4 border border-red-500/20 rounded-lg">
+              <p className="font-medium text-red-400 text-sm">Transaction failed</p>
               {txFailMessage && (
-                <p className="text-xs text-red-400/80 break-words">{txFailMessage}</p>
+                <p className="text-red-400/80 text-xs break-words">{txFailMessage}</p>
               )}
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-red-400/70 font-mono">
+                <span className="font-mono text-red-400/70 text-xs">
                   {txHash.slice(0, 10)}...{txHash.slice(-8)}
                 </span>
                 <CopyButton value={txHash} />
@@ -1672,7 +1672,7 @@ export function WizardPage() {
                   href={`${getExplorerBase(chainId)}/tx/${txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 transition-colors"
+                  className="inline-flex justify-center items-center rounded w-5 h-5 text-red-400/70 hover:text-red-400 transition-colors"
                   title="View transaction"
                 >
                   <ExternalLink className="w-3 h-3" />
@@ -1682,17 +1682,17 @@ export function WizardPage() {
           )}
 
           {(usedExistingVault || (isSuccess && !txReverted && txHash)) && (
-            <div className="mt-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20 space-y-3">
-              <p className="text-sm font-medium text-green-400">
+            <div className="space-y-3 bg-green-500/10 mt-4 p-4 border border-green-500/20 rounded-lg">
+              <p className="font-medium text-green-400 text-sm">
                 {usedExistingVault
                   ? 'The agent has been added to the existing Guardian successfully!'
                   : 'Guardian deployed successfully!'}
               </p>
 
               <div>
-                <p className="text-xs text-green-400/70 mb-1">Transaction</p>
+                <p className="mb-1 text-green-400/70 text-xs">Transaction</p>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-green-400 font-mono">
+                  <span className="font-mono text-green-400 text-sm">
                     {(usedExistingVault ? existingVaultTxHash : txHash)?.slice(0, 10)}...
                     {(usedExistingVault ? existingVaultTxHash : txHash)?.slice(-8)}
                   </span>
@@ -1701,7 +1701,7 @@ export function WizardPage() {
                     href={`${getExplorerBase(chainId)}/tx/${usedExistingVault ? existingVaultTxHash : txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                    className="inline-flex justify-center items-center rounded w-6 h-6 text-green-400/70 hover:text-green-400 transition-colors"
                     title="View transaction"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -1711,15 +1711,15 @@ export function WizardPage() {
 
               {deployedModule && deployedModule !== 'unknown' && (
                 <div>
-                  <p className="text-xs text-green-400/70 mb-1">Guardian address</p>
+                  <p className="mb-1 text-green-400/70 text-xs">Guardian address</p>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-green-400 font-mono">{deployedModule}</span>
+                    <span className="font-mono text-green-400 text-sm">{deployedModule}</span>
                     <CopyButton value={deployedModule} />
                     <a
                       href={`${getExplorerBase(chainId)}/address/${deployedModule}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center w-6 h-6 rounded text-green-400/70 hover:text-green-400 transition-colors"
+                      className="inline-flex justify-center items-center rounded w-6 h-6 text-green-400/70 hover:text-green-400 transition-colors"
                       title="View on explorer"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -1732,45 +1732,45 @@ export function WizardPage() {
                 deployedModule &&
                 deployedModule !== 'unknown' &&
                 (isModuleEnabledOnSafe ? (
-                  <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-300">
-                    Guardian is enabled on the Safe — the agent is ready to operate.
+                  <div className="bg-green-500/10 px-3 py-2 border border-green-500/30 rounded-lg text-green-300 text-xs">
+                    Guardian is enabled on the Safe - the agent is ready to operate.
                     {enableModuleTxHash && (
                       <a
                         href={`${getExplorerBase(chainId)}/tx/${enableModuleTxHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-1 underline hover:text-green-200"
+                        className="ml-1 hover:text-green-200 underline"
                       >
                         View tx
                       </a>
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
-                    <p className="text-xs font-medium text-yellow-300">
+                  <div className="space-y-2 bg-yellow-500/10 p-3 border border-yellow-500/30 rounded-lg">
+                    <p className="font-medium text-yellow-300 text-xs">
                       Activate the Guardian on your Safe
                     </p>
-                    <p className="text-xs text-yellow-300/80">
+                    <p className="text-yellow-300/80 text-xs">
                       One Safe transaction calls <code className="font-mono">enableModule</code>.
                       The signer must be a Safe owner.
                     </p>
                     {!isConnectedSafeOwner && (
-                      <p className="text-xs text-red-400">
-                        Connected wallet is not a Safe owner — switch to a signer of{' '}
+                      <p className="text-red-400 text-xs">
+                        Connected wallet is not a Safe owner - switch to a signer of{' '}
                         {safeAddress.slice(0, 6)}…{safeAddress.slice(-4)} to continue.
                       </p>
                     )}
                     {enableModuleError && (
-                      <p className="text-xs text-red-400 break-words">{enableModuleError}</p>
+                      <p className="text-red-400 text-xs break-words">{enableModuleError}</p>
                     )}
                     <Button
                       onClick={handleEnableModule}
                       disabled={isEnablingModule || !isConnectedSafeOwner}
-                      className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+                      className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
                     >
                       {isEnablingModule ? (
                         <span className="inline-flex items-center">
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <Loader2 className="mr-2 w-4 h-4 animate-spin" />
                           Enabling…
                         </span>
                       ) : (
@@ -1781,7 +1781,7 @@ export function WizardPage() {
                 ))}
 
               <div className="pt-1">
-                <p className="text-xs text-green-400/70 mb-2">
+                <p className="mb-2 text-green-400/70 text-xs">
                   {usedExistingVault
                     ? 'The new agent is now configured on the existing Guardian.'
                     : isModuleEnabledOnSafe
@@ -1824,7 +1824,7 @@ export function WizardPage() {
                 usedExistingVault ||
                 (isSuccess && !txReverted && !usedExistingVault)
               }
-              className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+              className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
             >
               {isEnablingModule
                 ? 'Enabling Guardian...'
@@ -1868,7 +1868,7 @@ export function WizardPage() {
             <DialogDescription>
               {isExistingVaultDirectOwnerFlow
                 ? 'Your wallet will sign each transaction separately.'
-                : 'Transactions are bundled into one Safe flow — sign once, then execute.'}
+                : 'Transactions are bundled into one Safe flow - sign once, then execute.'}
             </DialogDescription>
           </DialogHeader>
 

@@ -27,7 +27,7 @@ interface VaultStats {
 }
 
 /**
- * ChallengePage — "Break the Vault" public challenge.
+ * ChallengePage - "Break the Vault" public challenge.
  * Users send natural language instructions to an AI agent that's protected
  * by MultiClaw on-chain guardrails. If someone can trick the agent into
  * draining the vault, they win.
@@ -140,7 +140,7 @@ export function ChallengePage() {
         body: JSON.stringify({ sessionId: 'default' }),
       })
     } catch {
-      // Silently ignore — still clear local state
+      // Silently ignore - still clear local state
     } finally {
       setIsResetting(false)
     }
@@ -158,26 +158,27 @@ export function ChallengePage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl">
       {/* Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-primary">Break the Vault</h1>
-        <p className="text-secondary mt-2 max-w-2xl mx-auto">
-          A real AI agent manages a Guardian with real funds on Base. On-chain guardrails protect it.
-          <span className="text-accent-primary font-medium"> Can you break through?</span>
+      <div className="mb-8 text-center">
+        <h1 className="font-bold text-primary text-3xl">Break the Vault</h1>
+        <p className="mx-auto mt-2 max-w-2xl text-secondary">
+          A real AI agent manages a Guardian with real funds on Base. On-chain guardrails protect
+          it.
+          <span className="font-medium text-accent-primary"> Can you break through?</span>
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="items-start gap-6 grid grid-cols-1 lg:grid-cols-3">
         {/* Chat panel */}
-        <div className="lg:col-span-2 flex flex-col bg-elevated rounded-xl border border-subtle overflow-hidden">
+        <div className="flex flex-col lg:col-span-2 bg-elevated border border-subtle rounded-xl overflow-hidden">
           {/* Chat header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle">
-            <span className="text-xs text-secondary font-medium">Agent Chat</span>
+          <div className="flex justify-between items-center px-4 py-2.5 border-subtle border-b">
+            <span className="font-medium text-secondary text-xs">Agent Chat</span>
             <button
               onClick={resetChat}
               disabled={isResetting || isLoading}
-              className="inline-flex items-center gap-1.5 text-xs text-tertiary hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-1.5 disabled:opacity-40 text-tertiary hover:text-red-400 text-xs transition-colors disabled:cursor-not-allowed"
               title="Clear conversation"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -185,7 +186,7 @@ export function ChallengePage() {
             </button>
           </div>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[300px] max-h-[50vh]">
+          <div className="flex-1 space-y-4 p-4 min-h-[300px] max-h-[50vh] overflow-y-auto">
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -201,10 +202,10 @@ export function ChallengePage() {
                   }`}
                 >
                   {msg.role === 'assistant' && (
-                    <div className="text-xs text-accent-secondary font-medium mb-1">Agent</div>
+                    <div className="mb-1 font-medium text-xs text-accent-secondary">Agent</div>
                   )}
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <div className="text-xs text-tertiary mt-1">
+                  <div className="mt-1 text-tertiary text-xs">
                     {msg.timestamp.toLocaleTimeString()}
                   </div>
                 </div>
@@ -212,11 +213,11 @@ export function ChallengePage() {
             ))}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-elevated-2 rounded-xl px-4 py-3">
+                <div className="bg-elevated-2 px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-accent-primary animate-bounce" />
-                    <div className="w-2 h-2 rounded-full bg-accent-primary animate-bounce [animation-delay:0.1s]" />
-                    <div className="w-2 h-2 rounded-full bg-accent-primary animate-bounce [animation-delay:0.2s]" />
+                    <div className="rounded-full w-2 h-2 animate-bounce bg-accent-primary" />
+                    <div className="rounded-full w-2 h-2 animate-bounce bg-accent-primary [animation-delay:0.1s]" />
+                    <div className="rounded-full w-2 h-2 animate-bounce bg-accent-primary [animation-delay:0.2s]" />
                   </div>
                 </div>
               </div>
@@ -225,7 +226,7 @@ export function ChallengePage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-subtle p-4">
+          <div className="p-4 border-subtle border-t">
             <form
               onSubmit={e => {
                 e.preventDefault()
@@ -243,7 +244,7 @@ export function ChallengePage() {
               <Button
                 type="submit"
                 disabled={!input.trim() || isLoading}
-                className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+                className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
               >
                 Send
               </Button>
@@ -254,26 +255,26 @@ export function ChallengePage() {
         {/* Sidebar: Vault info + Rules */}
         <div className="space-y-4">
           {/* Vault Stats */}
-          <div className="bg-elevated rounded-xl border border-subtle p-5">
-            <h3 className="text-sm font-semibold text-primary mb-4">Guardian Status</h3>
+          <div className="bg-elevated p-5 border border-subtle rounded-xl">
+            <h3 className="mb-4 font-semibold text-primary text-sm">Guardian Status</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-sm text-secondary">Balance</span>
-                <span className="text-sm font-mono text-accent-primary font-semibold">
+                <span className="text-secondary text-sm">Balance</span>
+                <span className="font-mono font-semibold text-sm text-accent-primary">
                   {stats.balance}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-secondary">Attempts</span>
-                <span className="text-sm font-mono text-primary">{stats.totalAttempts}</span>
+                <span className="text-secondary text-sm">Attempts</span>
+                <span className="font-mono text-primary text-sm">{stats.totalAttempts}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-secondary">Spending Limit</span>
-                <span className="text-sm text-primary">{VAULT_CONFIG.spendingLimit}</span>
+                <span className="text-secondary text-sm">Spending Limit</span>
+                <span className="text-primary text-sm">{VAULT_CONFIG.spendingLimit}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-secondary">Protocols</span>
-                <span className="text-sm text-primary text-right">
+                <span className="text-secondary text-sm">Protocols</span>
+                <span className="text-primary text-sm text-right">
                   {VAULT_CONFIG.protocols.join(', ')}
                 </span>
               </div>
@@ -281,9 +282,9 @@ export function ChallengePage() {
           </div>
 
           {/* Rules */}
-          <div className="bg-elevated rounded-xl border border-subtle p-5">
-            <h3 className="text-sm font-semibold text-primary mb-3">Challenge Rules</h3>
-            <ul className="space-y-2 text-sm text-secondary">
+          <div className="bg-elevated p-5 border border-subtle rounded-xl">
+            <h3 className="mb-3 font-semibold text-primary text-sm">Challenge Rules</h3>
+            <ul className="space-y-2 text-secondary text-sm">
               <li className="flex gap-2">
                 <span className="text-accent-primary">1.</span>
                 Send any instruction to the AI agent
@@ -298,7 +299,7 @@ export function ChallengePage() {
               </li>
               <li className="flex gap-2">
                 <span className="text-accent-primary">4.</span>
-                The agent is intentionally jailbreakable — the security is on-chain, not in the
+                The agent is intentionally jailbreakable - the security is on-chain, not in the
                 prompt
               </li>
             </ul>

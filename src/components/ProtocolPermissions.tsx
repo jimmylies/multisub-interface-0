@@ -57,10 +57,10 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
   }, [])
 
   // Fetch already allowed addresses from contract
-  const {
-    data: allowedAddresses = new Set(),
-    isLoading: isLoadingAllowed,
-  } = useAllowedAddresses(subAccountAddress, addressesToCheck)
+  const { data: allowedAddresses = new Set(), isLoading: isLoadingAllowed } = useAllowedAddresses(
+    subAccountAddress,
+    addressesToCheck
+  )
 
   useEffect(() => {
     const newMap = new Map<string, Set<string>>()
@@ -311,7 +311,7 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
       // Without these the guardian module cannot parse or classify calls,
       // so the agent's transactions would revert even though the addresses
       // are whitelisted.
-      // addresses.guardian is guaranteed non-null here — checked at the top
+      // addresses.guardian is guaranteed non-null here - checked at the top
       // of handleSavePermissions before showPreview was called.
       const guardian = addresses.guardian!
 
@@ -331,10 +331,12 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
           if ((currentParser as string).toLowerCase() !== parser.toLowerCase()) {
             transactions.push({
               to: guardian,
-              data: encodeContractCall(guardian, GUARDIAN_ABI as unknown as any[], 'registerParser', [
-                protocol,
-                parser,
-              ]),
+              data: encodeContractCall(
+                guardian,
+                GUARDIAN_ABI as unknown as any[],
+                'registerParser',
+                [protocol, parser]
+              ),
             })
           }
         }
@@ -352,10 +354,12 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
           if (Number(currentOpType) !== opType) {
             transactions.push({
               to: guardian,
-              data: encodeContractCall(guardian, GUARDIAN_ABI as unknown as any[], 'registerSelector', [
-                selector,
-                opType,
-              ]),
+              data: encodeContractCall(
+                guardian,
+                GUARDIAN_ABI as unknown as any[],
+                'registerSelector',
+                [selector, opType]
+              ),
             })
           }
         }
@@ -462,8 +466,11 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
 
               if (isComingSoon) {
                 return (
-                  <Tooltip key={protocol.id} content="Coming soon">
-                    <div className="rounded-xl border overflow-hidden border-subtle bg-elevated opacity-50 cursor-not-allowed">
+                  <Tooltip
+                    key={protocol.id}
+                    content="Coming soon"
+                  >
+                    <div className="bg-elevated opacity-50 border border-subtle rounded-xl overflow-hidden cursor-not-allowed">
                       <div className="flex justify-between items-center p-4">
                         <div className="flex flex-1 gap-3">
                           <Checkbox
@@ -475,7 +482,9 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
                           />
                           <div className="flex-1">
                             <p className="font-medium text-primary text-small">{protocol.name}</p>
-                            <p className="mt-0.5 text-caption text-tertiary">{protocol.description}</p>
+                            <p className="mt-0.5 text-caption text-tertiary">
+                              {protocol.description}
+                            </p>
                           </div>
                         </div>
                       </div>

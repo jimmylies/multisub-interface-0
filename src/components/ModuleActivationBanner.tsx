@@ -75,12 +75,12 @@ export function ModuleActivationBanner() {
   }
 
   return (
-    <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+    <div className="bg-yellow-500/10 p-4 border border-yellow-500/30 rounded-xl">
       <div className="flex items-start gap-3">
-        <ShieldAlert className="w-5 h-5 text-yellow-300 mt-0.5 shrink-0" />
+        <ShieldAlert className="mt-0.5 w-5 h-5 text-yellow-300 shrink-0" />
         <div className="flex-1 space-y-2">
-          <p className="text-sm font-medium text-yellow-200">Guardian not enabled on this Safe</p>
-          <p className="text-xs text-yellow-200/80">
+          <p className="font-medium text-yellow-200 text-sm">Guardian not enabled on this Safe</p>
+          <p className="text-yellow-200/80 text-xs">
             The Guardian module{' '}
             <code className="font-mono">
               {guardian.slice(0, 6)}…{guardian.slice(-4)}
@@ -92,20 +92,20 @@ export function ModuleActivationBanner() {
             . The agent cannot execute any transaction until a Safe owner activates it.
           </p>
           {!isSafeOwner && (
-            <p className="text-xs text-red-400">
-              Connected wallet is not an owner of this Safe — switch to a signer to activate the
+            <p className="text-red-400 text-xs">
+              Connected wallet is not an owner of this Safe - switch to a signer to activate the
               Guardian.
             </p>
           )}
-          {enableError && <p className="text-xs text-red-400 break-words">{enableError}</p>}
+          {enableError && <p className="text-red-400 text-xs break-words">{enableError}</p>}
           {enableTxHash && chainId !== undefined && (
-            <p className="text-xs text-yellow-200/80">
+            <p className="text-yellow-200/80 text-xs">
               Activation transaction sent.{' '}
               <a
                 href={`${getExplorerBase(chainId)}/tx/${enableTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline inline-flex items-center gap-0.5"
+                className="inline-flex items-center gap-0.5 underline"
               >
                 View
                 <ExternalLink className="w-3 h-3" />
@@ -115,11 +115,11 @@ export function ModuleActivationBanner() {
           <Button
             onClick={handleEnable}
             disabled={isEnabling || !isSafeOwner}
-            className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
+            className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
           >
             {isEnabling ? (
               <span className="inline-flex items-center">
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 w-4 h-4 animate-spin" />
                 Enabling…
               </span>
             ) : (

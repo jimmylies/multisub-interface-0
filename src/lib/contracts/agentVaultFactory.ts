@@ -1,4 +1,4 @@
-// AgentVaultFactory ABI — permissionless vault deployment
+// AgentVaultFactory ABI - permissionless vault deployment
 export const AGENT_VAULT_FACTORY_ABI = [
   {
     type: 'function',
@@ -56,9 +56,7 @@ export const AGENT_VAULT_FACTORY_ABI = [
   {
     type: 'function',
     name: 'computeModuleAddress',
-    inputs: [
-      { name: 'safe', type: 'address', internalType: 'address' },
-    ],
+    inputs: [{ name: 'safe', type: 'address', internalType: 'address' }],
     outputs: [{ name: 'predicted', type: 'address', internalType: 'address' }],
     stateMutability: 'view',
   },

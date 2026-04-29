@@ -107,7 +107,9 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   // Calculate percent used
   const percentUsed =
     maxAllowance > 0n
-      ? Number(((displayedSpent > maxAllowance ? maxAllowance : displayedSpent) * 10000n) / maxAllowance) / 100
+      ? Number(
+          ((displayedSpent > maxAllowance ? maxAllowance : displayedSpent) * 10000n) / maxAllowance
+        ) / 100
       : 0
 
   // Determine color coding
@@ -129,7 +131,7 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
             <TooltipIcon
               content={
                 isOracleless
-                  ? 'In oracleless mode, the spending budget is the fixed USD limit per window. There is no oracle tracking — only on-chain cumulative enforcement.'
+                  ? 'In oracleless mode, the spending budget is the fixed USD limit per window. There is no oracle tracking - only on-chain cumulative enforcement.'
                   : "The oracle tracks your spending across all operations. Remaining allowance is calculated based on your spending limit and the Safe's portfolio value."
               }
             />
@@ -137,7 +139,7 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
           {isOracleless ? (
             <Badge
               variant="outline"
-              className="text-accent-primary text-xs"
+              className="text-xs text-accent-primary"
             >
               Oracleless
             </Badge>

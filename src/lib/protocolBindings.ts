@@ -14,7 +14,7 @@
 import type { Address } from 'viem'
 import type { NetworkName } from '@/lib/chains'
 
-// OperationType values from DeFiInteractorModule.sol — must stay in sync
+// OperationType values from DeFiInteractorModule.sol - must stay in sync
 // with the contract enum. Any change in the contract should bump these.
 export const OP_SWAP = 1
 export const OP_DEPOSIT = 2
@@ -34,7 +34,7 @@ export interface SelectorBinding {
 }
 
 export interface ProtocolBinding {
-  /** Protocol target addresses to whitelist. Subset of `protocols.ts` —
+  /** Protocol target addresses to whitelist. Subset of `protocols.ts` -
    *  only addresses that have a parser + selectors registered. */
   protocols: Address[]
   /** Parser registrations (protocol address → parser contract). */
@@ -44,7 +44,7 @@ export interface ProtocolBinding {
   selectors: SelectorBinding[]
 }
 
-/** Selectors that work for any DeFi protocol — registered once per vault. */
+/** Selectors that work for any DeFi protocol - registered once per vault. */
 const COMMON_SELECTORS: SelectorBinding[] = [
   { selector: '0x095ea7b3', opType: OP_APPROVE }, // ERC20.approve
 ]
@@ -103,7 +103,7 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
         parser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc', // UniswapV3Parser
       },
       {
-        // V3 NonfungiblePositionManager reuses the V3 parser — UniswapV3Parser
+        // V3 NonfungiblePositionManager reuses the V3 parser - UniswapV3Parser
         // already handles MINT/INCREASE/DECREASE/COLLECT selectors
         // (UniswapV3Parser.sol:67-73).
         protocol: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2',
@@ -130,13 +130,13 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
       { selector: '0x0c49ccbe', opType: OP_WITHDRAW }, // decreaseLiquidity (V3)
       { selector: '0xfc6f7865', opType: OP_CLAIM }, // collect (V3)
       // NOTE: PositionManager V4 selector. Earlier code had 0xa0ca4234 here
-      // which doesn't correspond to any V4 function — the V4 parser actually
+      // which doesn't correspond to any V4 function - the V4 parser actually
       // handles modifyLiquidities(bytes,uint256) = 0xdd46508f
       // (UniswapV4Parser.sol:48).
       { selector: '0xdd46508f', opType: OP_DEPOSIT }, // modifyLiquidities (PositionManager V4)
     ],
   },
-  // merkl: Distributor parser/selectors not deployed — intentionally absent
+  // merkl: Distributor parser/selectors not deployed - intentionally absent
   // so users can't whitelist a protocol the agent can't actually call.
 }
 

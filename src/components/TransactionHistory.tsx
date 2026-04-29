@@ -37,9 +37,9 @@ interface TransactionHistoryProps {
 // Skeleton loader for transaction rows
 function TransactionRowSkeleton() {
   return (
-    <div className="flex items-center gap-4 p-4 rounded-lg bg-elevated border border-subtle">
-      <div className="p-2 rounded-lg bg-elevated-2">
-        <div className="w-5 h-5 rounded bg-elevated animate-pulse" />
+    <div className="flex items-center gap-4 bg-elevated p-4 border border-subtle rounded-lg">
+      <div className="bg-elevated-2 p-2 rounded-lg">
+        <div className="bg-elevated rounded w-5 h-5 animate-pulse" />
       </div>
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-2">
@@ -51,8 +51,8 @@ function TransactionRowSkeleton() {
       <div className="flex flex-col items-end gap-1">
         <SkeletonText width="w-16" />
         <div className="flex gap-2">
-          <div className="w-3 h-3 rounded bg-elevated-2 animate-pulse" />
-          <div className="w-3 h-3 rounded bg-elevated-2 animate-pulse" />
+          <div className="bg-elevated-2 rounded w-3 h-3 animate-pulse" />
+          <div className="bg-elevated-2 rounded w-3 h-3 animate-pulse" />
         </div>
       </div>
     </div>
@@ -62,14 +62,14 @@ function TransactionRowSkeleton() {
 // Empty state component
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
-    <FadeInUp className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="p-4 rounded-full bg-elevated-2 mb-4">
+    <FadeInUp className="flex flex-col justify-center items-center py-12 text-center">
+      <div className="bg-elevated-2 mb-4 p-4 rounded-full">
         <Inbox className="w-8 h-8 text-tertiary" />
       </div>
-      <h3 className="text-lg font-medium text-primary mb-2">
+      <h3 className="mb-2 font-medium text-primary text-lg">
         {hasFilters ? 'No matching transactions' : 'No transactions yet'}
       </h3>
-      <p className="text-sm text-secondary max-w-md">
+      <p className="max-w-md text-secondary text-sm">
         {hasFilters
           ? 'Try adjusting your filters to see more transactions.'
           : 'Transaction history will appear here once you start using your sub-account.'}
@@ -112,16 +112,16 @@ function ExportMenu({
       {isOpen && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            className="z-10 fixed inset-0"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute top-full right-0 mt-1 w-48 py-1 bg-elevated border border-subtle rounded-lg shadow-lg z-20 animate-fade-in">
+          <div className="top-full right-0 z-20 absolute bg-elevated shadow-lg mt-1 py-1 border border-subtle rounded-lg w-48 animate-fade-in">
             <button
               onClick={() => {
                 onExportCSV()
                 setIsOpen(false)
               }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-primary hover:bg-elevated-2 transition-colors"
+              className="flex items-center gap-2 hover:bg-elevated-2 px-3 py-2 w-full text-primary text-sm transition-colors"
             >
               <FileText className="w-4 h-4" />
               Export as CSV
@@ -131,18 +131,18 @@ function ExportMenu({
                 onExportJSON()
                 setIsOpen(false)
               }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-primary hover:bg-elevated-2 transition-colors"
+              className="flex items-center gap-2 hover:bg-elevated-2 px-3 py-2 w-full text-primary text-sm transition-colors"
             >
               <FileJson className="w-4 h-4" />
               Export as JSON
             </button>
-            <div className="border-t border-subtle my-1" />
+            <div className="my-1 border-subtle border-t" />
             <button
               onClick={() => {
                 onCopyClipboard()
                 setIsOpen(false)
               }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-primary hover:bg-elevated-2 transition-colors"
+              className="flex items-center gap-2 hover:bg-elevated-2 px-3 py-2 w-full text-primary text-sm transition-colors"
             >
               <ClipboardCopy className="w-4 h-4" />
               Copy to clipboard
@@ -169,7 +169,7 @@ export function TransactionHistory({
   })
   const { getAccountName } = useSubAccountNames()
 
-  // Fetch transaction history — multi-account when subAccounts is provided, single otherwise
+  // Fetch transaction history - multi-account when subAccounts is provided, single otherwise
   const isMultiAccount = !!subAccounts && subAccounts.length > 0
   const singleQuery = useTransactionHistory({
     subAccount,
@@ -250,10 +250,10 @@ export function TransactionHistory({
     return (
       <SkeletonCard className={className}>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
+          <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-elevated-2">
-                <div className="w-5 h-5 rounded bg-elevated animate-pulse" />
+              <div className="bg-elevated-2 p-2 rounded-lg">
+                <div className="bg-elevated rounded w-5 h-5 animate-pulse" />
               </div>
               <SkeletonText
                 width="w-40"
@@ -276,17 +276,17 @@ export function TransactionHistory({
     return (
       <Card className={className}>
         <CardContent className="py-12">
-          <FadeInUp className="flex flex-col items-center justify-center text-center">
-            <div className="p-4 rounded-full bg-error/10 mb-4">
+          <FadeInUp className="flex flex-col justify-center items-center text-center">
+            <div className="bg-error/10 mb-4 p-4 rounded-full">
               <History className="w-8 h-8 text-error" />
             </div>
-            <h3 className="text-lg font-medium text-primary mb-2">Failed to load history</h3>
-            <p className="text-sm text-secondary mb-4">
+            <h3 className="mb-2 font-medium text-primary text-lg">Failed to load history</h3>
+            <p className="mb-4 text-secondary text-sm">
               There was an error loading your transaction history.
             </p>
             <button
               onClick={() => refetch()}
-              className="flex items-center gap-2 px-4 py-2 bg-accent-primary text-primary-inverse rounded-lg hover:bg-accent-hover transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-primary-inverse transition-colors bg-accent-primary hover:bg-accent-hover"
             >
               <RefreshCw className="w-4 h-4" />
               Try again
@@ -300,9 +300,9 @@ export function TransactionHistory({
   return (
     <Card className={cn('overflow-hidden', className)}>
       <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-info/10 text-info">
+            <div className="bg-info/10 p-2 rounded-lg text-info">
               <History className="w-5 h-5" />
             </div>
             <div className="flex items-center gap-2">
@@ -358,7 +358,7 @@ export function TransactionHistory({
         {filteredTransactions.length === 0 ? (
           <EmptyState hasFilters={hasActiveFilters} />
         ) : (
-          <div className="overflow-y-auto max-h-[560px] pr-1 mr-1 scrollbar-thin">
+          <div className="mr-1 pr-1 max-h-[560px] overflow-y-auto scrollbar-thin">
             <StaggerList className="space-y-2">
               {filteredTransactions.map((tx, index) => (
                 <StaggerItem key={tx.id}>

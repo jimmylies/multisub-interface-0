@@ -108,7 +108,7 @@ export function SubAccountManager() {
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
 
-  // Read the module's actual oracleless flag — locks the trust-mode picker on oracleless modules.
+  // Read the module's actual oracleless flag - locks the trust-mode picker on oracleless modules.
   // Picking BPS on an oracleless module would revert with OraclelessRequiresUSDMode at submission.
   const { data: isModuleOracleless } = useIsOracleless()
   useEffect(() => {
@@ -137,7 +137,7 @@ export function SubAccountManager() {
     setSelectedPreset(preset.id)
     setGrantExecute(preset.execute)
     setGrantTransfer(preset.transfer)
-    // Oracleless always requires spending limits — don't let a preset override that
+    // Oracleless always requires spending limits - don't let a preset override that
     if (trustMode !== 'oracleless') {
       setSetSpendingLimits(preset.autoSetLimits)
     }
@@ -389,7 +389,7 @@ export function SubAccountManager() {
             <div className="space-y-4">
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Preset</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr items-stretch gap-2">
+                <div className="items-stretch gap-2 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr">
                   {DASHBOARD_AGENT_PRESETS.map(preset => {
                     const isComingSoon = preset.id === 'payment-agent'
                     const card = (
@@ -399,7 +399,7 @@ export function SubAccountManager() {
                         onClick={() => !isComingSoon && applyPreset(preset.id)}
                         disabled={isComingSoon}
                         className={cn(
-                          'h-full w-full rounded-xl border p-3 text-left transition-all',
+                          'p-3 border rounded-xl w-full h-full text-left transition-all',
                           isComingSoon
                             ? 'border-subtle bg-elevated-2 opacity-50 cursor-not-allowed'
                             : selectedPreset === preset.id
@@ -407,8 +407,8 @@ export function SubAccountManager() {
                               : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
                         )}
                       >
-                        <div className="flex h-full flex-col">
-                          <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-col h-full">
+                          <div className="flex justify-between items-center gap-2">
                             <span className="font-medium text-primary text-small">
                               {preset.name}
                             </span>
@@ -454,7 +454,7 @@ export function SubAccountManager() {
 
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Trust Mode</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -468,7 +468,7 @@ export function SubAccountManager() {
                         : undefined
                     }
                     className={cn(
-                      'rounded-xl border p-3 text-left transition-all',
+                      'p-3 border rounded-xl text-left transition-all',
                       trustMode === 'oracle-managed'
                         ? 'border-accent-primary bg-accent-primary/5'
                         : 'border-subtle bg-elevated-2 hover:border-accent-primary/30',
@@ -491,7 +491,7 @@ export function SubAccountManager() {
                       setSpendingLimitUSD('')
                     }}
                     className={cn(
-                      'rounded-xl border p-3 text-left transition-all',
+                      'p-3 border rounded-xl text-left transition-all',
                       trustMode === 'oracleless'
                         ? 'border-accent-primary bg-accent-primary/5'
                         : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
@@ -508,7 +508,7 @@ export function SubAccountManager() {
                 </div>
                 {isModuleOracleless && (
                   <p className="text-caption text-tertiary">
-                    This module is oracleless — sub-accounts must use USD spending limits.
+                    This module is oracleless - sub-accounts must use USD spending limits.
                   </p>
                 )}
               </div>
@@ -574,7 +574,7 @@ export function SubAccountManager() {
                   Spending Limits {trustMode === 'oracleless' ? '(Required)' : '(Optional)'}
                 </label>
                 <div className="bg-elevated-2 p-3 border border-subtle rounded-xl">
-                  <div className="relative flex items-start gap-3 group">
+                  <div className="group relative flex items-start gap-3">
                     <Checkbox
                       id="set-limits"
                       checked={setSpendingLimits}
@@ -598,7 +598,7 @@ export function SubAccountManager() {
                       </p>
                     </div>
                     {trustMode === 'oracleless' && (
-                      <div className="absolute -top-9 left-0 hidden group-hover:block bg-slate-900 text-white text-xs px-3 py-2 rounded-md shadow-lg w-max max-w-xs z-50 pointer-events-none">
+                      <div className="hidden group-hover:block -top-9 left-0 z-50 absolute bg-slate-900 shadow-lg px-3 py-2 rounded-md w-max max-w-xs text-white text-xs pointer-events-none">
                         A USD spending limit is required in oracleless mode.
                       </div>
                     )}
@@ -791,13 +791,14 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
   // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant).
   // Also skip oracle's value when no spending has occurred yet (windowStart === 0 &&
-  // cumulativeSpent === 0) — the oracle may hold a stale allowance from a prior config.
+  // cumulativeSpent === 0) - the oracle may hold a stale allowance from a prior config.
   const noSpendingYet = (windowStart === undefined || windowStart === 0n) && effectiveSpent === 0n
-  const effectiveRemainingAllowance = isAccountOracleless || noSpendingYet
-    ? remainingBySpent
-    : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
-      ? spendingAllowance
-      : remainingBySpent
+  const effectiveRemainingAllowance =
+    isAccountOracleless || noSpendingYet
+      ? remainingBySpent
+      : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
+        ? spendingAllowance
+        : remainingBySpent
   const isOracleAllowanceLagging =
     !isAccountOracleless &&
     !noSpendingYet &&
@@ -1133,7 +1134,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
               addresses.guardian,
             ])
             if (!fresh?.some(a => a.address.toLowerCase() === deletedAddress)) break
-            // RPC still returning stale data — re-apply optimistic removal
+            // RPC still returning stale data - re-apply optimistic removal
             updateManagedAccountsCache(accounts =>
               accounts.filter(a => a.address.toLowerCase() !== deletedAddress)
             )
@@ -1313,7 +1314,7 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
               variant="outline"
               onClick={handleDeleteSubAccount}
               disabled={isRevoking || isUpdating}
-              className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              className="hover:bg-red-500/10 border-red-500/30 text-red-400 hover:text-red-300"
             >
               {isUpdating ? 'Deleting...' : 'Delete'}
             </Button>

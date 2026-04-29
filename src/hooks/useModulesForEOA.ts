@@ -6,7 +6,12 @@ import {
   AGENT_VAULT_CREATED_QUERY,
   type AgentVaultCreatedEvent,
 } from '@/lib/subgraph'
-import { AGENT_VAULT_FACTORY_ABI, GUARDIAN_ABI, MODULE_REGISTRY_ABI, SAFE_ABI } from '@/lib/contracts'
+import {
+  AGENT_VAULT_FACTORY_ABI,
+  GUARDIAN_ABI,
+  MODULE_REGISTRY_ABI,
+  SAFE_ABI,
+} from '@/lib/contracts'
 
 const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
 
@@ -44,14 +49,16 @@ export function useModulesForEOA() {
           { agentAddress: address.toLowerCase() }
         )
         if (data.agentVaultCreateds.length > 0) {
-          addModules(data.agentVaultCreateds.map(e => ({
-            module: e.module as Address,
-            safe: e.safe as Address,
-            presetId: BigInt(e.presetId),
-          })))
+          addModules(
+            data.agentVaultCreateds.map(e => ({
+              module: e.module as Address,
+              safe: e.safe as Address,
+              presetId: BigInt(e.presetId),
+            }))
+          )
         }
       } catch {
-        // Subgraph unavailable or entity not indexed — fall through to getLogs
+        // Subgraph unavailable or entity not indexed - fall through to getLogs
       }
 
       // Fallback: getLogs
@@ -122,7 +129,7 @@ export function useModulesForEOA() {
 
           addModules(ownerChecks.filter((module): module is DeployedModule => module !== null))
         } catch {
-          // Registry or Safe owner lookup unavailable — ignore and return whatever we already found
+          // Registry or Safe owner lookup unavailable - ignore and return whatever we already found
         }
       }
 

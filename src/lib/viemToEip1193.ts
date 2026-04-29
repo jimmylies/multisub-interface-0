@@ -1,24 +1,27 @@
-import { Eip1193Provider } from '@safe-global/protocol-kit';
+import { Eip1193Provider } from '@safe-global/protocol-kit'
 import type { PublicClient, WalletClient } from 'viem'
 
 /**
  * EIP-1193 Provider interface
  */
 interface RequestArguments {
-  readonly method: string;
-  readonly params?: readonly unknown[] | object;
+  readonly method: string
+  readonly params?: readonly unknown[] | object
 }
 
 /**
  * Creates an EIP-1193 compatible provider from a viem PublicClient
  * This avoids circular reference issues when passing to Safe SDK
  */
-export function createEip1193Provider(client: PublicClient, walletClient?: WalletClient): Eip1193Provider {
+export function createEip1193Provider(
+  client: PublicClient,
+  walletClient?: WalletClient
+): Eip1193Provider {
   return {
     request: async (args: RequestArguments): Promise<unknown> => {
-      const { method, params } = args;
+      const { method, params } = args
       // Normalize params to array format
-      const paramsArray = params ? (Array.isArray(params) ? params : [params]) : [];
+      const paramsArray = params ? (Array.isArray(params) ? params : [params]) : []
       try {
         // Map EIP-1193 methods to viem client methods
         switch (method) {
@@ -39,24 +42,26 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
             return await client.getCode({ address: paramsArray[0] as `0x${string}` })
 
           case 'eth_getTransactionCount':
-            const count = await client.getTransactionCount({ address: paramsArray[0] as `0x${string}` })
+            const count = await client.getTransactionCount({
+              address: paramsArray[0] as `0x${string}`,
+            })
             return `0x${count.toString(16)}`
 
           case 'eth_call':
             const callResult = await client.call({
-              to: (paramsArray[0]).to,
-              data: (paramsArray[0]).data,
-              account: (paramsArray[0]).from,
-              value: (paramsArray[0]).value,
+              to: paramsArray[0].to,
+              data: paramsArray[0].data,
+              account: paramsArray[0].from,
+              value: paramsArray[0].value,
             })
             return callResult.data
 
           case 'eth_estimateGas':
             const estimatedGas = await client.estimateGas({
-              to: (paramsArray[0]).to,
-              data: (paramsArray[0]).data,
-              account: (paramsArray[0]).from,
-              value: (paramsArray[0]).value,
+              to: paramsArray[0].to,
+              data: paramsArray[0].data,
+              account: paramsArray[0].from,
+              value: paramsArray[0].value,
             })
             return `0x${estimatedGas.toString(16)}`
 
@@ -66,15 +71,18 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
 
           case 'eth_getBlockByNumber':
             return await client.getBlock({
-              blockNumber: paramsArray[0] === 'latest' ? undefined : BigInt(paramsArray[0] as string),
-              includeTransactions: paramsArray[1] as boolean
+              blockNumber:
+                paramsArray[0] === 'latest' ? undefined : BigInt(paramsArray[0] as string),
+              includeTransactions: paramsArray[1] as boolean,
             })
 
           case 'eth_getTransactionReceipt':
             return await client.getTransactionReceipt({ hash: paramsArray[0] as `0x${string}` })
 
           case 'eth_sendRawTransaction':
-            return await client.sendRawTransaction({ serializedTransaction: paramsArray[0] as `0x${string}` })
+            return await client.sendRawTransaction({
+              serializedTransaction: paramsArray[0] as `0x${string}`,
+            })
 
           case 'eth_sendTransaction':
             if (!walletClient) {
@@ -96,7 +104,7 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
               throw new Error('Wallet client required for eth_sign')
             }
             const [signAddress, message] = paramsArray as [string, string]
-            // eth_sign signs raw bytes — pass as { raw } so viem doesn't
+            // eth_sign signs raw bytes - pass as { raw } so viem doesn't
             // UTF-8 encode the hex string (which would produce a wrong signature).
             return await walletClient.signMessage({
               account: signAddress as `0x${string}`,
@@ -111,7 +119,7 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
             }
             const [typedDataAddress, typedData] = paramsArray as [string, string]
             const parsedData = typeof typedData === 'string' ? JSON.parse(typedData) : typedData
-            // Strip EIP712Domain from types — viem derives it from the `domain`
+            // Strip EIP712Domain from types - viem derives it from the `domain`
             // object and will error if the types object also contains it.
             const { EIP712Domain: _unused, ...filteredTypes } = parsedData.types ?? {}
             return await walletClient.signTypedData({

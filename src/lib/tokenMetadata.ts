@@ -11,7 +11,7 @@ export interface TrackedToken {
   decimals: number
 }
 
-// Known tokens per network — used for display labels and tracked balances
+// Known tokens per network - used for display labels and tracked balances
 const KNOWN_TOKENS_BY_NETWORK: Record<NetworkName, Record<string, TokenMetadata>> = {
   base: {
     '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': { symbol: 'USDC', decimals: 6 },

@@ -20,7 +20,7 @@ export function useSafeAddress() {
     functionName: 'avatar',
     chainId,
     query: {
-      staleTime: 5 * 60 * 1000, // 5 minutes — avatar rarely changes
+      staleTime: 5 * 60 * 1000, // 5 minutes - avatar rarely changes
       gcTime: 10 * 60 * 1000,
     },
   })
@@ -60,7 +60,7 @@ export function useSafeOwners() {
     functionName: 'getOwners',
     query: {
       enabled: Boolean(safeAddress),
-      staleTime: 5 * 60 * 1000, // 5 minutes — owners rarely change
+      staleTime: 5 * 60 * 1000, // 5 minutes - owners rarely change
       gcTime: 10 * 60 * 1000,
     },
     chainId,
@@ -83,7 +83,7 @@ export function useCumulativeSpent(subAccountAddress?: `0x${string}`) {
     chainId,
     query: {
       enabled: Boolean(subAccountAddress && addresses.guardian),
-      staleTime: 30 * 1000, // 30s — changes after each spending op
+      staleTime: 30 * 1000, // 30s - changes after each spending op
       gcTime: 2 * 60 * 1000,
     },
   })
@@ -127,7 +127,7 @@ export function useIsOracleless() {
     chainId,
     query: {
       enabled: Boolean(addresses.guardian),
-      staleTime: 5 * 60 * 1000, // 5 minutes — mode changes are rare admin actions
+      staleTime: 5 * 60 * 1000, // 5 minutes - mode changes are rare admin actions
       gcTime: 10 * 60 * 1000,
     },
   })
@@ -147,7 +147,7 @@ export function useIsPaused() {
     chainId,
     query: {
       enabled: Boolean(addresses.guardian),
-      staleTime: 60 * 1000, // 1 minute — check pause status periodically
+      staleTime: 60 * 1000, // 1 minute - check pause status periodically
       gcTime: 5 * 60 * 1000,
     },
   })
@@ -168,9 +168,7 @@ export function useIsSafeOwner() {
     owners.some(owner => owner.toLowerCase() === connectedAddress.toLowerCase())
 
   const isDirectOwner =
-    connectedAddress &&
-    moduleOwner &&
-    connectedAddress.toLowerCase() === moduleOwner.toLowerCase()
+    connectedAddress && moduleOwner && connectedAddress.toLowerCase() === moduleOwner.toLowerCase()
 
   return {
     isSafeOwner: Boolean(isSafeSigner || isDirectOwner),
@@ -350,9 +348,7 @@ export function useAllowedAddresses(
 
       return allowed
     },
-    enabled: Boolean(
-      addresses.guardian && publicClient && subAccountAddress && addressesToCheck
-    ),
+    enabled: Boolean(addresses.guardian && publicClient && subAccountAddress && addressesToCheck),
   })
 }
 
@@ -371,7 +367,7 @@ export function useSpendingAllowance(subAccountAddress?: `0x${string}`) {
     args: subAccountAddress ? [subAccountAddress] : undefined,
     query: {
       enabled: Boolean(subAccountAddress && addresses.guardian),
-      staleTime: 10 * 1000, // 10s — depends on oracle-updated safe value
+      staleTime: 10 * 1000, // 10s - depends on oracle-updated safe value
       gcTime: 60 * 1000,
       refetchOnWindowFocus: true,
       refetchInterval: 30 * 1000, // Poll every 30s to stay in sync with oracle updates
@@ -417,7 +413,7 @@ export function useSafeValue() {
     functionName: 'getSafeValue',
     query: {
       enabled: Boolean(addresses.guardian),
-      staleTime: 30 * 1000, // 30s — oracle updates portfolio value periodically
+      staleTime: 30 * 1000, // 30s - oracle updates portfolio value periodically
       gcTime: 5 * 60 * 1000,
     },
     chainId,
