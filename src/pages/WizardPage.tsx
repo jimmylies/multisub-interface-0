@@ -39,6 +39,7 @@ import { PROTOCOLS } from '@/lib/protocols'
 import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
 import { Tooltip } from '@/components/ui/tooltip'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
+import { useContractAddresses } from '@/contexts/ContractAddressContext'
 
 // Preset IDs match PresetRegistry on-chain (0-indexed via presetCount++)
 const PRESET_IDS: Record<string, number> = {
@@ -240,6 +241,7 @@ const PRESET_CONFIG: Record<string, NamedPresetConfig> = {
 
 export function WizardPage() {
   const navigate = useNavigate()
+  const { setGuardian } = useContractAddresses()
   const { isConnected, address: connectedAddress } = useAccount()
   const chainId = useChainId()
   const publicClient = usePublicClient()
@@ -1394,7 +1396,7 @@ export function WizardPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    localStorage.setItem('guardian', existingModuleAddress)
+                    setGuardian(existingModuleAddress as `0x${string}`)
                     navigate(`${ROUTES.DASHBOARD}?guardian=${existingModuleAddress}`)
                   }}
                 >
@@ -1583,7 +1585,15 @@ export function WizardPage() {
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(ROUTES.DASHBOARD)}
+                  onClick={() => {
+                    const target = usedExistingVault
+                      ? existingModuleAddress
+                      : deployedModule && deployedModule !== 'unknown'
+                        ? deployedModule
+                        : null
+                    if (target) setGuardian(target as `0x${string}`)
+                    navigate(`${ROUTES.DASHBOARD}?guardian=${target ?? ''}`)
+                  }}
                 >
                   Go to Dashboard
                 </Button>
