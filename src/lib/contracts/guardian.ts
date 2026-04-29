@@ -191,6 +191,20 @@ export const GUARDIAN_ABI = [
   },
   {
     type: 'function',
+    name: 'tokenPriceFeeds',
+    inputs: [{ name: '', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'address', internalType: 'contract AggregatorV3Interface' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'maxPriceFeedAge',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'selectorType',
     inputs: [{ name: '', type: 'bytes4', internalType: 'bytes4' }],
     outputs: [{ name: '', type: 'uint8', internalType: 'enum DeFiInteractorModule.OperationType' }],
@@ -255,6 +269,7 @@ export const GUARDIAN_ABI = [
     inputs: [
       { name: 'target', type: 'address', internalType: 'address' },
       { name: 'data', type: 'bytes', internalType: 'bytes' },
+      { name: 'value', type: 'uint256', internalType: 'uint256' },
     ],
     outputs: [{ name: '', type: 'bytes', internalType: 'bytes' }],
     stateMutability: 'payable',
@@ -616,6 +631,59 @@ export const GUARDIAN_ABI = [
   { type: 'error', name: 'ExceedsMaxBps', inputs: [] },
   { type: 'error', name: 'Unauthorized', inputs: [] },
   { type: 'error', name: 'InvalidAddress', inputs: [] },
+  { type: 'error', name: 'BothLimitModesSet', inputs: [] },
+  { type: 'error', name: 'NeitherLimitModeSet', inputs: [] },
+  { type: 'error', name: 'OraclelessRequiresUSDMode', inputs: [] },
+  { type: 'error', name: 'AlreadyInitialized', inputs: [] },
+  {
+    type: 'error',
+    name: 'ExceedsOracleAcquiredBudget',
+    inputs: [
+      { name: 'cumulative', type: 'uint256', internalType: 'uint256' },
+      { name: 'maximum', type: 'uint256', internalType: 'uint256' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'ExceedsCumulativeSpendingLimit',
+    inputs: [
+      { name: 'cumulative', type: 'uint256', internalType: 'uint256' },
+      { name: 'maximum', type: 'uint256', internalType: 'uint256' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'CannotRegisterParserForCoreAddress',
+    inputs: [{ name: 'account', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'InvalidRecipient',
+    inputs: [
+      { name: 'recipient', type: 'address', internalType: 'address' },
+      { name: 'expected', type: 'address', internalType: 'address' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'CannotBeSubaccount',
+    inputs: [{ name: 'account', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'CannotBeOracle',
+    inputs: [{ name: 'account', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'CannotWhitelistCoreAddress',
+    inputs: [{ name: 'account', type: 'address', internalType: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'SubAccountHasBPSLimits',
+    inputs: [{ name: 'subAccount', type: 'address', internalType: 'address' }],
+  },
 ] as const
 
 // Operation type enum (matches contract)
@@ -641,7 +709,6 @@ export const ROLE_NAMES = {
 } as const
 
 export const ROLE_DESCRIPTIONS = {
-  [ROLES.DEFI_EXECUTE_ROLE]:
-    'Can execute protocol interactions (limited by spending allowance)',
+  [ROLES.DEFI_EXECUTE_ROLE]: 'Can execute protocol interactions (limited by spending allowance)',
   [ROLES.DEFI_TRANSFER_ROLE]: 'Can transfer tokens from Safe (costs spending allowance)',
 } as const

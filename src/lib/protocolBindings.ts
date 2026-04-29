@@ -117,7 +117,7 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
         // V4 parser deployed at 0xa6ddd242…51ae on Base Sepolia (decoded from
         // ConfigureModuleBaseSepolia broadcast). Handles modifyLiquidities.
         protocol: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
-        parser: '0xa6DDd242D2a933944fB241f6FFF43e37BcB851aE',
+        parser: '0xa6dDd242d2A933944Fb241F6fFf43e37bCb851ae',
       },
     ],
     selectors: [

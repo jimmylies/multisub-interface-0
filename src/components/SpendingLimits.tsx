@@ -378,11 +378,22 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                 <p className="font-medium text-primary text-small">Summary</p>
               </div>
               <div className="space-y-1.5 ml-7 text-caption text-secondary">
-                <p>
-                  • All operations limited to <strong>{spendingLimit}%</strong> of portfolio per{' '}
-                  {windowHours}-hour window
-                </p>
-                <p>• Oracle tracks real-time spending across all transactions</p>
+                {isOracleless ? (
+                  <p>
+                    • All operations limited to <strong>${spendingLimitUSD || '0'}</strong> per{' '}
+                    {windowHours}-hour window
+                  </p>
+                ) : (
+                  <p>
+                    • All operations limited to <strong>{spendingLimit}%</strong> of portfolio per{' '}
+                    {windowHours}-hour window
+                  </p>
+                )}
+                {isOracleless ? (
+                  <p>• On-chain cumulative spending tracker — no oracle required</p>
+                ) : (
+                  <p>• Oracle tracks real-time spending across all transactions</p>
+                )}
                 <p>• Acquired tokens (from swaps/deposits) are FREE for 24 hours</p>
                 <p>
                   • Limits automatically reset every{' '}

@@ -33,7 +33,7 @@ const UNI_BASE_SEPOLIA = {
   positionManagerV4: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
   swapRouterParser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
   universalParser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
-  v4Parser: '0xa6DDd242D2a933944fB241f6FFF43e37BcB851aE',
+  v4Parser: '0xa6dDd242d2A933944Fb241F6fFf43e37bCb851ae',
 } as const
 
 describe('composeBindings (base-sepolia)', () => {
