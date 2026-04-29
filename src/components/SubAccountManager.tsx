@@ -1099,13 +1099,34 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
         )
 
         if (result.success) {
+          const deletedAddress = account.toLowerCase()
           updateManagedAccountsCache(accounts =>
-            accounts.filter(existing => existing.address.toLowerCase() !== account.toLowerCase())
+            accounts.filter(existing => existing.address.toLowerCase() !== deletedAddress)
           )
           toast.success('Agent deleted successfully')
           setIsRolesPopoverOpen(false)
           setLocalExecuteRole(false)
           setLocalTransferRole(false)
+
+          // The query invalidation in useSafeProposal fires ~4s after confirmation
+          // and may restore the account if the RPC node hasn't indexed the block yet.
+          // Poll until the on-chain data confirms deletion, re-applying the optimistic
+          // removal each time a stale refetch sneaks through.
+          for (let i = 0; i < 6; i++) {
+            await new Promise(res => setTimeout(res, 3000))
+            await queryClient.refetchQueries({
+              queryKey: ['managedAccounts', addresses.guardian],
+            })
+            const fresh = queryClient.getQueryData<SubAccount[]>([
+              'managedAccounts',
+              addresses.guardian,
+            ])
+            if (!fresh?.some(a => a.address.toLowerCase() === deletedAddress)) break
+            // RPC still returning stale data — re-apply optimistic removal
+            updateManagedAccountsCache(accounts =>
+              accounts.filter(a => a.address.toLowerCase() !== deletedAddress)
+            )
+          }
         } else if ('cancelled' in result && result.cancelled) {
           return
         } else {
