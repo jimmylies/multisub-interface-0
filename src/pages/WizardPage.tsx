@@ -131,6 +131,11 @@ const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefine
 const supportedProtocolIds = getSupportedProtocolIds(selectedNetworkName)
 // Major tokens on Base Sepolia with Chainlink price feeds
 const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
+  // Native ETH (address(0)) → ETH/USD
+  {
+    token: '0x0000000000000000000000000000000000000000',
+    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
+  },
   // WETH → ETH/USD
   {
     token: '0x4200000000000000000000000000000000000006',
