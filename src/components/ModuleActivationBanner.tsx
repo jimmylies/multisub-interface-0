@@ -118,10 +118,10 @@ export function ModuleActivationBanner() {
             className="bg-accent-primary text-black hover:bg-accent-primary/90 disabled:opacity-50"
           >
             {isEnabling ? (
-              <>
+              <span className="inline-flex items-center">
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Enabling…
-              </>
+              </span>
             ) : (
               'Enable Guardian on Safe'
             )}
