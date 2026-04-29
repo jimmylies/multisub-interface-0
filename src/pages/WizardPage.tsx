@@ -870,6 +870,8 @@ export function WizardPage() {
                 selectorTypes,
                 priceFeedTokens,
                 priceFeedAddresses,
+                recipientWhitelistEnabled: false,
+                allowedRecipients: [],
               },
             ],
           },

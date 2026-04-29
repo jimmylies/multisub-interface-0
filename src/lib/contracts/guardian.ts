@@ -316,6 +316,27 @@ export const GUARDIAN_ABI = [
   },
   {
     type: 'function',
+    name: 'setRecipientWhitelistEnabled',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'enabled', type: 'bool', internalType: 'bool' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setAllowedRecipients',
+    inputs: [
+      { name: 'subAccount', type: 'address', internalType: 'address' },
+      { name: 'recipients', type: 'address[]', internalType: 'address[]' },
+      { name: 'allowed', type: 'bool', internalType: 'bool' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     name: 'registerSelector',
     inputs: [
       { name: 'selector', type: 'bytes4', internalType: 'bytes4' },
@@ -484,6 +505,25 @@ export const GUARDIAN_ABI = [
   },
   {
     type: 'event',
+    name: 'RecipientWhitelistToggled',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'enabled', type: 'bool', indexed: false, internalType: 'bool' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'AllowedRecipientsSet',
+    inputs: [
+      { name: 'subAccount', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'recipients', type: 'address[]', indexed: false, internalType: 'address[]' },
+      { name: 'allowed', type: 'bool', indexed: false, internalType: 'bool' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
     name: 'EmergencyPaused',
     inputs: [{ name: 'by', type: 'address', indexed: true, internalType: 'address' }],
     anonymous: false,
@@ -560,11 +600,16 @@ export const GUARDIAN_ABI = [
   },
   {
     type: 'error',
-    name: 'ExceedsAbsoluteMaxSpending',
+    name: 'ExceedsAllowanceCap',
     inputs: [
       { name: 'requested', type: 'uint256', internalType: 'uint256' },
       { name: 'maximum', type: 'uint256', internalType: 'uint256' },
     ],
+  },
+  {
+    type: 'error',
+    name: 'RecipientNotAllowed',
+    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
   },
   { type: 'error', name: 'CannotRegisterUnknown', inputs: [] },
   { type: 'error', name: 'LengthMismatch', inputs: [] },
