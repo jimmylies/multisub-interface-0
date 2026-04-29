@@ -626,6 +626,7 @@ export enum OperationType {
   WITHDRAW = 3,
   CLAIM = 4,
   APPROVE = 5,
+  REPAY = 6,
 }
 
 // Role constants

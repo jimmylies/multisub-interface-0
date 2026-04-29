@@ -260,6 +260,7 @@ export function WizardPage() {
   const [oracleless, setOracleless] = useState(false)
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
+  const [isSimulating, setIsSimulating] = useState(false)
   const [existingVaultTxHash, setExistingVaultTxHash] = useState<`0x${string}` | null>(null)
   const [usedExistingVault, setUsedExistingVault] = useState(false)
   const [isExistingVaultFlowModalOpen, setIsExistingVaultFlowModalOpen] = useState(false)
@@ -279,7 +280,7 @@ export function WizardPage() {
   // In oracleless mode, oracle address can be missing (we use zeroAddress)
   const oracleConfigOk = oracleless || !!ORACLE_ADDRESS
 
-  const { writeContract, data: txHash, isPending: isWriting } = useWriteContract()
+  const { writeContract, reset: resetWriteContract, data: txHash, isPending: isWriting } = useWriteContract()
   const {
     data: receipt,
     isLoading: isConfirming,
@@ -826,6 +827,8 @@ export function WizardPage() {
     setDeployedModule(null)
     setUsedExistingVault(false)
     setExistingVaultTxHash(null)
+    resetWriteContract()
+    setIsSimulating(true)
 
     const presetId = PRESET_IDS[preset.id]
     // In oracleless mode, price feeds are not strictly needed for spending tracking
@@ -855,32 +858,67 @@ export function WizardPage() {
       const selectors = composed.selectors
       const selectorTypes = composed.selectorTypes
 
-      {
+      const vaultConfig = {
+        safe: safeAddress as Address,
+        oracle: effectiveOracle,
+        agentAddress: agentAddress as Address,
+        roleId,
+        maxSpendingBps,
+        maxSpendingUSD,
+        windowDuration: 86400n, // 24h
+        allowedProtocols,
+        parserProtocols,
+        parserAddresses,
+        selectors,
+        selectorTypes,
+        priceFeedTokens,
+        priceFeedAddresses,
+        recipientWhitelistEnabled: false,
+        allowedRecipients: [],
+      } as const
+
+      // Pre-flight: check the registry directly (bypasses React Query cache) to
+      // detect SafeAlreadyHasModule before wasting a gas simulation.
+      if (publicClient && moduleRegistryAddress) {
+        const registeredModule = await publicClient.readContract({
+          address: moduleRegistryAddress,
+          abi: MODULE_REGISTRY_ABI,
+          functionName: 'getModuleForSafe',
+          args: [safeAddress as Address],
+        })
+        if (registeredModule && registeredModule !== zeroAddress) {
+          setDeployError(
+            `This Safe already has a Guardian registered in the module registry (${registeredModule}). Use "Open In Dashboard" above to manage it instead.`
+          )
+          return
+        }
+      }
+
+      // Simulate first — surfaces the actual revert reason before any gas is spent.
+      // If this throws, the outer catch will set deployError with the decoded message.
+      if (publicClient && connectedAddress) {
+        const { request } = await publicClient.simulateContract({
+          address: FACTORY_ADDRESS,
+          abi: AGENT_VAULT_FACTORY_ABI,
+          functionName: 'deployVault',
+          args: [vaultConfig],
+          account: connectedAddress,
+        })
+        writeContract(request, {
+          onSuccess(hash) {
+            console.log('Vault deployment tx:', hash)
+          },
+          onError(error) {
+            setDeployError(error.message)
+          },
+        })
+      } else {
         writeContract(
           {
             address: FACTORY_ADDRESS,
             abi: AGENT_VAULT_FACTORY_ABI,
             functionName: 'deployVault',
-            args: [
-              {
-                safe: safeAddress as Address,
-                oracle: effectiveOracle,
-                agentAddress: agentAddress as Address,
-                roleId,
-                maxSpendingBps,
-                maxSpendingUSD,
-                windowDuration: 86400n, // 24h
-                allowedProtocols,
-                parserProtocols,
-                parserAddresses,
-                selectors,
-                selectorTypes,
-                priceFeedTokens,
-                priceFeedAddresses,
-                recipientWhitelistEnabled: false,
-                allowedRecipients: [],
-              },
-            ],
+            args: [vaultConfig],
           },
           {
             onSuccess(hash) {
@@ -893,7 +931,23 @@ export function WizardPage() {
         )
       }
     } catch (error) {
-      setDeployError(error instanceof Error ? error.message : 'Deployment failed')
+      // Viem's ContractFunctionRevertedError has shortMessage + cause.reason.
+      // Prefer the most specific message; fall back through layers to avoid
+      // dumping the full "Raw Call Arguments" block into the UI.
+      const e = error as {
+        shortMessage?: string
+        cause?: { reason?: string; shortMessage?: string }
+        message?: string
+      }
+      const msg =
+        e.cause?.reason ??
+        e.cause?.shortMessage ??
+        e.shortMessage ??
+        e.message ??
+        'Deployment failed'
+      setDeployError(msg)
+    } finally {
+      setIsSimulating(false)
     }
   }
 
@@ -1411,7 +1465,7 @@ export function WizardPage() {
             </div>
           )}
 
-          {deployError && (
+          {deployError && !isSimulating && (
             <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-sm text-red-400">{deployError}</p>
             </div>
@@ -1424,14 +1478,21 @@ export function WizardPage() {
             </div>
           )}
 
-          {isWriting && (
+          {isSimulating && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+              <p className="text-sm text-blue-400">Validating configuration...</p>
+            </div>
+          )}
+
+          {!isSimulating && isWriting && (
             <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
               <p className="text-sm text-blue-400">Waiting for wallet confirmation...</p>
             </div>
           )}
 
-          {isConfirming && !txFailed && txHash && (
+          {!isSimulating && isConfirming && !txFailed && txHash && (
             <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <div className="flex items-center gap-3 mb-2">
                 <Loader2 className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
@@ -1457,7 +1518,7 @@ export function WizardPage() {
             </div>
           )}
 
-          {txFailed && txHash && (
+          {!isSimulating && txFailed && txHash && (
             <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
               <p className="text-sm font-medium text-red-400">Transaction failed</p>
               {txFailMessage && (
@@ -1617,6 +1678,7 @@ export function WizardPage() {
             <Button
               onClick={handleDeploy}
               disabled={
+                isSimulating ||
                 isDeploying ||
                 isConfiguringExistingVault ||
                 usedExistingVault ||
@@ -1626,17 +1688,19 @@ export function WizardPage() {
             >
               {isConfiguringExistingVault
                 ? 'Configuring Existing Guardian...'
-                : isWriting
-                  ? 'Confirm in Wallet...'
-                  : isConfirming && !txFailed
-                    ? 'Deploying...'
-                    : usedExistingVault || (isSuccess && !txReverted)
-                      ? 'Deployed!'
-                      : txFailed
-                        ? 'Retry Deploy'
-                        : showExistingModuleWarning
-                          ? 'Add Agent To Existing Guardian'
-                          : 'Deploy Guardian'}
+                : isSimulating
+                  ? 'Validating...'
+                  : isWriting
+                    ? 'Confirm in Wallet...'
+                    : isConfirming && !txFailed
+                      ? 'Deploying...'
+                      : usedExistingVault || (isSuccess && !txReverted)
+                        ? 'Deployed!'
+                        : txFailed
+                          ? 'Retry Deploy'
+                          : showExistingModuleWarning
+                            ? 'Add Agent To Existing Guardian'
+                            : 'Deploy Guardian'}
             </Button>
           </div>
         </div>
