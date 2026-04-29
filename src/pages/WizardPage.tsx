@@ -208,8 +208,8 @@ const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
     feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
   },
 ]
-const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.token)
-const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.feed)
+const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.filter(p => p.token !== zeroAddress).map(p => p.token)
+const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.filter(p => p.token !== zeroAddress).map(p => p.feed)
 
 const PRESET_ROLE_IDS: Record<string, number> = {
   'defi-trader': ROLES.DEFI_EXECUTE_ROLE,
@@ -378,6 +378,13 @@ export function WizardPage() {
     setUsedExistingVault(false)
     setIsExistingVaultFlowModalOpen(false)
 
+    if (!isConnectedSafeOwner) {
+      setDeployError(
+        `Connected wallet is not an owner of this Safe. Switch to a signer of ${safeAddress.slice(0, 6)}…${safeAddress.slice(-4)} to continue.`
+      )
+      return
+    }
+
     try {
       const result = await proposeTransaction(
         transactions.length === 1 ? transactions[0] : transactions,
@@ -479,6 +486,28 @@ export function WizardPage() {
       // Fallback to UI toggle if call fails
     }
 
+    // Early blocker: if this agent already has a role in the vault, stop here.
+    const roleToCheck =
+      preset.id === 'custom'
+        ? ROLES.DEFI_EXECUTE_ROLE
+        : (PRESET_ROLE_IDS[preset.id] ?? ROLES.DEFI_EXECUTE_ROLE)
+    try {
+      const agentAlreadyHasRole = await publicClient.readContract({
+        address: existingModuleAddress,
+        abi: GUARDIAN_ABI,
+        functionName: 'hasRole',
+        args: [agentAddress as Address, roleToCheck],
+      })
+      if (agentAlreadyHasRole) {
+        setDeployError(
+          `Agent ${agentAddress.slice(0, 6)}…${agentAddress.slice(-4)} already has access in this vault. To update its limits or permissions, use the Dashboard instead.`
+        )
+        return
+      }
+    } catch {
+      // If the call fails, continue and let the transaction surface any issue
+    }
+
     // Register any missing price feeds on the existing guardian
     const feedStatuses = await Promise.all(
       BASE_SEPOLIA_PRICE_FEEDS.map(async ({ token, feed }) => {
@@ -501,7 +530,7 @@ export function WizardPage() {
       })
     )
 
-    const missingFeeds = feedStatuses.filter(f => f.needsRegistration)
+    const missingFeeds = feedStatuses.filter(f => f.needsRegistration && f.token !== zeroAddress)
     missingFeeds.forEach(({ token, feed }) => {
       addTransaction(
         {
@@ -519,20 +548,30 @@ export function WizardPage() {
     })
 
     if (preset.id === 'custom') {
-      addTransaction(
-        {
-          to: existingModuleAddress,
-          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'grantRole', [
-            agentAddress as Address,
-            ROLES.DEFI_EXECUTE_ROLE,
-          ]),
-        },
-        {
-          title: 'Grant agent role',
-          description:
-            'Gives this agent the EXECUTE permission needed to operate inside the vault.',
-        }
-      )
+      const alreadyHasRoleCustom = await publicClient.readContract({
+        address: existingModuleAddress,
+        abi: GUARDIAN_ABI,
+        functionName: 'hasRole',
+        args: [agentAddress as Address, ROLES.DEFI_EXECUTE_ROLE],
+      })
+
+      if (!alreadyHasRoleCustom) {
+        addTransaction(
+          {
+            to: existingModuleAddress,
+            data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'grantRole', [
+              agentAddress as Address,
+              ROLES.DEFI_EXECUTE_ROLE,
+            ]),
+          },
+          {
+            title: 'Grant agent role',
+            description:
+              'Gives this agent the EXECUTE permission needed to operate inside the vault.',
+          }
+        )
+      }
+
       addTransaction(
         {
           to: existingModuleAddress,
@@ -939,12 +978,18 @@ export function WizardPage() {
         cause?: { reason?: string; shortMessage?: string }
         message?: string
       }
-      const msg =
+      const raw =
         e.cause?.reason ??
         e.cause?.shortMessage ??
         e.shortMessage ??
         e.message ??
         'Deployment failed'
+      // "execution reverted" with no reason means the contract reverted without
+      // a message — surface a clearer explanation than the raw EVM term.
+      const msg =
+        raw === 'execution reverted' || raw === 'Execution reverted.'
+          ? 'Deployment failed — the contract rejected the transaction. This usually means the configuration is invalid or the Safe is already registered. If the issue persists, contact support.'
+          : raw
       setDeployError(msg)
     } finally {
       setIsSimulating(false)
@@ -1466,8 +1511,25 @@ export function WizardPage() {
           )}
 
           {deployError && !isSimulating && (
-            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 space-y-2">
               <p className="text-sm text-red-400">{deployError}</p>
+              {FACTORY_ADDRESS && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-red-400/70 font-mono">
+                    Factory: {FACTORY_ADDRESS.slice(0, 10)}...{FACTORY_ADDRESS.slice(-8)}
+                  </span>
+                  <CopyButton value={FACTORY_ADDRESS} />
+                  <a
+                    href={`${getExplorerBase(chainId)}/address/${FACTORY_ADDRESS}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-5 h-5 rounded text-red-400/70 hover:text-red-400 transition-colors"
+                    title="View factory contract"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
             </div>
           )}
 

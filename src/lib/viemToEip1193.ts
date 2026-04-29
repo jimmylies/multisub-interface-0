@@ -82,6 +82,7 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
             }
             const txParams: any = paramsArray[0]
             return await walletClient.sendTransaction({
+              chain: walletClient.chain,
               account: txParams.from as `0x${string}`,
               to: txParams.to as `0x${string}`,
               data: txParams.data as `0x${string}`,
@@ -95,9 +96,11 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
               throw new Error('Wallet client required for eth_sign')
             }
             const [signAddress, message] = paramsArray as [string, string]
+            // eth_sign signs raw bytes — pass as { raw } so viem doesn't
+            // UTF-8 encode the hex string (which would produce a wrong signature).
             return await walletClient.signMessage({
               account: signAddress as `0x${string}`,
-              message: message as `0x${string}`,
+              message: { raw: message as `0x${string}` },
             })
 
           case 'eth_signTypedData':
@@ -108,9 +111,13 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
             }
             const [typedDataAddress, typedData] = paramsArray as [string, string]
             const parsedData = typeof typedData === 'string' ? JSON.parse(typedData) : typedData
+            // Strip EIP712Domain from types — viem derives it from the `domain`
+            // object and will error if the types object also contains it.
+            const { EIP712Domain: _unused, ...filteredTypes } = parsedData.types ?? {}
             return await walletClient.signTypedData({
               account: typedDataAddress as `0x${string}`,
-              ...parsedData
+              ...parsedData,
+              types: filteredTypes,
             })
 
           case 'personal_sign':
@@ -118,10 +125,10 @@ export function createEip1193Provider(client: PublicClient, walletClient?: Walle
               throw new Error('Wallet client required for personal_sign')
             }
             const [personalMessage, personalAddress] = paramsArray as [string, string]
-            // personal_sign format: message first, then address (opposite of eth_sign)
+            // personal_sign signs raw bytes (same as eth_sign but different param order).
             return await walletClient.signMessage({
               account: (personalAddress || walletClient.account?.address) as `0x${string}`,
-              message: personalMessage as `0x${string}`,
+              message: { raw: personalMessage as `0x${string}` },
             })
 
           case 'eth_gasPrice':
