@@ -32,6 +32,7 @@ const UNI_BASE_SEPOLIA = {
   positionManagerV4: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
   swapRouterParser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
   universalParser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
+  v4Parser: '0xa6DDd242D2a933944fB241f6FFF43e37BcB851aE',
 } as const
 
 describe('composeBindings (base-sepolia)', () => {
@@ -65,20 +66,28 @@ describe('composeBindings (base-sepolia)', () => {
       UNI_BASE_SEPOLIA.positionManagerV4,
     ])
 
+    // V3 PositionManager reuses the V3 swap-router parser (UniswapV3Parser
+    // covers MINT/INCREASE/DECREASE/COLLECT). V4 PositionManager uses its
+    // own parser deployed at v4Parser.
     expect(result.parserProtocols).toEqual([
       AAVE_BASE_SEPOLIA.pool,
       AAVE_BASE_SEPOLIA.rewards,
       UNI_BASE_SEPOLIA.swapRouter,
+      UNI_BASE_SEPOLIA.positionManagerV3,
       UNI_BASE_SEPOLIA.universal,
+      UNI_BASE_SEPOLIA.positionManagerV4,
     ])
     expect(result.parserAddresses).toEqual([
       AAVE_BASE_SEPOLIA.parser,
       AAVE_BASE_SEPOLIA.parser,
       UNI_BASE_SEPOLIA.swapRouterParser,
+      UNI_BASE_SEPOLIA.swapRouterParser,
       UNI_BASE_SEPOLIA.universalParser,
+      UNI_BASE_SEPOLIA.v4Parser,
     ])
 
     // APPROVE first (common), then aave selectors, then uniswap selectors
+    // (swap-side first, then V3 PositionManager, then V4).
     expect(result.selectors).toEqual([
       APPROVE,
       '0x617ba037', // aave supply
@@ -95,7 +104,7 @@ describe('composeBindings (base-sepolia)', () => {
       '0x219f5d17', // uni increaseLiquidity (V3)
       '0x0c49ccbe', // uni decreaseLiquidity (V3)
       '0xfc6f7865', // uni collect (V3)
-      '0xa0ca4234', // uni modifyLiquidities (PositionManager V4)
+      '0xdd46508f', // uni modifyLiquidities (PositionManager V4)
     ])
     expect(result.selectorTypes).toEqual([
       OP_APPROVE,

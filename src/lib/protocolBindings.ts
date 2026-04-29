@@ -98,11 +98,24 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
     parsers: [
       {
         protocol: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
+        parser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc', // UniswapV3Parser
+      },
+      {
+        // V3 NonfungiblePositionManager reuses the V3 parser — UniswapV3Parser
+        // already handles MINT/INCREASE/DECREASE/COLLECT selectors
+        // (UniswapV3Parser.sol:67-73).
+        protocol: '0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2',
         parser: '0x37F53B27CAAcCb1cDc100d0bC0E52d8B09937aCc',
       },
       {
         protocol: '0x492E6456D9528771018DeB9E87ef7750EF184104',
-        parser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568',
+        parser: '0x0e5A08b67BB89E8050A361f19Bcb70D9Ba6bF568', // UniversalRouterParser
+      },
+      {
+        // V4 parser deployed at 0xa6ddd242…51ae on Base Sepolia (decoded from
+        // ConfigureModuleBaseSepolia broadcast). Handles modifyLiquidities.
+        protocol: '0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80',
+        parser: '0xa6DDd242D2a933944fB241f6FFF43e37BcB851aE',
       },
     ],
     selectors: [
@@ -114,7 +127,11 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
       { selector: '0x219f5d17', opType: OP_DEPOSIT }, // increaseLiquidity (V3)
       { selector: '0x0c49ccbe', opType: OP_WITHDRAW }, // decreaseLiquidity (V3)
       { selector: '0xfc6f7865', opType: OP_CLAIM }, // collect (V3)
-      { selector: '0xa0ca4234', opType: OP_DEPOSIT }, // modifyLiquidities (PositionManager V4)
+      // NOTE: PositionManager V4 selector. Earlier code had 0xa0ca4234 here
+      // which doesn't correspond to any V4 function — the V4 parser actually
+      // handles modifyLiquidities(bytes,uint256) = 0xdd46508f
+      // (UniswapV4Parser.sol:48).
+      { selector: '0xdd46508f', opType: OP_DEPOSIT }, // modifyLiquidities (PositionManager V4)
     ],
   },
   // merkl: Distributor parser/selectors not deployed — intentionally absent

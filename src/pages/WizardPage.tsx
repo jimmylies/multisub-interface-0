@@ -208,8 +208,14 @@ const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
     feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
   },
 ]
-const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.filter(p => p.token !== zeroAddress).map(p => p.token)
-const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.filter(p => p.token !== zeroAddress).map(p => p.feed)
+// At fresh deploy time the factory calls setTokenPriceFeeds (plural) which
+// explicitly accepts address(0) as native ETH (DeFiInteractorModule.sol:1136).
+// The zeroAddress filter must NOT be applied here — it would silently drop
+// the ETH/USD feed and break Uniswap swap paths that involve native ETH.
+// (The existing-vault flow keeps its own filter because it uses the singular
+// setter which rejects address(0).)
+const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.token)
+const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.feed)
 
 const PRESET_ROLE_IDS: Record<string, number> = {
   'defi-trader': ROLES.DEFI_EXECUTE_ROLE,
@@ -280,7 +286,12 @@ export function WizardPage() {
   // In oracleless mode, oracle address can be missing (we use zeroAddress)
   const oracleConfigOk = oracleless || !!ORACLE_ADDRESS
 
-  const { writeContract, reset: resetWriteContract, data: txHash, isPending: isWriting } = useWriteContract()
+  const {
+    writeContract,
+    reset: resetWriteContract,
+    data: txHash,
+    isPending: isWriting,
+  } = useWriteContract()
   const {
     data: receipt,
     isLoading: isConfirming,
