@@ -24,6 +24,7 @@ const AAVE_BASE_SEPOLIA = {
 } as const
 
 const MORPHO_BLUE_BASE_SEPOLIA = '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb'
+const MORPHO_BLUE_PARSER_BASE_SEPOLIA = '0x19be5d89dB6d4CD8dd26Eaac306B280e9D83B739'
 
 const UNI_BASE_SEPOLIA = {
   swapRouter: '0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4',
@@ -134,9 +135,16 @@ describe('composeBindings (base-sepolia)', () => {
       AAVE_BASE_SEPOLIA.rewards,
       MORPHO_BLUE_BASE_SEPOLIA,
     ])
-    // Morpho intentionally has no parser registered
-    expect(result.parserProtocols).toEqual([AAVE_BASE_SEPOLIA.pool, AAVE_BASE_SEPOLIA.rewards])
-    expect(result.parserAddresses).toEqual([AAVE_BASE_SEPOLIA.parser, AAVE_BASE_SEPOLIA.parser])
+    expect(result.parserProtocols).toEqual([
+      AAVE_BASE_SEPOLIA.pool,
+      AAVE_BASE_SEPOLIA.rewards,
+      MORPHO_BLUE_BASE_SEPOLIA,
+    ])
+    expect(result.parserAddresses).toEqual([
+      AAVE_BASE_SEPOLIA.parser,
+      AAVE_BASE_SEPOLIA.parser,
+      MORPHO_BLUE_PARSER_BASE_SEPOLIA,
+    ])
 
     expect(result.selectors).toEqual([
       APPROVE,

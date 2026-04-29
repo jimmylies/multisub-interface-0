@@ -76,10 +76,12 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
   },
   morpho: {
     protocols: ['0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb'],
-    // No Morpho parser is currently deployed on Base Sepolia for the
-    // module — selectors are registered without a parser, matching the
-    // historical yield-farmer preset shape.
-    parsers: [],
+    parsers: [
+      {
+        protocol: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
+        parser: '0x19be5d89dB6d4CD8dd26Eaac306B280e9D83B739',
+      },
+    ],
     selectors: [
       { selector: '0xa99aad89', opType: OP_DEPOSIT }, // supply
       { selector: '0x5c2bea49', opType: OP_WITHDRAW }, // withdraw
