@@ -389,6 +389,8 @@ export function WizardPage() {
   const stepOrder: Step[] = ['preset', 'configure', 'review']
   const currentStepIndex = stepOrder.indexOf(step)
   const isDeploying = isWriting || isConfirming
+  const isUserRejectedDeployError = deployError?.startsWith('User rejected the request.') ?? false
+  const shouldShowDeployError = Boolean(deployError) && !isUserRejectedDeployError
   const { proposeTransaction, isPending: isConfiguringExistingVault } = useSafeProposal()
 
   async function executeExistingVaultConfiguration(transactions: ExistingVaultTransaction[]) {
@@ -1587,7 +1589,7 @@ export function WizardPage() {
             </div>
           )}
 
-          {deployError && !isSimulating && (
+          {shouldShowDeployError && !isSimulating && (
             <div className="space-y-2 bg-red-500/10 mt-4 p-4 border border-red-500/20 rounded-lg">
               <p className="text-red-400 text-sm">{deployError}</p>
               {FACTORY_ADDRESS && (
