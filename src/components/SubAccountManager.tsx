@@ -789,19 +789,21 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
   const remainingBySpent =
     maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
-  // For oracleless mode, skip oracle's spendingAllowance (it may be 0/irrelevant).
-  // Also skip oracle's value when no spending has occurred yet (windowStart === 0 &&
-  // cumulativeSpent === 0) - the oracle may hold a stale allowance from a prior config.
+  // Skip oracle's spendingAllowance when it can't be trusted:
+  // 1. Oracleless mode (oracle is irrelevant).
+  // 2. No spending yet (windowStart === 0 && cumulativeSpent === 0) — oracle may hold a stale
+  //    value from a prior config after a spending limit update.
+  // 3. Window expired — oracle hasn't reset yet, still reflects last window's remaining.
   const noSpendingYet = (windowStart === undefined || windowStart === 0n) && effectiveSpent === 0n
+  const skipOracle = isAccountOracleless || noSpendingYet || isWindowExpired
   const effectiveRemainingAllowance =
-    isAccountOracleless || noSpendingYet
+    skipOracle
       ? remainingBySpent
       : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
         ? spendingAllowance
         : remainingBySpent
   const isOracleAllowanceLagging =
-    !isAccountOracleless &&
-    !noSpendingYet &&
+    !skipOracle &&
     spendingAllowance !== undefined &&
     spendingAllowance < remainingBySpent &&
     maxAllowance !== null &&
@@ -809,14 +811,14 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const isPriorSessionConstraint =
     !isAccountOracleless &&
     !isWindowExpired &&
+    !noSpendingYet &&
     effectiveSpent > 0n &&
     spendingAllowance !== undefined &&
     effectiveRemainingAllowance < spendingAllowance
   // When the oracle's spendingAllowance is the binding constraint, derive
   // percentUsed from it so the bar stays consistent with the "remaining" figure.
   const effectiveSpentForBar =
-    !isAccountOracleless &&
-    !noSpendingYet &&
+    !skipOracle &&
     spendingAllowance !== undefined &&
     spendingAllowance < remainingBySpent &&
     maxAllowance !== null
