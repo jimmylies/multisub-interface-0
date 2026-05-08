@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
-import { Tooltip, TooltipIcon } from '@/components/ui/tooltip'
+import { TooltipIcon } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { ChevronDown, Pencil, ShieldCheck } from 'lucide-react'
 import {
@@ -102,6 +102,12 @@ export function SubAccountManager() {
   const [setSpendingLimits, setSetSpendingLimits] = useState(false)
   const [spendingLimit, setSpendingLimit] = useState('5')
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
+  // Payment Agent: optional recipient whitelist. Mirrors the WizardPage flow.
+  // When `useWhitelist` is true the agent can only call transferToken() with
+  // recipients in `allowedRecipients`; when false the role permits transfers
+  // to any recipient (no whitelist).
+  const [useWhitelist, setUseWhitelist] = useState(true)
+  const [allowedRecipients, setAllowedRecipients] = useState<string[]>([''])
   const { toast } = useToast()
   const { showPreview } = useTransactionPreviewContext()
 
@@ -176,6 +182,17 @@ export function SubAccountManager() {
 
     if (!addresses.guardian) {
       toast.warning('Contract not configured')
+      return
+    }
+
+    // Payment Agent: when the whitelist is on, require at least one valid
+    // recipient. Toggle-on + empty list would block all transfers.
+    const isPaymentAgent = selectedPreset === 'payment-agent'
+    const validRecipients = allowedRecipients
+      .map(a => a.trim())
+      .filter(a => isAddress(a)) as `0x${string}`[]
+    if (isPaymentAgent && useWhitelist && validRecipients.length === 0) {
+      toast.warning('Add at least one allowed recipient or switch the whitelist OFF')
       return
     }
 
@@ -302,6 +319,32 @@ export function SubAccountManager() {
           })
         }
 
+        // Payment Agent: configure the recipient whitelist for this agent.
+        // Always set the flag (cheap, idempotent) so the on-chain state matches
+        // the user's choice, then add the recipients only when whitelist is on
+        // and the user supplied at least one valid address.
+        if (isPaymentAgent) {
+          transactions.push({
+            to: addresses.guardian!,
+            data: encodeContractCall(
+              addresses.guardian!,
+              GUARDIAN_ABI,
+              'setRecipientWhitelistEnabled',
+              [newSubAccount as `0x${string}`, useWhitelist]
+            ),
+          })
+          if (useWhitelist && validRecipients.length > 0) {
+            transactions.push({
+              to: addresses.guardian!,
+              data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setAllowedRecipients', [
+                newSubAccount as `0x${string}`,
+                validRecipients,
+                true,
+              ]),
+            })
+          }
+        }
+
         const result = await proposeTransaction(
           transactions.length === 1 ? transactions[0] : transactions,
           { transactionType: TRANSACTION_TYPES.GRANT_ROLE }
@@ -345,6 +388,8 @@ export function SubAccountManager() {
           setSetSpendingLimits(false)
           setSpendingLimit('5')
           setSpendingLimitUSD('5000')
+          setUseWhitelist(true)
+          setAllowedRecipients([''])
           toast.success('Transaction submitted')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing
@@ -390,53 +435,34 @@ export function SubAccountManager() {
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Preset</label>
                 <div className="items-stretch gap-2 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr">
-                  {DASHBOARD_AGENT_PRESETS.map(preset => {
-                    const isComingSoon = preset.id === 'payment-agent'
-                    const card = (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => !isComingSoon && applyPreset(preset.id)}
-                        disabled={isComingSoon}
-                        className={cn(
-                          'p-3 border rounded-xl w-full h-full text-left transition-all',
-                          isComingSoon
-                            ? 'border-subtle bg-elevated-2 opacity-50 cursor-not-allowed'
-                            : selectedPreset === preset.id
-                              ? 'border-accent-primary bg-accent-primary/5'
-                              : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
-                        )}
-                      >
-                        <div className="flex flex-col h-full">
-                          <div className="flex justify-between items-center gap-2">
-                            <span className="font-medium text-primary text-small">
-                              {preset.name}
-                            </span>
-                            {!isComingSoon && selectedPreset === preset.id && (
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px] uppercase"
-                              >
-                                Selected
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="mt-1 text-caption text-tertiary">{preset.description}</p>
+                  {DASHBOARD_AGENT_PRESETS.map(preset => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset.id)}
+                      className={cn(
+                        'p-3 border rounded-xl w-full h-full text-left transition-all',
+                        selectedPreset === preset.id
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex flex-col h-full">
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-medium text-primary text-small">{preset.name}</span>
+                          {selectedPreset === preset.id && (
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] uppercase"
+                            >
+                              Selected
+                            </Badge>
+                          )}
                         </div>
-                      </button>
-                    )
-                    return isComingSoon ? (
-                      <Tooltip
-                        key={preset.id}
-                        content="Coming soon"
-                        wrapperClassName="block h-full"
-                      >
-                        {card}
-                      </Tooltip>
-                    ) : (
-                      card
-                    )
-                  })}
+                        <p className="mt-1 text-caption text-tertiary">{preset.description}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -568,6 +594,120 @@ export function SubAccountManager() {
                   </div>
                 </div>
               </div>
+
+              {selectedPreset === 'payment-agent' && (
+                <div className="space-y-3">
+                  <label className="block font-medium text-primary text-small">
+                    Recipient Whitelist
+                  </label>
+                  <p className="text-caption text-tertiary">
+                    When ON, this agent can only transfer to the addresses below. When OFF, the
+                    agent can transfer to any recipient (still bounded by spending limits).
+                  </p>
+                  <div className="gap-2 grid grid-cols-1 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setUseWhitelist(true)}
+                      className={cn(
+                        'p-3 border rounded-xl text-left transition-all',
+                        useWhitelist
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                        <span className="font-medium text-primary text-small">Whitelist ON</span>
+                      </div>
+                      <p className="text-caption text-tertiary">
+                        Restrict transfers to a fixed list of recipient addresses.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUseWhitelist(false)}
+                      className={cn(
+                        'p-3 border rounded-xl text-left transition-all',
+                        !useWhitelist
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                        <span className="font-medium text-primary text-small">Whitelist OFF</span>
+                      </div>
+                      <p className="text-caption text-tertiary">
+                        Any recipient is allowed; spending limits still apply.
+                      </p>
+                    </button>
+                  </div>
+
+                  {useWhitelist && (
+                    <div className="space-y-2 bg-elevated-2 p-3 border border-subtle rounded-xl">
+                      <label className="block font-medium text-primary text-small">
+                        Allowed Recipients
+                      </label>
+                      <p className="text-caption text-tertiary">
+                        Add the addresses this agent is allowed to transfer to. The Safe and the
+                        Guardian itself cannot be added.
+                      </p>
+                      {allowedRecipients.map((recipient, i) => {
+                        const trimmed = recipient.trim()
+                        const isInvalid = trimmed.length > 0 && !isAddress(trimmed)
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-start gap-2"
+                          >
+                            <div className="flex-1">
+                              <Input
+                                value={recipient}
+                                placeholder="0x..."
+                                onChange={e => {
+                                  const next = [...allowedRecipients]
+                                  next[i] = (e.target as HTMLInputElement).value
+                                  setAllowedRecipients(next)
+                                }}
+                              />
+                              {isInvalid && (
+                                <p className="mt-1 text-caption text-red-400">Invalid address</p>
+                              )}
+                            </div>
+                            {allowedRecipients.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  setAllowedRecipients(allowedRecipients.filter((_, j) => j !== i))
+                                }
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      })}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setAllowedRecipients([...allowedRecipients, ''])}
+                      >
+                        + Add recipient
+                      </Button>
+                      {allowedRecipients.filter(a => isAddress(a.trim())).length === 0 && (
+                        <div className="bg-yellow-500/10 mt-2 p-2 border border-yellow-500/20 rounded-md">
+                          <p className="text-caption text-yellow-400">
+                            Whitelist is ON with no valid addresses. The agent would not be able to
+                            transfer to anyone. Add at least one recipient or switch the whitelist
+                            OFF.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">
@@ -796,12 +936,11 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   // 3. Window expired — oracle hasn't reset yet, still reflects last window's remaining.
   const noSpendingYet = (windowStart === undefined || windowStart === 0n) && effectiveSpent === 0n
   const skipOracle = isAccountOracleless || noSpendingYet || isWindowExpired
-  const effectiveRemainingAllowance =
-    skipOracle
-      ? remainingBySpent
-      : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
-        ? spendingAllowance
-        : remainingBySpent
+  const effectiveRemainingAllowance = skipOracle
+    ? remainingBySpent
+    : spendingAllowance !== undefined && spendingAllowance < remainingBySpent
+      ? spendingAllowance
+      : remainingBySpent
   const isOracleAllowanceLagging =
     !skipOracle &&
     spendingAllowance !== undefined &&
