@@ -11,6 +11,11 @@ import { encodeContractCall, useSafeProposal } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { useToast } from '@/contexts/ToastContext'
 import { cn } from '@/lib/utils'
+import {
+  createSubgraphClient,
+  ALLOWED_RECIPIENTS_HISTORY_QUERY,
+  type AllowedRecipientsSetEvent,
+} from '@/lib/subgraph'
 
 const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 
@@ -22,10 +27,20 @@ interface RecipientWhitelistProps {
   subAccountAddress: Address
 }
 
-// Reconstructs the current set of allowed recipients for an agent by replaying
-// AllowedRecipientsSet events (the on-chain mapping has no enumeration), then
-// re-checking the live mapping for each unique recipient ever touched. This is
-// fine for testnets; for mainnet a subgraph index would scale better.
+// Reconstructs the current set of allowed recipients for an agent. The on-chain
+// mapping has no enumeration getter, so we need an off-chain index of touched
+// addresses. Strategy (matches useModulesForEOA):
+//   1. Primary: TheGraph subgraph — one GraphQL call returns the full history.
+//   2. Fallback: chunked eth_getLogs over a recent window — public RPCs cap
+//      eth_getLogs at 10k blocks per call, so we walk back in 9k-block windows.
+// Either way, we then re-check the live `allowedRecipients(agent, recipient)`
+// mapping per candidate so the rendered list reflects authoritative on-chain
+// state (handles re-orgs and removals not yet indexed).
+const LOG_CHUNK_BLOCKS = 9_000n
+// ~3 days at Base Sepolia's ~2s block time. Only used by the RPC fallback;
+// the subgraph path returns the full history regardless of age.
+const MAX_LOOKBACK_BLOCKS = 130_000n
+
 function useAllowedRecipientsList(subAccountAddress: Address) {
   const { addresses } = useContractAddresses()
   const publicClient = usePublicClient()
@@ -35,19 +50,67 @@ function useAllowedRecipientsList(subAccountAddress: Address) {
     queryFn: async (): Promise<Address[]> => {
       if (!publicClient || !addresses.guardian) return []
 
-      const logs = (await publicClient.getLogs({
-        address: addresses.guardian,
-        event: ALLOWED_RECIPIENTS_SET_EVENT,
-        args: { subAccount: subAccountAddress },
-        fromBlock: 0n,
-        toBlock: 'latest',
-      })) as Log[]
-
       const everTouched = new Set<Address>()
-      for (const log of logs) {
-        const args = (log as unknown as { args: { recipients?: readonly Address[] } }).args
-        for (const r of args.recipients ?? []) {
-          everTouched.add(r.toLowerCase() as Address)
+
+      // Primary: subgraph
+      let subgraphOk = false
+      try {
+        const client = createSubgraphClient()
+        const data = await client.request<{
+          allowedRecipientsSets: AllowedRecipientsSetEvent[]
+        }>(ALLOWED_RECIPIENTS_HISTORY_QUERY, {
+          subAccount: subAccountAddress.toLowerCase(),
+        })
+        for (const ev of data.allowedRecipientsSets) {
+          for (const r of ev.recipients) {
+            everTouched.add(r.toLowerCase() as Address)
+          }
+        }
+        subgraphOk = true
+      } catch {
+        // Subgraph unavailable, entity not indexed, or auth failure — fall
+        // through to the RPC path. A failed subgraph call should never block
+        // the panel from rendering.
+      }
+
+      // Fallback: chunked eth_getLogs over a recent window. Used when the
+      // subgraph either errored or returned an empty list (which could mean
+      // either "really empty" or "subgraph hasn't indexed this guardian yet"
+      // for a freshly-deployed instance, so it's safe to also try RPC).
+      if (!subgraphOk || everTouched.size === 0) {
+        try {
+          const latest = await publicClient.getBlockNumber()
+          const floor = latest > MAX_LOOKBACK_BLOCKS ? latest - MAX_LOOKBACK_BLOCKS : 0n
+
+          let toBlock = latest
+          while (toBlock >= floor) {
+            const fromBlock =
+              toBlock > floor + LOG_CHUNK_BLOCKS ? toBlock - LOG_CHUNK_BLOCKS : floor
+            try {
+              const logs = (await publicClient.getLogs({
+                address: addresses.guardian,
+                event: ALLOWED_RECIPIENTS_SET_EVENT,
+                args: { subAccount: subAccountAddress },
+                fromBlock,
+                toBlock,
+              })) as Log[]
+              for (const log of logs) {
+                const args = (log as unknown as { args: { recipients?: readonly Address[] } }).args
+                for (const r of args.recipients ?? []) {
+                  everTouched.add(r.toLowerCase() as Address)
+                }
+              }
+            } catch (err) {
+              // One window failing shouldn't kill the whole walk.
+              console.warn('getLogs window failed', { fromBlock, toBlock, err })
+            }
+            if (fromBlock === floor) break
+            toBlock = fromBlock - 1n
+          }
+        } catch (err) {
+          console.warn('Failed to enumerate AllowedRecipientsSet events', err)
+          // Don't return early — if the subgraph already populated everTouched,
+          // we still want to verify those entries via the mapping read below.
         }
       }
 
@@ -82,7 +145,12 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
   const { toast } = useToast()
   const { proposeTransaction, isPending } = useSafeProposal()
 
-  const { data: enabled, refetch: refetchEnabled } = useReadContract({
+  const {
+    data: enabled,
+    refetch: refetchEnabled,
+    isLoading: isLoadingEnabled,
+    isError: isEnabledError,
+  } = useReadContract({
     address: addresses.guardian,
     abi: GUARDIAN_ABI,
     functionName: 'recipientWhitelistEnabled',
@@ -118,7 +186,10 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
       toast.warning('Contract not configured')
       return
     }
-    const next = !enabled
+    // If we don't yet know the on-chain state (read still loading or RPC error),
+    // default the action to "enable" so a fresh agent isn't stuck behind an
+    // unclickable button. The contract no-ops if the value is already what we set.
+    const next = enabled === undefined ? true : !enabled
     try {
       const result = await proposeTransaction(
         {
@@ -216,9 +287,15 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
           <div>
             <p className="font-medium text-primary text-small">Recipient Whitelist</p>
             <p className="mt-0.5 text-caption text-tertiary">
-              {enabled
-                ? 'ON — this agent can only transfer to addresses listed below.'
-                : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'}
+              {enabled === undefined
+                ? isLoadingEnabled
+                  ? 'Loading current state...'
+                  : isEnabledError
+                    ? 'Could not read on-chain state. You can still toggle the whitelist.'
+                    : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'
+                : enabled
+                  ? 'ON — this agent can only transfer to addresses listed below.'
+                  : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'}
             </p>
           </div>
         </div>
@@ -226,7 +303,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
           type="button"
           variant="outline"
           onClick={handleToggle}
-          disabled={isPending || enabled === undefined}
+          disabled={isPending}
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />

@@ -3,8 +3,9 @@ import { gql } from 'graphql-request'
 
 // Client configuration
 export const createSubgraphClient = () => {
-  const url = import.meta.env.VITE_SUBGRAPH_URL
-    || 'https://api.studio.thegraph.com/query/36309/multiclaw-sepolia/version/latest'
+  const url =
+    import.meta.env.VITE_SUBGRAPH_URL ||
+    'https://api.studio.thegraph.com/query/36309/multiclaw-sepolia/version/latest'
   const token = import.meta.env.VITE_SUBGRAPH_AUTH_TOKEN
 
   return new GraphQLClient(url, {
@@ -142,6 +143,36 @@ export const AGENT_VAULT_CREATED_QUERY = gql`
       agentAddress
       module
       presetId
+    }
+  }
+`
+
+// AllowedRecipientsSet event (recipient whitelist mutations). Each entry sets
+// a batch of recipient addresses to allowed=true or allowed=false; the current
+// set is the running union/difference of these in chronological order.
+export interface AllowedRecipientsSetEvent {
+  id: string
+  subAccount: string
+  recipients: string[]
+  allowed: boolean
+  blockNumber: string
+  blockTimestamp: string
+}
+
+export const ALLOWED_RECIPIENTS_HISTORY_QUERY = gql`
+  query GetAllowedRecipientsHistory($subAccount: Bytes!) {
+    allowedRecipientsSets(
+      where: { subAccount: $subAccount }
+      orderBy: blockNumber
+      orderDirection: asc
+      first: 1000
+    ) {
+      id
+      subAccount
+      recipients
+      allowed
+      blockNumber
+      blockTimestamp
     }
   }
 `
