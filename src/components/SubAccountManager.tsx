@@ -19,6 +19,7 @@ const GUARDIAN_ABI = GUARDIAN_ABI_CONST as unknown as any[]
 import { PROTOCOLS, getProtocolContractAddresses } from '@/lib/protocols'
 import { useSubAccountNames } from '@/hooks/useSubAccountNames'
 import { ProtocolPermissions } from '@/components/ProtocolPermissions'
+import { RecipientWhitelist } from '@/components/RecipientWhitelist'
 import { SpendingLimits } from '@/components/SpendingLimits'
 import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import {
@@ -868,7 +869,7 @@ interface SubAccountRowProps {
 
 function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<'spending' | 'protocols'>('spending')
+  const [activeTab, setActiveTab] = useState<'spending' | 'protocols' | 'recipients'>('spending')
   const [isRolesPopoverOpen, setIsRolesPopoverOpen] = useState(false)
   const [isNamePopoverOpen, setIsNamePopoverOpen] = useState(false)
   const [nameInputValue, setNameInputValue] = useState('')
@@ -876,7 +877,13 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
 
   const { data: hasExecuteRole } = useHasRole(account, ROLES.DEFI_EXECUTE_ROLE)
   const { data: hasTransferRole } = useHasRole(account, ROLES.DEFI_TRANSFER_ROLE)
+  const { data: hasRepayRole } = useHasRole(account, ROLES.DEFI_REPAY_ROLE)
   const { isSafeOwner } = useIsSafeOwner()
+  // Tab visibility: protocol permissions are only meaningful for agents that
+  // can call into protocols (Execute or Repay roles); the recipient whitelist
+  // is only meaningful for agents that can call transferToken (Transfer role).
+  const showProtocolsTab = Boolean(hasExecuteRole) || Boolean(hasRepayRole)
+  const showRecipientsTab = Boolean(hasTransferRole)
 
   // Get full sub-account state for preview context
   const { fullState: currentFullState, allowedAddresses: currentAllowedAddresses } =
@@ -904,6 +911,14 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
       setNameInputValue(accountName || '')
     }
   }, [isNamePopoverOpen, accountName])
+
+  // If the active tab becomes invalid because roles changed (or the row was
+  // expanded for an agent without protocol/transfer access), fall back to the
+  // always-available Spending Limits tab.
+  useEffect(() => {
+    if (activeTab === 'protocols' && !showProtocolsTab) setActiveTab('spending')
+    if (activeTab === 'recipients' && !showRecipientsTab) setActiveTab('spending')
+  }, [activeTab, showProtocolsTab, showRecipientsTab])
 
   // Spending allowance data for progress bar
   const { data: spendingAllowance } = useSpendingAllowance(account)
@@ -1567,21 +1582,40 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
             >
               Spending Limits
             </button>
-            <button
-              onClick={() => setActiveTab('protocols')}
-              className={`flex-1 px-3 py-2 text-small font-medium rounded-md transition-all ${
-                activeTab === 'protocols'
-                  ? 'bg-elevated-2 text-primary shadow-sm'
-                  : 'text-tertiary hover:text-secondary'
-              }`}
-            >
-              Protocol Permissions
-            </button>
+            {showProtocolsTab && (
+              <button
+                onClick={() => setActiveTab('protocols')}
+                className={`flex-1 px-3 py-2 text-small font-medium rounded-md transition-all ${
+                  activeTab === 'protocols'
+                    ? 'bg-elevated-2 text-primary shadow-sm'
+                    : 'text-tertiary hover:text-secondary'
+                }`}
+              >
+                Protocol Permissions
+              </button>
+            )}
+            {showRecipientsTab && (
+              <button
+                onClick={() => setActiveTab('recipients')}
+                className={`flex-1 px-3 py-2 text-small font-medium rounded-md transition-all ${
+                  activeTab === 'recipients'
+                    ? 'bg-elevated-2 text-primary shadow-sm'
+                    : 'text-tertiary hover:text-secondary'
+                }`}
+              >
+                Recipient Whitelist
+              </button>
+            )}
           </div>
 
           {/* Tab Content */}
           {activeTab === 'spending' && <SpendingLimits subAccountAddress={account} />}
-          {activeTab === 'protocols' && <ProtocolPermissions subAccountAddress={account} />}
+          {activeTab === 'protocols' && showProtocolsTab && (
+            <ProtocolPermissions subAccountAddress={account} />
+          )}
+          {activeTab === 'recipients' && showRecipientsTab && (
+            <RecipientWhitelist subAccountAddress={account} />
+          )}
         </div>
       )}
     </div>

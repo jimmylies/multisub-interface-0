@@ -701,14 +701,17 @@ export enum OperationType {
 export const ROLES = {
   DEFI_EXECUTE_ROLE: 1,
   DEFI_TRANSFER_ROLE: 2,
+  DEFI_REPAY_ROLE: 3,
 } as const
 
 export const ROLE_NAMES = {
   [ROLES.DEFI_EXECUTE_ROLE]: 'Execute',
   [ROLES.DEFI_TRANSFER_ROLE]: 'Transfer',
+  [ROLES.DEFI_REPAY_ROLE]: 'Repay',
 } as const
 
 export const ROLE_DESCRIPTIONS = {
   [ROLES.DEFI_EXECUTE_ROLE]: 'Can execute protocol interactions (limited by spending allowance)',
   [ROLES.DEFI_TRANSFER_ROLE]: 'Can transfer tokens from Safe (costs spending allowance)',
+  [ROLES.DEFI_REPAY_ROLE]: 'Can repay protocol debt on behalf of the Safe',
 } as const

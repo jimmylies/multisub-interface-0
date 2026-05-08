@@ -6,6 +6,8 @@ export const TRANSACTION_TYPES = {
   // Sub-account configuration
   SET_SUB_ACCOUNT_LIMITS: 'setSubAccountLimits',
   SET_ALLOWED_ADDRESSES: 'setAllowedAddresses',
+  SET_RECIPIENT_WHITELIST_ENABLED: 'setRecipientWhitelistEnabled',
+  SET_ALLOWED_RECIPIENTS: 'setAllowedRecipients',
 
   // Emergency controls
   PAUSE: 'pause',
