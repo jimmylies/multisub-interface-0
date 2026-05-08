@@ -263,6 +263,11 @@ export function WizardPage() {
   const [spendingLimitBps, setSpendingLimitBps] = useState('5')
   const [safeAddress, setSafeAddress] = useState('')
   const [selectedProtocols, setSelectedProtocols] = useState<string[]>([])
+  // Payment Agent: optional recipient whitelist. When `useWhitelist` is true the
+  // agent can only call transferToken() with recipients in `allowedRecipients`;
+  // when false the role permits transfers to any recipient (no whitelist).
+  const [useWhitelist, setUseWhitelist] = useState(true)
+  const [allowedRecipients, setAllowedRecipients] = useState<string[]>([''])
   const [oracleless, setOracleless] = useState(false)
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
@@ -841,6 +846,71 @@ export function WizardPage() {
           }
         )
       }
+
+      // Payment Agent: configure the recipient whitelist on the existing
+      // guardian. The flag is per-agent on-chain, so we read the current
+      // value to avoid a no-op tx, then queue setAllowedRecipients only when
+      // the user supplied at least one valid address.
+      if (preset.id === 'payment-agent') {
+        const desiredEnabled = useWhitelist
+        let currentEnabled = false
+        try {
+          currentEnabled = (await publicClient.readContract({
+            address: existingModuleAddress,
+            abi: GUARDIAN_ABI,
+            functionName: 'recipientWhitelistEnabled',
+            args: [agentAddress as Address],
+          })) as boolean
+        } catch {
+          // If the view call fails, queue the tx anyway so the on-chain state
+          // converges to the user's intent.
+        }
+
+        if (currentEnabled !== desiredEnabled) {
+          addTransaction(
+            {
+              to: existingModuleAddress,
+              data: encodeContractCall(
+                existingModuleAddress,
+                GUARDIAN_ABI,
+                'setRecipientWhitelistEnabled',
+                [agentAddress as Address, desiredEnabled]
+              ),
+            },
+            {
+              title: desiredEnabled ? 'Enable recipient whitelist' : 'Disable recipient whitelist',
+              description: desiredEnabled
+                ? 'Restricts transferToken() to addresses in the recipient list.'
+                : 'Removes the recipient restriction; spending limits still apply.',
+            }
+          )
+        }
+
+        if (desiredEnabled) {
+          const validRecipientsExisting = allowedRecipients
+            .map(a => a.trim())
+            .filter(a => isAddress(a)) as Address[]
+          if (validRecipientsExisting.length > 0) {
+            addTransaction(
+              {
+                to: existingModuleAddress,
+                data: encodeContractCall(
+                  existingModuleAddress,
+                  GUARDIAN_ABI,
+                  'setAllowedRecipients',
+                  [agentAddress as Address, validRecipientsExisting, true]
+                ),
+              },
+              {
+                title: 'Whitelist recipients',
+                description: `Adds ${validRecipientsExisting.length} address${
+                  validRecipientsExisting.length === 1 ? '' : 'es'
+                } the agent is allowed to transfer to.`,
+              }
+            )
+          }
+        }
+      }
     }
 
     if (transactions.length === 0) {
@@ -930,6 +1000,18 @@ export function WizardPage() {
       const selectors = composed.selectors
       const selectorTypes = composed.selectorTypes
 
+      // Payment Agent: forward the user's whitelist toggle and recipient list.
+      // For all other presets the whitelist is forced off (other roles don't
+      // call transferToken() so the flag has no effect, but we keep the wire
+      // shape clean).
+      const isPaymentAgent = preset.id === 'payment-agent'
+      const validRecipients = allowedRecipients
+        .map(a => a.trim())
+        .filter(a => isAddress(a)) as Address[]
+      const recipientWhitelistEnabled = isPaymentAgent && useWhitelist
+      const recipientsForDeploy: readonly Address[] =
+        isPaymentAgent && useWhitelist ? validRecipients : []
+
       const vaultConfig = {
         safe: safeAddress as Address,
         oracle: effectiveOracle,
@@ -945,8 +1027,8 @@ export function WizardPage() {
         selectorTypes,
         priceFeedTokens,
         priceFeedAddresses,
-        recipientWhitelistEnabled: false,
-        allowedRecipients: [],
+        recipientWhitelistEnabled,
+        allowedRecipients: recipientsForDeploy,
       } as const
 
       // Pre-flight: check the registry directly (bypasses React Query cache) to
@@ -1105,58 +1187,41 @@ export function WizardPage() {
             you can still add custom protocols and adjust the guardrails afterward.
           </p>
           <div className="gap-4 grid grid-cols-1 md:grid-cols-2">
-            {PRESETS.map(p => {
-              const isComingSoon = p.id === 'payment-agent'
-              const card = (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    if (isComingSoon) return
-                    setSelectedPreset(p.id)
-                    setSpendingLimitBps(String(p.defaultBps / 100))
-                  }}
-                  disabled={isComingSoon}
-                  className={`w-full text-left p-5 rounded-xl border transition-all ${
-                    isComingSoon
-                      ? 'border-subtle bg-elevated opacity-50 cursor-not-allowed'
-                      : selectedPreset === p.id
-                        ? 'border-accent-primary bg-accent-primary/5 shadow-glow'
-                        : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="flex justify-center items-center bg-elevated-2 rounded-lg w-10 h-10 font-mono text-2xl text-accent-primary">
-                      {p.icon}
-                    </span>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-primary">{p.name}</h3>
-                      <p className="mt-1 text-secondary text-sm">{p.description}</p>
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
-                          <span
-                            key={proto}
-                            className="bg-elevated-2 px-2 py-0.5 rounded-full text-tertiary text-xs"
-                          >
-                            {proto}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-2 text-tertiary text-xs">Role: {p.roleLabel}</div>
+            {PRESETS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setSelectedPreset(p.id)
+                  setSpendingLimitBps(String(p.defaultBps / 100))
+                }}
+                className={`w-full text-left p-5 rounded-xl border transition-all ${
+                  selectedPreset === p.id
+                    ? 'border-accent-primary bg-accent-primary/5 shadow-glow'
+                    : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex justify-center items-center bg-elevated-2 rounded-lg w-10 h-10 font-mono text-2xl text-accent-primary">
+                    {p.icon}
+                  </span>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-primary">{p.name}</h3>
+                    <p className="mt-1 text-secondary text-sm">{p.description}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {getPresetProtocolLabels(p.id, chainId, p.protocols).map(proto => (
+                        <span
+                          key={proto}
+                          className="bg-elevated-2 px-2 py-0.5 rounded-full text-tertiary text-xs"
+                        >
+                          {proto}
+                        </span>
+                      ))}
                     </div>
+                    <div className="mt-2 text-tertiary text-xs">Role: {p.roleLabel}</div>
                   </div>
-                </button>
-              )
-              return isComingSoon ? (
-                <Tooltip
-                  key={p.id}
-                  content="Coming soon"
-                >
-                  {card}
-                </Tooltip>
-              ) : (
-                card
-              )
-            })}
+                </div>
+              </button>
+            ))}
           </div>
           <div className="flex justify-end mt-8">
             <Button
@@ -1299,6 +1364,123 @@ export function WizardPage() {
             </div>
           </div>
 
+          {selectedPreset === 'payment-agent' && (
+            <div className="space-y-4 mt-8">
+              <div>
+                <label className="block mb-1.5 font-medium text-primary text-sm">
+                  Recipient Whitelist
+                </label>
+                <p className="mb-3 text-tertiary text-xs">
+                  When ON, this agent can only transfer to the addresses listed below. When OFF, the
+                  agent can transfer to any recipient (still bounded by spending limits).
+                </p>
+              </div>
+              <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setUseWhitelist(true)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    useWhitelist
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="font-medium text-primary text-sm">Whitelist ON</span>
+                  </div>
+                  <p className="text-tertiary text-xs">
+                    Restrict the agent to a fixed set of recipient addresses. Recommended for
+                    payroll, vendor payments, or any flow with a known counterparty list.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseWhitelist(false)}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    !useWhitelist
+                      ? 'border-accent-primary bg-accent-primary/5'
+                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="font-medium text-primary text-sm">Whitelist OFF</span>
+                  </div>
+                  <p className="text-tertiary text-xs">
+                    Any recipient is allowed. Spending limits still apply, but there is no
+                    counterparty restriction.
+                  </p>
+                </button>
+              </div>
+
+              {useWhitelist && (
+                <div className="space-y-2">
+                  <label className="block font-medium text-primary text-sm">
+                    Allowed Recipients
+                  </label>
+                  <p className="text-tertiary text-xs">
+                    Add the addresses this agent is allowed to transfer to. The Safe and the
+                    Guardian itself cannot be added (the contract rejects them).
+                  </p>
+                  {allowedRecipients.map((recipient, i) => {
+                    const trimmed = recipient.trim()
+                    const isInvalid = trimmed.length > 0 && !isAddress(trimmed)
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-start gap-2"
+                      >
+                        <div className="flex-1">
+                          <Input
+                            value={recipient}
+                            onChange={e => {
+                              const next = [...allowedRecipients]
+                              next[i] = e.target.value
+                              setAllowedRecipients(next)
+                            }}
+                            placeholder="0x..."
+                            className="bg-elevated-2 border-subtle"
+                          />
+                          {isInvalid && (
+                            <p className="mt-1 text-red-400 text-xs">Invalid address</p>
+                          )}
+                        </div>
+                        {allowedRecipients.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              setAllowedRecipients(allowedRecipients.filter((_, j) => j !== i))
+                            }
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAllowedRecipients([...allowedRecipients, ''])}
+                  >
+                    + Add recipient
+                  </Button>
+                  {allowedRecipients.filter(a => isAddress(a.trim())).length === 0 && (
+                    <div className="bg-yellow-500/10 mt-2 p-3 border border-yellow-500/20 rounded-lg">
+                      <p className="text-yellow-400 text-xs">
+                        Whitelist is ON but no valid addresses are entered. The agent would not be
+                        able to transfer to anyone. Add at least one recipient or switch to
+                        Whitelist OFF.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {selectedPreset === 'custom' && (
             <div className="space-y-4 mt-8">
               <div>
@@ -1414,7 +1596,10 @@ export function WizardPage() {
                 !isAddress(safeAddress) ||
                 !FACTORY_ADDRESS ||
                 !oracleConfigOk ||
-                (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0))
+                (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) ||
+                (selectedPreset === 'payment-agent' &&
+                  useWhitelist &&
+                  allowedRecipients.filter(a => isAddress(a.trim())).length === 0)
               }
               className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
             >
@@ -1503,6 +1688,30 @@ export function WizardPage() {
                   : selectedPresetProtocolLabels.join(', ')}
               </span>
             </div>
+            {selectedPreset === 'payment-agent' && (
+              <div className="flex justify-between items-start">
+                <span className="text-secondary">Recipient Whitelist</span>
+                <div className="text-primary text-right">
+                  {useWhitelist ? (
+                    <>
+                      <div className="mb-1">ON</div>
+                      <div className="space-y-0.5 font-mono text-tertiary text-xs">
+                        {allowedRecipients
+                          .map(a => a.trim())
+                          .filter(a => isAddress(a))
+                          .map(a => (
+                            <div key={a}>
+                              {a.slice(0, 6)}...{a.slice(-4)}
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    'OFF (any recipient allowed)'
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {showExistingModuleWarning && existingModuleAddress && (
