@@ -352,6 +352,23 @@ export const GUARDIAN_ABI = [
   },
   {
     type: 'function',
+    name: 'recipientWhitelistEnabled',
+    inputs: [{ name: '', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'allowedRecipients',
+    inputs: [
+      { name: '', type: 'address', internalType: 'address' },
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'registerSelector',
     inputs: [
       { name: 'selector', type: 'bytes4', internalType: 'bytes4' },
