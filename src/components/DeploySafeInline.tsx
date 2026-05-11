@@ -27,6 +27,20 @@ interface DeploySafeInlineProps {
  * sees what they're getting before they sign. After confirmation the predicted
  * address is the deployed address (Safe deployment is deterministic).
  */
+// Safe v1.4.1 proxy addresses are CREATE2-derived from (factory, singleton,
+// init code hash from owners/threshold/setup, saltNonce). With the same owners
+// and the default saltNonce of 0, every prediction collides — the second
+// deployment would revert because code already exists at that address. We
+// generate a fresh random uint256 saltNonce per panel session, and rotate it
+// after a successful deploy, so each Safe gets a unique address.
+function randomSaltNonce(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let hex = ''
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+  return BigInt('0x' + hex).toString()
+}
+
 export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient()
@@ -36,6 +50,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [owners, setOwners] = useState<string[]>([''])
   const [threshold, setThreshold] = useState(1)
+  const [saltNonce, setSaltNonce] = useState<string>(() => randomSaltNonce())
   const [predictedAddress, setPredictedAddress] = useState<Address | null>(null)
   const [isPredicting, setIsPredicting] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
@@ -71,6 +86,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
       provider: provider as unknown as Parameters<typeof Safe.init>[0]['provider'],
       predictedSafe: {
         safeAccountConfig: { owners: validOwners, threshold },
+        safeDeploymentConfig: { saltNonce },
       },
     })
       .then(safe => safe.getAddress())
@@ -88,7 +104,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canPredict, owners.join(','), threshold, publicClient?.chain?.id])
+  }, [canPredict, owners.join(','), threshold, saltNonce, publicClient?.chain?.id])
 
   const handleDeploy = async () => {
     if (!publicClient || !walletClient || !connectedAddress) {
@@ -108,6 +124,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
         signer: connectedAddress,
         predictedSafe: {
           safeAccountConfig: { owners: validOwners, threshold },
+          safeDeploymentConfig: { saltNonce },
         },
       })
 
@@ -127,6 +144,10 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
       toast.success('Safe deployed')
       onDeployed(predicted)
       setIsExpanded(false)
+      // Rotate the salt so if the user comes back to deploy a second Safe with
+      // the same owners, they get a fresh CREATE2 address instead of hitting
+      // the already-deployed one.
+      setSaltNonce(randomSaltNonce())
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to deploy Safe'
       if (
