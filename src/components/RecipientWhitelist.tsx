@@ -31,15 +31,20 @@ interface RecipientWhitelistProps {
 // mapping has no enumeration getter, so we need an off-chain index of touched
 // addresses. Strategy (matches useModulesForEOA):
 //   1. Primary: TheGraph subgraph — one GraphQL call returns the full history.
-//   2. Fallback: chunked eth_getLogs over a recent window — public RPCs cap
-//      eth_getLogs at 10k blocks per call, so we walk back in 9k-block windows.
+//   2. Fallback: chunked eth_getLogs over a recent window. Base Sepolia's
+//      public RPC caps eth_getLogs at 2000 blocks per call (not 10k as some
+//      providers advertise) — we chunk in 1900-block windows to stay safely
+//      under the limit on every supported network.
 // Either way, we then re-check the live `allowedRecipients(agent, recipient)`
 // mapping per candidate so the rendered list reflects authoritative on-chain
 // state (handles re-orgs and removals not yet indexed).
-const LOG_CHUNK_BLOCKS = 9_000n
-// ~3 days at Base Sepolia's ~2s block time. Only used by the RPC fallback;
-// the subgraph path returns the full history regardless of age.
-const MAX_LOOKBACK_BLOCKS = 130_000n
+const LOG_CHUNK_BLOCKS = 1_900n
+// ~5.5 days at Base Sepolia's ~2s block time. Only used by the RPC fallback;
+// the subgraph path returns the full history regardless of age. At 1900-block
+// chunks this is ~132 RPC calls per panel render in the worst case (subgraph
+// down + agent has no events) — acceptable because the panel is only mounted
+// when the user expands a row.
+const MAX_LOOKBACK_BLOCKS = 250_000n
 
 function useAllowedRecipientsList(subAccountAddress: Address) {
   const { addresses } = useContractAddresses()
