@@ -14,6 +14,7 @@ import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/ui/copy-button'
+import { DeploySafeInline } from '@/components/DeploySafeInline'
 import {
   Dialog,
   DialogBody,
@@ -1244,7 +1245,7 @@ export function WizardPage() {
           </p>
 
           <div className="space-y-6">
-            <div>
+            <div className="space-y-2">
               <label className="block mb-1.5 font-medium text-primary text-sm">Safe Address</label>
               <Input
                 value={safeAddress}
@@ -1255,6 +1256,7 @@ export function WizardPage() {
               {safeAddress && !isAddress(safeAddress) && (
                 <p className="mt-1 text-red-400 text-xs">Invalid address</p>
               )}
+              <DeploySafeInline onDeployed={addr => setSafeAddress(addr)} />
             </div>
 
             <div>
