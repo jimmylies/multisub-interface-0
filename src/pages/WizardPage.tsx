@@ -28,6 +28,7 @@ import {
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase, selectedChain, selectedNetworkName } from '@/lib/chains'
 import { composeBindings, getSupportedProtocolIds } from '@/lib/protocolBindings'
+import { getPriceFeedsForChain } from '@/lib/priceFeeds'
 import {
   AGENT_VAULT_FACTORY_ABI,
   GUARDIAN_ABI as GUARDIAN_ABI_CONST,
@@ -130,93 +131,20 @@ const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefine
 // Protocol ids with parser+selector bindings on the active network.
 // Anything not in here is shown as "coming soon" in the Custom picker.
 const supportedProtocolIds = getSupportedProtocolIds(selectedNetworkName)
-// Major tokens on Base Sepolia with Chainlink price feeds
-const BASE_SEPOLIA_PRICE_FEEDS: { token: Address; feed: Address }[] = [
-  // Native ETH (address(0)) → ETH/USD
-  {
-    token: '0x0000000000000000000000000000000000000000',
-    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
-  },
-  // WETH → ETH/USD
-  {
-    token: '0x4200000000000000000000000000000000000006',
-    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
-  },
-  // USDC (Circle) → USDC/USD
-  {
-    token: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
-  },
-  // USDC (Aave) → USDC/USD
-  {
-    token: '0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f',
-    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
-  },
-  // USDT → USDT/USD
-  {
-    token: '0x0a215D8ba66387DCA84B284D18c3B4ec3de6E54a',
-    feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f',
-  },
-  // WBTC → BTC/USD
-  {
-    token: '0x54114591963CF60EF3aA63bEfD6eC263D98145a4',
-    feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298',
-  },
-  // LINK → LINK/USD
-  {
-    token: '0x810D46F9a9027E28F9B01F75E2bdde839dA61115',
-    feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61',
-  },
-  // cbETH → ETH/USD (pegged)
-  {
-    token: '0xD171b9694f7A2597Ed006D41f7509aaD4B485c4B',
-    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
-  },
-  // EURC → USDC/USD (proxy: no native EUR/USD feed on Base Sepolia testnet)
-  {
-    token: '0x808456652fdb597867f38412077A9182bf77359F',
-    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
-  },
-  // Aave V3 aTokens (1:1 with underlying)
-  // aWETH → ETH/USD
-  {
-    token: '0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb',
-    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
-  },
-  // aUSDC → USDC/USD
-  {
-    token: '0x10F1A9D11CDf50041f3f8cB7191CBE2f31750ACC',
-    feed: '0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165',
-  },
-  // aUSDT → USDT/USD
-  {
-    token: '0xcE3CAae5Ed17A7AafCEEbc897DE843fA6CC0c018',
-    feed: '0x3ec8593F930EA45ea58c968260e6e9FF53FC934f',
-  },
-  // aWBTC → BTC/USD
-  {
-    token: '0x47Db195BAf46898302C06c31bCF46c01C64ACcF9',
-    feed: '0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298',
-  },
-  // aLINK → LINK/USD
-  {
-    token: '0x0aD46dE765522399d7b25B438b230A894d72272B',
-    feed: '0xb113F5A928BCfF189C998ab20d753a47F9dE5A61',
-  },
-  // acbETH → ETH/USD
-  {
-    token: '0x9Fd6d1DBAd7c052e0c43f46df36eEc6a68814B63',
-    feed: '0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1',
-  },
-]
+// Chain-keyed Chainlink price-feed registry. Returns the entries for the
+// currently selected chain (or `[]` if none are catalogued for that chain).
+// Previously the Base Sepolia feeds were hard-coded and unconditionally
+// passed to deployVault, which would have wired Base mainnet deploys to
+// testnet-only feed addresses that don't exist on-chain.
+const PRICE_FEED_ENTRIES = getPriceFeedsForChain(selectedChain.id) ?? []
 // At fresh deploy time the factory calls setTokenPriceFeeds (plural) which
 // explicitly accepts address(0) as native ETH (DeFiInteractorModule.sol:1136).
 // The zeroAddress filter must NOT be applied here - it would silently drop
 // the ETH/USD feed and break Uniswap swap paths that involve native ETH.
 // (The existing-vault flow keeps its own filter because it uses the singular
 // setter which rejects address(0).)
-const PRICE_FEED_TOKENS = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.token)
-const PRICE_FEED_ADDRESSES = BASE_SEPOLIA_PRICE_FEEDS.map(p => p.feed)
+const PRICE_FEED_TOKENS = PRICE_FEED_ENTRIES.map(p => p.token)
+const PRICE_FEED_ADDRESSES = PRICE_FEED_ENTRIES.map(p => p.feed)
 
 const PRESET_ROLE_IDS: Record<string, number> = {
   'defi-trader': ROLES.DEFI_EXECUTE_ROLE,
@@ -425,7 +353,9 @@ export function WizardPage() {
       if (result.success) {
         setUsedExistingVault(true)
         setDeployedModule(existingModuleAddress)
-        setExistingVaultTxHash(result.transactionHash as `0x${string}`)
+        if (typeof result.transactionHash === 'string' && result.transactionHash.startsWith('0x')) {
+          setExistingVaultTxHash(result.transactionHash as `0x${string}`)
+        }
         setPendingExistingVaultTransactions([])
         setPendingExistingVaultExplanations([])
       } else if ('cancelled' in result && result.cancelled) {
@@ -460,7 +390,9 @@ export function WizardPage() {
         }
       )
       if (result.success) {
-        setEnableModuleTxHash(result.transactionHash as `0x${string}`)
+        if (typeof result.transactionHash === 'string' && result.transactionHash.startsWith('0x')) {
+          setEnableModuleTxHash(result.transactionHash as `0x${string}`)
+        }
         // Poll until the RPC reflects the module activation (up to ~20s)
         for (let i = 0; i < 5; i++) {
           await new Promise(res => setTimeout(res, 3000))
@@ -537,7 +469,7 @@ export function WizardPage() {
 
     // Register any missing price feeds on the existing guardian
     const feedStatuses = await Promise.all(
-      BASE_SEPOLIA_PRICE_FEEDS.map(async ({ token, feed }) => {
+      PRICE_FEED_ENTRIES.map(async ({ token, feed }) => {
         try {
           const currentFeed = (await publicClient.readContract({
             address: existingModuleAddress,

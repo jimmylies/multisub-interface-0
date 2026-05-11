@@ -73,11 +73,11 @@ function useAllowedRecipientsList(subAccountAddress: Address) {
         // the panel from rendering.
       }
 
-      // Fallback: chunked eth_getLogs over a recent window. Used when the
-      // subgraph either errored or returned an empty list (which could mean
-      // either "really empty" or "subgraph hasn't indexed this guardian yet"
-      // for a freshly-deployed instance, so it's safe to also try RPC).
-      if (!subgraphOk || everTouched.size === 0) {
+      // Fallback: chunked eth_getLogs over a recent window. Only used when
+      // the subgraph errored — if it returned an empty list cleanly that's
+      // the source of truth (the previous "also try RPC on empty" path fired
+      // ~14 wasted RPC calls per panel render for agents with no whitelist).
+      if (!subgraphOk) {
         try {
           const latest = await publicClient.getBlockNumber()
           const floor = latest > MAX_LOOKBACK_BLOCKS ? latest - MAX_LOOKBACK_BLOCKS : 0n
@@ -288,11 +288,13 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
             <p className="font-medium text-primary text-small">Recipient Whitelist</p>
             <p className="mt-0.5 text-caption text-tertiary">
               {enabled === undefined
-                ? isLoadingEnabled
-                  ? 'Loading current state...'
-                  : isEnabledError
-                    ? 'Could not read on-chain state. You can still toggle the whitelist.'
-                    : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'
+                ? !addresses.guardian
+                  ? 'Waiting for Guardian context...'
+                  : isLoadingEnabled
+                    ? 'Loading current state...'
+                    : isEnabledError
+                      ? 'Could not read on-chain state. You can still toggle the whitelist.'
+                      : 'Loading current state...'
                 : enabled
                   ? 'ON — this agent can only transfer to addresses listed below.'
                   : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'}

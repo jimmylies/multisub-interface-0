@@ -2,6 +2,7 @@ export interface SubAccount {
   address: `0x${string}`
   hasExecuteRole: boolean
   hasTransferRole: boolean
+  hasRepayRole?: boolean
   addedAt?: number
 }
 
@@ -40,10 +41,4 @@ export interface OracleStatus {
   isStale: boolean // Whether data is too old
 }
 
-export type OperationType =
-  | 'UNKNOWN'
-  | 'SWAP'
-  | 'DEPOSIT'
-  | 'WITHDRAW'
-  | 'CLAIM'
-  | 'APPROVE'
+export type OperationType = 'UNKNOWN' | 'SWAP' | 'DEPOSIT' | 'WITHDRAW' | 'CLAIM' | 'APPROVE'

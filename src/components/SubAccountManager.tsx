@@ -210,7 +210,17 @@ export function SubAccountManager() {
       rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
     }
 
-    if (rolesToGrant.length === 0 && allowedProtocolAddresses.length === 0 && !setSpendingLimits) {
+    // Payment Agent: a user re-running this form on an existing Transfer agent
+    // to update its whitelist is a real case. The early-return below would
+    // block that flow ("address already has the selected roles") even though
+    // the whitelist tx batch below has real work to do.
+    const hasPaymentAgentWhitelistWork = isPaymentAgent && validRecipients.length > 0
+    if (
+      rolesToGrant.length === 0 &&
+      allowedProtocolAddresses.length === 0 &&
+      !setSpendingLimits &&
+      !hasPaymentAgentWhitelistWork
+    ) {
       toast.info('This address already has the selected roles')
       return
     }

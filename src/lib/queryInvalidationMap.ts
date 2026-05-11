@@ -5,6 +5,7 @@ export const QUERY_KEYS = {
   MANAGED_ACCOUNTS: 'managedAccounts',
   ALLOWED_ADDRESSES: 'allowedAddresses',
   ACQUIRED_BALANCES: 'acquiredBalances',
+  ALLOWED_RECIPIENTS: 'allowedRecipients',
 } as const
 
 // Wagmi useReadContract function names
@@ -14,6 +15,8 @@ export const WAGMI_READ_FUNCTIONS = {
   GET_SPENDING_ALLOWANCE: 'getSpendingAllowance',
   PAUSED: 'paused',
   ALLOWED_ADDRESSES: 'allowedAddresses',
+  ALLOWED_RECIPIENTS: 'allowedRecipients',
+  RECIPIENT_WHITELIST_ENABLED: 'recipientWhitelistEnabled',
 } as const
 
 // Map transaction types to query keys that need invalidation
@@ -57,5 +60,18 @@ export const INVALIDATION_MAP: Record<
   [TRANSACTION_TYPES.ENABLE_MODULE]: {
     reactQueryKeys: [],
     wagmiFunctions: [],
+  },
+  // Recipient whitelist toggle — affects the boolean read by the Recipient
+  // Whitelist panel. The panel runs its own refetchAll(), but other surfaces
+  // reading recipientWhitelistEnabled (e.g. role badges) need invalidation too.
+  [TRANSACTION_TYPES.SET_RECIPIENT_WHITELIST_ENABLED]: {
+    reactQueryKeys: [],
+    wagmiFunctions: [WAGMI_READ_FUNCTIONS.RECIPIENT_WHITELIST_ENABLED],
+  },
+  // Whitelist mutations — invalidate the historical-event query keyed on the
+  // agent, and the per-(agent, recipient) mapping reads.
+  [TRANSACTION_TYPES.SET_ALLOWED_RECIPIENTS]: {
+    reactQueryKeys: [QUERY_KEYS.ALLOWED_RECIPIENTS],
+    wagmiFunctions: [WAGMI_READ_FUNCTIONS.ALLOWED_RECIPIENTS],
   },
 }

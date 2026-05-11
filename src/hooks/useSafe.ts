@@ -244,8 +244,10 @@ export function useManagedAccounts() {
         return []
       }
 
-      // Fetch accounts for each role using the contract's getter functions
-      const [executeAccounts, transferAccounts] = await Promise.all([
+      // Fetch accounts for each role using the contract's getter functions.
+      // REPAY is a real on-chain role; if we don't query it here, agents with
+      // only REPAY granted are invisible in the dashboard agents list.
+      const [executeAccounts, transferAccounts, repayAccounts] = await Promise.all([
         publicClient.readContract({
           address: addresses.guardian,
           abi: GUARDIAN_ABI,
@@ -258,35 +260,32 @@ export function useManagedAccounts() {
           functionName: 'getSubaccountsByRole',
           args: [ROLES.DEFI_TRANSFER_ROLE],
         }) as Promise<`0x${string}`[]>,
+        publicClient.readContract({
+          address: addresses.guardian,
+          abi: GUARDIAN_ABI,
+          functionName: 'getSubaccountsByRole',
+          args: [ROLES.DEFI_REPAY_ROLE],
+        }) as Promise<`0x${string}`[]>,
       ])
 
-      console.log('[useManagedAccounts] guardian:', addresses.guardian)
-      console.log('[useManagedAccounts] executeAccounts:', executeAccounts)
-      console.log('[useManagedAccounts] transferAccounts:', transferAccounts)
-
       // Build a map of addresses and their roles
-      const accountMap = new Map<`0x${string}`, { executeRole: boolean; transferRole: boolean }>()
+      const accountMap = new Map<
+        `0x${string}`,
+        { executeRole: boolean; transferRole: boolean; repayRole: boolean }
+      >()
 
-      // Add execute role accounts
-      for (const address of executeAccounts) {
-        accountMap.set(address, {
-          executeRole: true,
-          transferRole: false,
-        })
+      const ensureEntry = (address: `0x${string}`) => {
+        const lower = address.toLowerCase() as `0x${string}`
+        const existing = accountMap.get(lower)
+        if (existing) return existing
+        const next = { executeRole: false, transferRole: false, repayRole: false }
+        accountMap.set(lower, next)
+        return next
       }
 
-      // Add transfer role accounts
-      for (const address of transferAccounts) {
-        const existing = accountMap.get(address)
-        if (existing) {
-          existing.transferRole = true
-        } else {
-          accountMap.set(address, {
-            executeRole: false,
-            transferRole: true,
-          })
-        }
-      }
+      for (const address of executeAccounts) ensureEntry(address).executeRole = true
+      for (const address of transferAccounts) ensureEntry(address).transferRole = true
+      for (const address of repayAccounts) ensureEntry(address).repayRole = true
 
       // Convert map to array
       const accountList: SubAccount[] = Array.from(accountMap.entries()).map(
@@ -294,6 +293,7 @@ export function useManagedAccounts() {
           address,
           hasExecuteRole: roles.executeRole,
           hasTransferRole: roles.transferRole,
+          hasRepayRole: roles.repayRole,
         })
       )
 

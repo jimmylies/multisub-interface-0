@@ -439,7 +439,23 @@ export function ProtocolPermissions({ subAccountAddress }: ProtocolPermissionsPr
         }
       } catch (error) {
         console.error('Error proposing permissions:', error)
-        const errorMsg = error instanceof Error ? error.message : 'Failed to propose transaction'
+        // Prefer the decoded revert reason (cause.reason / cause.shortMessage)
+        // over the full viem error which often includes raw call args + a stack.
+        const e = error as {
+          shortMessage?: string
+          cause?: { reason?: string; shortMessage?: string }
+          message?: string
+        }
+        const raw =
+          e.cause?.reason ??
+          e.cause?.shortMessage ??
+          e.shortMessage ??
+          e.message ??
+          'Failed to propose transaction'
+        const errorMsg =
+          raw === 'execution reverted' || raw === 'Execution reverted.'
+            ? 'The contract rejected the transaction.'
+            : raw
         toast.error(`Transaction failed: ${errorMsg}`)
       }
     })
