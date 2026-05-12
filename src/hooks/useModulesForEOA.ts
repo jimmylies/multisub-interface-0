@@ -12,8 +12,10 @@ import {
   MODULE_REGISTRY_ABI,
   SAFE_ABI,
 } from '@/lib/contracts'
+import { selectedChain } from '@/lib/chains'
+import { getDeployment } from '@/lib/deployments'
 
-const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
+const FACTORY_ADDRESS = getDeployment(selectedChain.id).agentVaultFactory
 
 export interface DeployedModule {
   module: Address

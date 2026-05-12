@@ -199,11 +199,9 @@ export function useSafeProposal() {
 
         // Get transaction hash
         const safeTxHash = await protocolKit.getTransactionHash(safeTransaction)
-        console.log('Safe transaction hash:', safeTxHash)
 
         // Sign the transaction
         const signedTransaction = await protocolKit.signTransaction(safeTransaction)
-        console.log('Transaction signed')
 
         // For Safes with threshold > 1, a single signature isn't enough to
         // execute. Stop here and surface a clear "needs cosigners" message
@@ -225,11 +223,9 @@ export function useSafeProposal() {
 
         // Execute the transaction
         const executeTxResponse = await protocolKit.executeTransaction(signedTransaction)
-        console.log('Transaction executed:', executeTxResponse)
 
         // Get transaction hash from response
         const txHash = extractTransactionHash(executeTxResponse)
-        console.log('Transaction hash:', txHash)
 
         if (!txHash) {
           throw new Error(
@@ -237,13 +233,10 @@ export function useSafeProposal() {
           )
         }
 
-        // Wait for transaction to be confirmed on the blockchain
-        console.log('Waiting for transaction confirmation...')
         const receipt = await publicClient.waitForTransactionReceipt({
           hash: txHash,
           confirmations: 1,
         })
-        console.log('Transaction confirmed:', receipt)
 
         // Check if transaction was successful
         if (receipt.status === 'reverted') {

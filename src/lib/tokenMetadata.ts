@@ -36,7 +36,7 @@ const KNOWN_TOKENS_BY_NETWORK: Record<NetworkName, Record<string, TokenMetadata>
 }
 
 const currentNetwork = ((import.meta.env.VITE_NETWORK as NetworkName | undefined) ||
-  'base') as NetworkName
+  'base-sepolia') as NetworkName
 
 export const KNOWN_TOKENS = KNOWN_TOKENS_BY_NETWORK[currentNetwork] ?? KNOWN_TOKENS_BY_NETWORK.base
 

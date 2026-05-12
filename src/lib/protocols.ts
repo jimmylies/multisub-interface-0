@@ -19,7 +19,7 @@ export interface Protocol {
 }
 
 const currentNetwork = ((import.meta.env.VITE_NETWORK as NetworkName | undefined) ||
-  'base') as NetworkName
+  'base-sepolia') as NetworkName
 
 const BASE_PROTOCOLS: Protocol[] = [
   {

@@ -1,5 +1,6 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { selectedChain, getTransports } from './lib/chains'
+import { getDeployment } from './lib/deployments'
 
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 if (!walletConnectProjectId || walletConnectProjectId === 'YOUR_PROJECT_ID') {
@@ -11,14 +12,15 @@ if (!walletConnectProjectId || walletConnectProjectId === 'YOUR_PROJECT_ID') {
   )
 }
 
-const subgraphUrl = import.meta.env.VITE_SUBGRAPH_URL
-if (!subgraphUrl) {
+if (!getDeployment(selectedChain.id).subgraphUrl) {
   // The default URL in lib/subgraph.ts points at a placeholder that returns
   // "Not found". When missing, log so the user knows the subgraph-backed
   // features (Acquired Balances, Transaction History, Recipient Whitelist
-  // history) are falling back to direct RPC calls.
+  // history) are falling back to direct RPC calls. Per-chain override:
+  // VITE_SUBGRAPH_URL_BASE / VITE_SUBGRAPH_URL_BASE_SEPOLIA, or the legacy
+  // single-chain VITE_SUBGRAPH_URL.
   console.warn(
-    '[wagmi] VITE_SUBGRAPH_URL is unset. Subgraph-backed reads will fall back to eth_getLogs, which is rate-limited on public RPCs.'
+    `[wagmi] No subgraph URL configured for chain ${selectedChain.id}. Subgraph-backed reads will fall back to eth_getLogs, which is rate-limited on public RPCs.`
   )
 }
 

@@ -1,10 +1,12 @@
 import { GraphQLClient } from 'graphql-request'
 import { gql } from 'graphql-request'
+import { selectedChain } from './chains'
+import { getDeployment } from './deployments'
 
 // Client configuration
 export const createSubgraphClient = () => {
   const url =
-    import.meta.env.VITE_SUBGRAPH_URL ||
+    getDeployment(selectedChain.id).subgraphUrl ||
     'https://api.studio.thegraph.com/query/1749819/test-multiclaw/v0.0.1'
   const token = import.meta.env.VITE_SUBGRAPH_AUTH_TOKEN
 

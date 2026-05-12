@@ -1,8 +1,10 @@
 import { useReadContract } from 'wagmi'
 import { zeroAddress, type Address } from 'viem'
 import { AGENT_VAULT_FACTORY_ABI, MODULE_REGISTRY_ABI } from '@/lib/contracts'
+import { selectedChain } from '@/lib/chains'
+import { getDeployment } from '@/lib/deployments'
 
-const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
+const FACTORY_ADDRESS = getDeployment(selectedChain.id).agentVaultFactory
 
 /**
  * Resolves a Safe address to its registered Guardian module address
@@ -19,7 +21,11 @@ export function useGuardianForSafe(safeAddress: `0x${string}` | undefined) {
     },
   })
 
-  const { data: moduleAddress, isLoading, isError } = useReadContract({
+  const {
+    data: moduleAddress,
+    isLoading,
+    isError,
+  } = useReadContract({
     address: registryAddress as Address | undefined,
     abi: MODULE_REGISTRY_ABI,
     functionName: 'getModuleForSafe',
@@ -29,9 +35,8 @@ export function useGuardianForSafe(safeAddress: `0x${string}` | undefined) {
     },
   })
 
-  const guardian = moduleAddress && moduleAddress !== zeroAddress
-    ? (moduleAddress as `0x${string}`)
-    : undefined
+  const guardian =
+    moduleAddress && moduleAddress !== zeroAddress ? (moduleAddress as `0x${string}`) : undefined
 
   return { guardian, isLoading, isError }
 }

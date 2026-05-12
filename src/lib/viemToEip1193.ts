@@ -148,7 +148,6 @@ export function createEip1193Provider(
 
           default:
             // Use the generic request method for any other methods
-            console.log(`Unhandled RPC method: ${method}`, paramsArray)
             return await client.request({ method: method as any, params: paramsArray as any })
         }
       } catch (error) {

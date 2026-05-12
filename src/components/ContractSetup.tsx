@@ -17,12 +17,14 @@ import { useContractAddresses } from '@/contexts/ContractAddressContext'
 import { useRecentAddresses } from '@/hooks/useRecentAddresses'
 import { useSafeAddress } from '@/hooks/useSafe'
 import { usePublicClient } from 'wagmi'
-import { isAddress, zeroAddress, type Address } from 'viem'
+import { isAddress, zeroAddress } from 'viem'
 import { AGENT_VAULT_FACTORY_ABI, MODULE_REGISTRY_ABI, GUARDIAN_ABI } from '@/lib/contracts'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/contexts/ToastContext'
+import { selectedChain } from '@/lib/chains'
+import { getDeployment } from '@/lib/deployments'
 
-const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
+const FACTORY_ADDRESS = getDeployment(selectedChain.id).agentVaultFactory
 
 export function ContractSetup() {
   const { addresses, setGuardian, clearGuardian, isConfigured } = useContractAddresses()
@@ -112,7 +114,9 @@ export function ContractSetup() {
         return
       }
 
-      setChangeError('No Guardian found for this address. Make sure a Guardian is deployed for this Safe.')
+      setChangeError(
+        'No Guardian found for this address. Make sure a Guardian is deployed for this Safe.'
+      )
     } catch {
       setChangeError('Failed to look up this address. Check your network connection.')
     } finally {
@@ -179,7 +183,8 @@ export function ContractSetup() {
 
               <div className="bg-elevated-2 p-3 border border-subtle rounded-lg">
                 <p className="text-xs text-tertiary">
-                  Enter your Safe address. The Guardian will be looked up automatically from the on-chain registry.
+                  Enter your Safe address. The Guardian will be looked up automatically from the
+                  on-chain registry.
                 </p>
               </div>
 
@@ -210,7 +215,9 @@ export function ContractSetup() {
                             'border-accent-primary bg-success-muted'
                         )}
                       >
-                        <span>{addr.slice(0, 10)}...{addr.slice(-8)}</span>
+                        <span>
+                          {addr.slice(0, 10)}...{addr.slice(-8)}
+                        </span>
                         <div className="flex items-center gap-1">
                           <CopyButton value={addr} />
                           <span
@@ -241,9 +248,7 @@ export function ContractSetup() {
           ) : (
             <div className="space-y-4">
               <div className="bg-elevated-2 p-3 border border-subtle rounded-lg">
-                <p className="mb-1 text-caption text-tertiary uppercase tracking-wider">
-                  Guardian
-                </p>
+                <p className="mb-1 text-caption text-tertiary uppercase tracking-wider">Guardian</p>
                 <div className="flex items-center gap-1">
                   <p className="font-mono text-primary text-small break-all">
                     {addresses.guardian.slice(0, 10)}...{addresses.guardian.slice(-8)}
@@ -301,9 +306,7 @@ export function ContractSetup() {
 
           <DialogBody className="space-y-4">
             <div>
-              <label className="block mb-2 font-medium text-primary text-small">
-                Safe Address
-              </label>
+              <label className="block mb-2 font-medium text-primary text-small">Safe Address</label>
               <Input
                 type="text"
                 placeholder="0x..."
@@ -335,7 +338,9 @@ export function ContractSetup() {
                           'border-accent-primary bg-success-muted'
                       )}
                     >
-                      <span>{addr.slice(0, 10)}...{addr.slice(-8)}</span>
+                      <span>
+                        {addr.slice(0, 10)}...{addr.slice(-8)}
+                      </span>
                       <div className="flex items-center gap-1">
                         <CopyButton value={addr} />
                         <span

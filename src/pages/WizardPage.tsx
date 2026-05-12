@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog'
 import { ROUTES } from '@/router/routes'
 import { getExplorerBase, selectedChain, selectedNetworkName } from '@/lib/chains'
+import { getDeployment } from '@/lib/deployments'
 import { composeBindings, getSupportedProtocolIds } from '@/lib/protocolBindings'
 import { getPriceFeedsForChain } from '@/lib/priceFeeds'
 import {
@@ -125,9 +126,10 @@ function getPresetProtocolLabels(
   return matchingProtocols.length > 0 ? matchingProtocols : [...fallbackLabels]
 }
 
-// Fixed deployment config - set via environment variables
-const FACTORY_ADDRESS = import.meta.env.VITE_AGENT_VAULT_FACTORY_ADDRESS as Address | undefined
-const ORACLE_ADDRESS = import.meta.env.VITE_ORACLE_ADDRESS as Address | undefined
+// Per-chain deployment config — falls back to legacy single-chain env vars
+// for backward compat. See src/lib/deployments.ts for the resolution order.
+const FACTORY_ADDRESS = getDeployment(selectedChain.id).agentVaultFactory
+const ORACLE_ADDRESS = getDeployment(selectedChain.id).oracle
 // Protocol ids with parser+selector bindings on the active network.
 // Anything not in here is shown as "coming soon" in the Custom picker.
 const supportedProtocolIds = getSupportedProtocolIds(selectedNetworkName)
