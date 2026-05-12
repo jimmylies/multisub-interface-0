@@ -140,9 +140,87 @@ const BASE_SEPOLIA_BINDINGS: Record<string, ProtocolBinding> = {
   // so users can't whitelist a protocol the agent can't actually call.
 }
 
+// Placeholder used for parser addresses on networks where the parser suite
+// has not yet been deployed. composeBindings() throws if it sees this in a
+// selected binding, so a misconfigured mainnet deploy fails fast instead of
+// silently registering a zero-address parser (which would later cause every
+// agent call to revert with ParserNotRegistered).
+const PARSER_TBD = '0x0000000000000000000000000000000000000000' as const
+
+// Base mainnet bindings. Protocol addresses mirror BASE_PROTOCOLS in
+// protocols.ts; parser addresses are TBD until the parser suite is deployed
+// on Base mainnet (see MAINNET_PREP.md §1 "Smart contracts"). Once parsers
+// are deployed, replace each PARSER_TBD with the corresponding deployment
+// address — composeBindings will then accept this network for production use.
+const BASE_MAINNET_BINDINGS: Record<string, ProtocolBinding> = {
+  aave: {
+    protocols: [
+      '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5', // Pool
+      '0xf9cc4F0D883F1a1eb2c253bdb46c254Ca51E1F44', // RewardsController
+    ],
+    parsers: [
+      { protocol: '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5', parser: PARSER_TBD },
+      { protocol: '0xf9cc4F0D883F1a1eb2c253bdb46c254Ca51E1F44', parser: PARSER_TBD },
+    ],
+    selectors: [
+      { selector: '0x617ba037', opType: OP_DEPOSIT }, // supply
+      { selector: '0x69328dec', opType: OP_WITHDRAW }, // withdraw
+      { selector: '0xa415bcad', opType: OP_WITHDRAW }, // borrow → WITHDRAW
+      { selector: '0x573ade81', opType: OP_REPAY }, // repay
+      { selector: '0x236300dc', opType: OP_CLAIM }, // claimRewards
+      { selector: '0xbb492bf5', opType: OP_CLAIM }, // claimAllRewards
+    ],
+  },
+  morpho: {
+    protocols: ['0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb'],
+    parsers: [{ protocol: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb', parser: PARSER_TBD }],
+    selectors: [
+      { selector: '0xa99aad89', opType: OP_DEPOSIT }, // supply
+      { selector: '0x5c2bea49', opType: OP_WITHDRAW }, // withdraw
+      { selector: '0x20b76e81', opType: OP_REPAY }, // repay
+      { selector: '0x238d6579', opType: OP_DEPOSIT }, // supplyCollateral
+      { selector: '0x8720316d', opType: OP_WITHDRAW }, // withdrawCollateral
+    ],
+  },
+  uniswap: {
+    protocols: [
+      '0x2626664c2603336E57B271c5C0b26F421741e481', // SwapRouter02 (V3)
+      '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', // NonfungiblePositionManager (V3)
+      '0x6fF5693b99212Da76ad316178A184AB56D299b43', // Universal Router
+      '0x7C5f5A4bBd8fD63184577525326123B519429bDc', // PositionManager (V4)
+    ],
+    parsers: [
+      { protocol: '0x2626664c2603336E57B271c5C0b26F421741e481', parser: PARSER_TBD },
+      { protocol: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1', parser: PARSER_TBD },
+      { protocol: '0x6fF5693b99212Da76ad316178A184AB56D299b43', parser: PARSER_TBD },
+      { protocol: '0x7C5f5A4bBd8fD63184577525326123B519429bDc', parser: PARSER_TBD },
+    ],
+    selectors: [
+      { selector: '0x04e45aaf', opType: OP_SWAP }, // exactInputSingle (V3)
+      { selector: '0xb858183f', opType: OP_SWAP }, // exactInput (V3)
+      { selector: '0x5023b4df', opType: OP_SWAP }, // exactOutputSingle (V3)
+      { selector: '0x3593564c', opType: OP_SWAP }, // execute (Universal Router)
+      { selector: '0x88316456', opType: OP_DEPOSIT }, // mint (NonfungiblePositionManager V3)
+      { selector: '0x219f5d17', opType: OP_DEPOSIT }, // increaseLiquidity (V3)
+      { selector: '0x0c49ccbe', opType: OP_WITHDRAW }, // decreaseLiquidity (V3)
+      { selector: '0xfc6f7865', opType: OP_CLAIM }, // collect (V3)
+      { selector: '0xdd46508f', opType: OP_DEPOSIT }, // modifyLiquidities (PositionManager V4)
+    ],
+  },
+}
+
 const BINDINGS_BY_NETWORK: Partial<Record<NetworkName, Record<string, ProtocolBinding>>> = {
   'base-sepolia': BASE_SEPOLIA_BINDINGS,
-  // Base mainnet bindings TBD when the parser suite is deployed there.
+  base: BASE_MAINNET_BINDINGS,
+}
+
+export class ParserNotDeployedError extends Error {
+  constructor(protocol: Address) {
+    super(
+      `Parser not deployed for protocol ${protocol}. Fill in the address in protocolBindings.ts before deploying on this network.`
+    )
+    this.name = 'ParserNotDeployedError'
+  }
 }
 
 export function getProtocolBindings(network: NetworkName): Record<string, ProtocolBinding> {
@@ -223,6 +301,7 @@ export function composeBindings(
     if (!binding) continue
     allowedProtocols.push(...binding.protocols)
     for (const { protocol, parser } of binding.parsers) {
+      if (parser === PARSER_TBD) throw new ParserNotDeployedError(protocol)
       parserProtocols.push(protocol)
       parserAddresses.push(parser)
     }
