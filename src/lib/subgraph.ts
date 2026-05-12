@@ -5,7 +5,7 @@ import { gql } from 'graphql-request'
 export const createSubgraphClient = () => {
   const url =
     import.meta.env.VITE_SUBGRAPH_URL ||
-    'https://api.studio.thegraph.com/query/36309/multiclaw-sepolia/version/latest'
+    'https://api.studio.thegraph.com/query/1749819/test-multiclaw/v0.0.1'
   const token = import.meta.env.VITE_SUBGRAPH_AUTH_TOKEN
 
   return new GraphQLClient(url, {
