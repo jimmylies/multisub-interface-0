@@ -41,7 +41,10 @@ export function ModuleActivationBanner() {
   })
 
   if (!guardian || !safe) return null
-  if (isEnabled) return null
+  // Show only when the read has resolved and explicitly returned false.
+  // While loading, isEnabled is undefined — rendering the banner then causes
+  // a visible flash on page refresh for Safes that actually have the module.
+  if (isEnabled !== false) return null
 
   async function handleEnable() {
     if (!safe || !guardian) return
