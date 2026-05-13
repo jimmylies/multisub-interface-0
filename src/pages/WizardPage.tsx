@@ -6,6 +6,7 @@ import {
   useWaitForTransactionReceipt,
   useChainId,
   useReadContract,
+  useReadContracts,
   usePublicClient,
 } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -282,6 +283,41 @@ export function WizardPage() {
     query: { enabled: Boolean(existingModuleAddress) },
   })
 
+  // Live membership check: if the entered agent address already holds any
+  // role on this module, block deployment to prevent the user from silently
+  // overwriting an existing agent's config. Existing agents are managed
+  // from the Dashboard, not from the deploy wizard.
+  const agentAddressForCheck = isAddress(agentAddress) ? (agentAddress as Address) : null
+  const { data: agentRoleResults } = useReadContracts({
+    contracts:
+      existingModuleAddress && agentAddressForCheck
+        ? [
+            {
+              address: existingModuleAddress,
+              abi: GUARDIAN_ABI,
+              functionName: 'hasRole',
+              args: [agentAddressForCheck, ROLES.DEFI_EXECUTE_ROLE],
+            },
+            {
+              address: existingModuleAddress,
+              abi: GUARDIAN_ABI,
+              functionName: 'hasRole',
+              args: [agentAddressForCheck, ROLES.DEFI_TRANSFER_ROLE],
+            },
+            {
+              address: existingModuleAddress,
+              abi: GUARDIAN_ABI,
+              functionName: 'hasRole',
+              args: [agentAddressForCheck, ROLES.DEFI_REPAY_ROLE],
+            },
+          ]
+        : [],
+    query: { enabled: Boolean(existingModuleAddress && agentAddressForCheck) },
+  })
+  const agentAlreadyOnModule = Boolean(
+    agentRoleResults?.some(r => r.status === 'success' && r.result === true)
+  )
+
   // One-shot default per detected module: when the user lands on a Safe with
   // an oracleless module, pre-fill the toggle + USD field for them. Doesn't
   // re-fire on subsequent toggle changes — picking "Oracle-managed" will
@@ -515,21 +551,24 @@ export function WizardPage() {
       )
     }
 
-    // Early blocker: if this agent already has a role in the vault, stop here.
-    const roleToCheck =
-      preset.id === 'custom'
-        ? ROLES.DEFI_EXECUTE_ROLE
-        : (PRESET_ROLE_IDS[preset.id] ?? ROLES.DEFI_EXECUTE_ROLE)
+    // Early blocker: if this agent already holds ANY role on the module,
+    // stop here. The UI also disables the Deploy button via the live
+    // membership read; this is a defensive re-check at submit time in case
+    // the live data was stale or the user bypassed the disabled state.
     try {
-      const agentAlreadyHasRole = await publicClient.readContract({
-        address: existingModuleAddress,
-        abi: GUARDIAN_ABI,
-        functionName: 'hasRole',
-        args: [agentAddress as Address, roleToCheck],
-      })
-      if (agentAlreadyHasRole) {
+      const roleChecks = await Promise.all(
+        [ROLES.DEFI_EXECUTE_ROLE, ROLES.DEFI_TRANSFER_ROLE, ROLES.DEFI_REPAY_ROLE].map(roleId =>
+          publicClient.readContract({
+            address: existingModuleAddress,
+            abi: GUARDIAN_ABI,
+            functionName: 'hasRole',
+            args: [agentAddress as Address, roleId],
+          })
+        )
+      )
+      if (roleChecks.some(Boolean)) {
         setDeployError(
-          `Agent ${agentAddress.slice(0, 6)}…${agentAddress.slice(-4)} already has access in this vault. To update its limits or permissions, use the Dashboard instead.`
+          `Agent ${agentAddress.slice(0, 6)}…${agentAddress.slice(-4)} is already an agent on this module. To update its limits or permissions, use the Dashboard instead.`
         )
         return
       }
@@ -1274,6 +1313,14 @@ export function WizardPage() {
               {agentAddress && !isAddress(agentAddress) && (
                 <p className="mt-1 text-red-400 text-xs">Invalid address</p>
               )}
+              {agentAlreadyOnModule && (
+                <p className="mt-1 text-red-400 text-xs">
+                  This address is already an agent on the existing module (
+                  {existingModuleAddress?.slice(0, 6)}…{existingModuleAddress?.slice(-4)}). Use the
+                  Dashboard to update its config — deploying again here would silently overwrite its
+                  limits and permissions.
+                </p>
+              )}
             </div>
 
             {/* Trust mode toggle */}
@@ -1639,6 +1686,7 @@ export function WizardPage() {
                 !isAddress(safeAddress) ||
                 !FACTORY_ADDRESS ||
                 !oracleConfigOk ||
+                agentAlreadyOnModule ||
                 (oracleless && (!spendingLimitUSD || Number(spendingLimitUSD) <= 0)) ||
                 (selectedPreset === 'payment-agent' &&
                   useWhitelist &&
@@ -2076,6 +2124,7 @@ export function WizardPage() {
                 isConfiguringExistingVault ||
                 isEnablingModule ||
                 usedExistingVault ||
+                agentAlreadyOnModule ||
                 (isSuccess && !txReverted && !usedExistingVault)
               }
               className="disabled:opacity-50 text-black bg-accent-primary hover:bg-accent-primary/90"
