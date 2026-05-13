@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,15 @@ export function EmergencyControls() {
     },
   })
 
+  const [optimisticPaused, setOptimisticPaused] = useState<boolean | null>(null)
+  const displayedPaused = optimisticPaused ?? isPaused
+
+  useEffect(() => {
+    if (optimisticPaused !== null && isPaused === optimisticPaused) {
+      setOptimisticPaused(null)
+    }
+  }, [isPaused, optimisticPaused])
+
   const handlePause = async () => {
     if (!addresses.guardian) {
       toast.warning('Contract not configured')
@@ -45,6 +55,7 @@ export function EmergencyControls() {
       )
 
       if (result.success) {
+        setOptimisticPaused(true)
         toast.success('Contract paused successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
@@ -79,6 +90,7 @@ export function EmergencyControls() {
       )
 
       if (result.success) {
+        setOptimisticPaused(false)
         toast.success('Contract unpaused successfully')
       } else if ('cancelled' in result && result.cancelled) {
         // User cancelled - do nothing
@@ -114,7 +126,7 @@ export function EmergencyControls() {
       <CardHeader className="pb-4">
         <div className="flex justify-between items-center">
           <CardTitle>Emergency Controls</CardTitle>
-          {isPaused ? (
+          {displayedPaused ? (
             <Badge variant="error">⚠️ PAUSED</Badge>
           ) : (
             <Badge variant="success">✓ Active</Badge>
@@ -124,18 +136,17 @@ export function EmergencyControls() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Warning Message */}
-        {isPaused ? (
+        {displayedPaused ? (
           <div className="bg-error-muted p-4 border border-error/20 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex flex-shrink-0 justify-center items-center bg-error/20 rounded-lg w-8 h-8">
                 <span>⚠️</span>
               </div>
               <div>
-                <p className="font-medium text-primary text-small">
-                  Contract is Currently Paused
-                </p>
+                <p className="font-medium text-primary text-small">Contract is Currently Paused</p>
                 <p className="mt-1 text-caption text-tertiary">
-                  All sub-account operations are frozen. No transfers or protocol interactions can be executed.
+                  All sub-account operations are frozen. No transfers or protocol interactions can
+                  be executed.
                 </p>
               </div>
             </div>
@@ -147,9 +158,7 @@ export function EmergencyControls() {
                 <span>✓</span>
               </div>
               <div>
-                <p className="font-medium text-primary text-small">
-                  Contract is Active
-                </p>
+                <p className="font-medium text-primary text-small">Contract is Active</p>
                 <p className="mt-1 text-caption text-tertiary">
                   All sub-accounts can execute transfers and protocol interactions normally.
                 </p>
@@ -159,13 +168,13 @@ export function EmergencyControls() {
         )}
 
         {/* Pause Button */}
-        {!isPaused && (
+        {!displayedPaused && (
           <div className="space-y-3">
             <div className="bg-warning-muted p-4 border border-warning/20 rounded-xl">
               <p className="font-medium text-primary text-small">
                 Pausing will immediately freeze all sub-account operations:
               </p>
-              <ul className="mt-2 ml-4 text-caption text-tertiary list-disc space-y-1">
+              <ul className="space-y-1 mt-2 ml-4 text-caption text-tertiary list-disc">
                 <li>Token transfers</li>
                 <li>DeFi protocol interactions</li>
                 <li>All sub-account transactions</li>
@@ -183,7 +192,7 @@ export function EmergencyControls() {
         )}
 
         {/* Unpause Button */}
-        {isPaused && (
+        {displayedPaused && (
           <div className="space-y-3">
             <div className="bg-success-muted p-4 border border-success/20 rounded-xl">
               <p className="text-small text-tertiary">
