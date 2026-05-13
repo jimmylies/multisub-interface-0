@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useAccount,
@@ -270,6 +270,25 @@ export function WizardPage() {
   const existingModuleAddress =
     existingModule && existingModule !== zeroAddress ? (existingModule as `0x${string}`) : null
 
+  // Read the existing module's on-chain trust mode. The module-level setting
+  // (authorizedOracle == 0) only constrains agents in one direction: an
+  // oracleless module rejects BPS-mode agents (DeFiInteractorModule.sol:410).
+  // An oracle-managed module accepts both BPS and USD agents, so the user
+  // can still freely pick per-agent trust mode in that case.
+  const { data: existingModuleIsOracleless } = useReadContract({
+    address: existingModuleAddress ?? undefined,
+    abi: GUARDIAN_ABI,
+    functionName: 'isOracleless',
+    query: { enabled: Boolean(existingModuleAddress) },
+  })
+
+  useEffect(() => {
+    if (existingModuleIsOracleless === true) {
+      setOracleless(true)
+      if (!spendingLimitUSD) setSpendingLimitUSD('5000')
+    }
+  }, [existingModuleIsOracleless, spendingLimitUSD])
+
   // Safe owner check - connected wallet must be a Safe signer to call enableModule
   const { data: safeOwners } = useReadContract({
     address: hasValidSafeAddress ? (safeAddress as Address) : undefined,
@@ -435,16 +454,21 @@ export function WizardPage() {
       explanations.push(explanation)
     }
 
-    // Auto-detect the guardian's actual on-chain mode instead of relying on UI toggle
+    // Decide the new agent's limit mode. Per-agent trust mode is the user's
+    // UI choice on an oracle-managed module (both BPS and USD agents are
+    // valid). An oracleless module forces every agent to USD mode (the
+    // module reverts BPS-mode setSubAccountLimits — see
+    // DeFiInteractorModule.sol:410), so we force-flip in that case only.
     let guardianIsOracleless = oracleless
     try {
-      guardianIsOracleless = (await publicClient.readContract({
+      const moduleIsOracleless = (await publicClient.readContract({
         address: existingModuleAddress,
         abi: GUARDIAN_ABI,
         functionName: 'isOracleless',
       })) as boolean
+      if (moduleIsOracleless) guardianIsOracleless = true
     } catch {
-      // Fallback to UI toggle if call fails
+      // If the call fails, fall back to UI toggle.
     }
 
     // Early blocker: if this agent already has a role in the vault, stop here.
@@ -1214,6 +1238,7 @@ export function WizardPage() {
               <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
                 <button
                   type="button"
+                  disabled={existingModuleIsOracleless === true}
                   onClick={() => {
                     setOracleless(false)
                   }}
@@ -1221,7 +1246,7 @@ export function WizardPage() {
                     !oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
                       : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                  }`}
+                  } ${existingModuleIsOracleless === true ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck className="w-4 h-4 text-accent-primary" />
@@ -1254,6 +1279,22 @@ export function WizardPage() {
                   </p>
                 </button>
               </div>
+              {existingModuleIsOracleless === true && (
+                <p className="mt-2 text-amber-400 text-xs">
+                  This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
+                  {existingModuleAddress?.slice(-4)}) is in <strong>oracleless</strong> mode, so
+                  every agent under it must use a USD-only limit. To switch the module to
+                  oracle-managed, the Safe owners must call <code>setAuthorizedOracle</code> on it.
+                </p>
+              )}
+              {existingModuleIsOracleless === false && (
+                <p className="mt-2 text-tertiary text-xs">
+                  This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
+                  {existingModuleAddress?.slice(-4)}) is oracle-managed. You can add agents in
+                  either trust mode — oracle-managed agents use a BPS-of-portfolio cap, oracleless
+                  agents use a fixed USD cap. Both are valid under an oracle module.
+                </p>
+              )}
             </div>
 
             {/* Spending limit */}
