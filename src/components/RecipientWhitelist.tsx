@@ -30,10 +30,10 @@ interface RecipientWhitelistProps {
 // Reconstructs the current set of allowed recipients for an agent. The on-chain
 // mapping has no enumeration getter, so we need an off-chain index of touched
 // addresses. Strategy (matches useModulesForEOA):
-//   1. Primary: TheGraph subgraph — one GraphQL call returns the full history.
+//   1. Primary: TheGraph subgraph - one GraphQL call returns the full history.
 //   2. Fallback: chunked eth_getLogs over a recent window. Base Sepolia's
 //      public RPC caps eth_getLogs at 2000 blocks per call (not 10k as some
-//      providers advertise) — we chunk in 1900-block windows to stay safely
+//      providers advertise) - we chunk in 1900-block windows to stay safely
 //      under the limit on every supported network.
 // Either way, we then re-check the live `allowedRecipients(agent, recipient)`
 // mapping per candidate so the rendered list reflects authoritative on-chain
@@ -42,7 +42,7 @@ const LOG_CHUNK_BLOCKS = 1_900n
 // ~5.5 days at Base Sepolia's ~2s block time. Only used by the RPC fallback;
 // the subgraph path returns the full history regardless of age. At 1900-block
 // chunks this is ~132 RPC calls per panel render in the worst case (subgraph
-// down + agent has no events) — acceptable because the panel is only mounted
+// down + agent has no events) - acceptable because the panel is only mounted
 // when the user expands a row.
 const MAX_LOOKBACK_BLOCKS = 250_000n
 
@@ -73,13 +73,13 @@ function useAllowedRecipientsList(subAccountAddress: Address) {
         }
         subgraphOk = true
       } catch {
-        // Subgraph unavailable, entity not indexed, or auth failure — fall
+        // Subgraph unavailable, entity not indexed, or auth failure - fall
         // through to the RPC path. A failed subgraph call should never block
         // the panel from rendering.
       }
 
       // Fallback: chunked eth_getLogs over a recent window. Only used when
-      // the subgraph errored — if it returned an empty list cleanly that's
+      // the subgraph errored - if it returned an empty list cleanly that's
       // the source of truth (the previous "also try RPC on empty" path fired
       // ~14 wasted RPC calls per panel render for agents with no whitelist).
       if (!subgraphOk) {
@@ -114,7 +114,7 @@ function useAllowedRecipientsList(subAccountAddress: Address) {
           }
         } catch (err) {
           console.warn('Failed to enumerate AllowedRecipientsSet events', err)
-          // Don't return early — if the subgraph already populated everTouched,
+          // Don't return early - if the subgraph already populated everTouched,
           // we still want to verify those entries via the mapping read below.
         }
       }
@@ -286,7 +286,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 bg-elevated p-3 border border-subtle rounded-xl">
+      <div className="flex justify-between items-start gap-3 bg-elevated p-3 border border-subtle rounded-xl">
         <div className="flex items-start gap-2">
           <ShieldCheck className="mt-0.5 w-4 h-4 text-accent-primary" />
           <div>
@@ -301,8 +301,8 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
                       ? 'Could not read on-chain state. You can still toggle the whitelist.'
                       : 'Loading current state...'
                 : enabled
-                  ? 'ON — this agent can only transfer to addresses listed below.'
-                  : 'OFF — this agent can transfer to any recipient (still bounded by spending limits).'}
+                  ? 'ON - this agent can only transfer to addresses listed below.'
+                  : 'OFF - this agent can transfer to any recipient (still bounded by spending limits).'}
             </p>
           </div>
         </div>
@@ -328,7 +328,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
         </p>
         {isLoadingRecipients ? (
           <div className="flex items-center gap-2 bg-elevated p-3 border border-subtle rounded-xl">
-            <Loader2 className="w-4 h-4 animate-spin text-tertiary" />
+            <Loader2 className="w-4 h-4 text-tertiary animate-spin" />
             <span className="text-caption text-tertiary">Loading recipients...</span>
           </div>
         ) : recipients.length === 0 ? (

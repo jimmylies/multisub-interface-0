@@ -61,14 +61,14 @@ export const INVALIDATION_MAP: Record<
     reactQueryKeys: [],
     wagmiFunctions: [],
   },
-  // Recipient whitelist toggle — affects the boolean read by the Recipient
+  // Recipient whitelist toggle - affects the boolean read by the Recipient
   // Whitelist panel. The panel runs its own refetchAll(), but other surfaces
   // reading recipientWhitelistEnabled (e.g. role badges) need invalidation too.
   [TRANSACTION_TYPES.SET_RECIPIENT_WHITELIST_ENABLED]: {
     reactQueryKeys: [],
     wagmiFunctions: [WAGMI_READ_FUNCTIONS.RECIPIENT_WHITELIST_ENABLED],
   },
-  // Whitelist mutations — invalidate the historical-event query keyed on the
+  // Whitelist mutations - invalidate the historical-event query keyed on the
   // agent, and the per-(agent, recipient) mapping reads.
   [TRANSACTION_TYPES.SET_ALLOWED_RECIPIENTS]: {
     reactQueryKeys: [QUERY_KEYS.ALLOWED_RECIPIENTS],

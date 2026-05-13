@@ -151,7 +151,7 @@ const PARSER_TBD = '0x0000000000000000000000000000000000000000' as const
 // protocols.ts; parser addresses are TBD until the parser suite is deployed
 // on Base mainnet (see MAINNET_PREP.md §1 "Smart contracts"). Once parsers
 // are deployed, replace each PARSER_TBD with the corresponding deployment
-// address — composeBindings will then accept this network for production use.
+// address - composeBindings will then accept this network for production use.
 const BASE_MAINNET_BINDINGS: Record<string, ProtocolBinding> = {
   aave: {
     protocols: [

@@ -126,7 +126,7 @@ function getPresetProtocolLabels(
   return matchingProtocols.length > 0 ? matchingProtocols : [...fallbackLabels]
 }
 
-// Per-chain deployment config — falls back to legacy single-chain env vars
+// Per-chain deployment config - falls back to legacy single-chain env vars
 // for backward compat. See src/lib/deployments.ts for the resolution order.
 const FACTORY_ADDRESS = getDeployment(selectedChain.id).agentVaultFactory
 const ORACLE_ADDRESS = getDeployment(selectedChain.id).oracle

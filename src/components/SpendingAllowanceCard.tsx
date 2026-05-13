@@ -80,9 +80,9 @@ export function SpendingAllowanceCard({ address }: SpendingAllowanceCardProps) {
   const effectiveSpent = isWindowExpired ? 0n : (cumulativeSpent ?? 0n)
 
   // Skip the oracle value when it's stale and can't be trusted:
-  // 1. No spending has ever occurred (windowStart === 0, cumulativeSpent === 0) — oracle may
+  // 1. No spending has ever occurred (windowStart === 0, cumulativeSpent === 0) - oracle may
   //    hold a leftover value from a prior config after a spending limit update.
-  // 2. The window has expired — oracle hasn't reset yet, still shows remaining from last window.
+  // 2. The window has expired - oracle hasn't reset yet, still shows remaining from last window.
   const noSpendingYet = ws === 0n && effectiveSpent === 0n
   const skipOracle = noSpendingYet || isWindowExpired
 

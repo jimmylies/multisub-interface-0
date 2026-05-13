@@ -1,6 +1,6 @@
 // Per-chain deployment registry. Resolves factory / oracle / subgraph
 // configuration by chainId so a single Vercel build can target either Base
-// Sepolia or Base mainnet — or both, if all per-chain env vars are present.
+// Sepolia or Base mainnet - or both, if all per-chain env vars are present.
 //
 // Resolution order for each field:
 //   1. Per-chain env var, e.g. VITE_AGENT_VAULT_FACTORY_ADDRESS_BASE
@@ -33,7 +33,7 @@ const CHAIN_SUFFIX: Record<number, string> = {
   84532: 'BASE_SEPOLIA',
 }
 
-// Baked-in defaults — kept empty so deployments stay env-var driven and the
+// Baked-in defaults - kept empty so deployments stay env-var driven and the
 // repo doesn't carry stale contract addresses. Fill in when you want addresses
 // shipped with the code (e.g. a known canonical mainnet factory).
 const BAKED_DEPLOYMENTS: Partial<Record<number, Deployment>> = {}

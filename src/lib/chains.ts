@@ -52,7 +52,7 @@ const CHAIN_LABEL_MAP: Record<number, string> = {
 }
 
 // Get network from env or default to Base Sepolia. Defaulting to testnet
-// keeps a misconfigured deploy from silently targeting mainnet — set
+// keeps a misconfigured deploy from silently targeting mainnet - set
 // VITE_NETWORK=base explicitly when you mean production.
 const networkName = (import.meta.env.VITE_NETWORK as NetworkName) || 'base-sepolia'
 

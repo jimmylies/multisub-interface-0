@@ -956,9 +956,9 @@ function SubAccountRow({ account, isRevoking, index }: SubAccountRowProps) {
     maxAllowance !== null && maxAllowance > effectiveSpent ? maxAllowance - effectiveSpent : 0n
   // Skip oracle's spendingAllowance when it can't be trusted:
   // 1. Oracleless mode (oracle is irrelevant).
-  // 2. No spending yet (windowStart === 0 && cumulativeSpent === 0) — oracle may hold a stale
+  // 2. No spending yet (windowStart === 0 && cumulativeSpent === 0) - oracle may hold a stale
   //    value from a prior config after a spending limit update.
-  // 3. Window expired — oracle hasn't reset yet, still reflects last window's remaining.
+  // 3. Window expired - oracle hasn't reset yet, still reflects last window's remaining.
   const noSpendingYet = (windowStart === undefined || windowStart === 0n) && effectiveSpent === 0n
   const skipOracle = isAccountOracleless || noSpendingYet || isWindowExpired
   const effectiveRemainingAllowance = skipOracle

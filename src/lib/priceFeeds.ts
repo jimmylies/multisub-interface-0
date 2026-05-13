@@ -6,7 +6,7 @@ import type { Address } from 'viem'
  * value common tokens.
  *
  * Feed addresses are Chainlink USD aggregators. address(0) is native ETH and
- * is accepted by `setTokenPriceFeeds` (the plural setter) — do not filter it
+ * is accepted by `setTokenPriceFeeds` (the plural setter) - do not filter it
  * out at deploy time or Uniswap swap paths through native ETH will break.
  */
 export interface PriceFeedEntry {
@@ -95,7 +95,7 @@ const BASE_SEPOLIA: PriceFeedEntry[] = [
 
 // Base mainnet (chainId 8453) Chainlink USD aggregators.
 //
-// IMPORTANT — verify each address against the live Chainlink directory
+// IMPORTANT - verify each address against the live Chainlink directory
 // (https://data.chain.link/base) before the first mainnet deploy. Feed
 // addresses are stable but Chainlink occasionally deprecates an aggregator
 // and migrates the proxy; the proxy address is what we want here.
@@ -103,7 +103,7 @@ const BASE_SEPOLIA: PriceFeedEntry[] = [
 // Token addresses mirror BASE_PROTOCOLS-adjacent assets used by the agents
 // (WETH for swaps, USDC/USDbC/USDT/DAI for stablecoins, cbETH for Aave
 // supply, EURC for euro-denominated flows). aTokens are intentionally
-// omitted until Aave V3 mainnet support is wired through — the underlying
+// omitted until Aave V3 mainnet support is wired through - the underlying
 // feed is what setTokenPriceFeeds needs, and aTokens can reuse it once their
 // addresses are catalogued.
 const BASE_MAINNET: PriceFeedEntry[] = [
@@ -174,7 +174,7 @@ const PRICE_FEEDS_BY_CHAIN: Record<number, PriceFeedEntry[]> = {
 /**
  * Returns the price-feed registry for a chain, or `undefined` if no registry
  * is configured. Callers should treat `undefined` as "skip seeding feeds at
- * deploy time" — the Guardian can still be deployed; price-dependent paths
+ * deploy time" - the Guardian can still be deployed; price-dependent paths
  * (swaps, USD-mode spending) will fail until feeds are added by the Safe
  * owner via the Dashboard.
  */

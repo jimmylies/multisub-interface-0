@@ -29,7 +29,7 @@ interface DeploySafeInlineProps {
  */
 // Safe v1.4.1 proxy addresses are CREATE2-derived from (factory, singleton,
 // init code hash from owners/threshold/setup, saltNonce). With the same owners
-// and the default saltNonce of 0, every prediction collides — the second
+// and the default saltNonce of 0, every prediction collides - the second
 // deployment would revert because code already exists at that address. We
 // generate a fresh random uint256 saltNonce per panel session, and rotate it
 // after a successful deploy, so each Safe gets a unique address.
@@ -154,7 +154,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
         msg.toLowerCase().includes('user rejected') ||
         msg.toLowerCase().includes('user denied')
       ) {
-        // Quiet — user closed the wallet prompt.
+        // Quiet - user closed the wallet prompt.
         return
       }
       console.error('Safe deploy failed', error)
@@ -251,7 +251,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
           <div className="space-y-2">
             <label className="block font-medium text-primary text-sm">
               Threshold
-              <span className="ml-2 text-tertiary text-xs font-normal">
+              <span className="ml-2 font-normal text-tertiary text-xs">
                 signatures required per Safe tx
               </span>
             </label>
@@ -268,7 +268,7 @@ export function DeploySafeInline({ onDeployed }: DeploySafeInlineProps) {
                 className="w-24"
               />
               <span className="text-tertiary text-sm">
-                of {validOwners.length || '—'} owner{validOwners.length === 1 ? '' : 's'}
+                of {validOwners.length || '-'} owner{validOwners.length === 1 ? '' : 's'}
               </span>
             </div>
             {validOwners.length > 0 && !thresholdValid && (
