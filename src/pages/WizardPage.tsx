@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   useAccount,
@@ -282,12 +282,25 @@ export function WizardPage() {
     query: { enabled: Boolean(existingModuleAddress) },
   })
 
+  // One-shot default per detected module: when the user lands on a Safe with
+  // an oracleless module, pre-fill the toggle + USD field for them. Doesn't
+  // re-fire on subsequent toggle changes — picking "Oracle-managed" will
+  // queue a setAuthorizedOracle Safe-tx alongside the agent configuration,
+  // so the module is migrated as part of the same flow.
+  const initializedForModule = useRef<string | null>(null)
   useEffect(() => {
-    if (existingModuleIsOracleless === true) {
-      setOracleless(true)
-      if (!spendingLimitUSD) setSpendingLimitUSD('5000')
+    if (
+      existingModuleAddress &&
+      typeof existingModuleIsOracleless === 'boolean' &&
+      initializedForModule.current !== existingModuleAddress
+    ) {
+      initializedForModule.current = existingModuleAddress
+      if (existingModuleIsOracleless) {
+        setOracleless(true)
+        if (!spendingLimitUSD) setSpendingLimitUSD('5000')
+      }
     }
-  }, [existingModuleIsOracleless, spendingLimitUSD])
+  }, [existingModuleAddress, existingModuleIsOracleless, spendingLimitUSD])
 
   // Safe owner check - connected wallet must be a Safe signer to call enableModule
   const { data: safeOwners } = useReadContract({
@@ -454,21 +467,52 @@ export function WizardPage() {
       explanations.push(explanation)
     }
 
-    // Decide the new agent's limit mode. Per-agent trust mode is the user's
-    // UI choice on an oracle-managed module (both BPS and USD agents are
-    // valid). An oracleless module forces every agent to USD mode (the
-    // module reverts BPS-mode setSubAccountLimits — see
-    // DeFiInteractorModule.sol:410), so we force-flip in that case only.
+    // Decide the new agent's limit mode + whether the module itself needs
+    // to be migrated. An oracleless module rejects BPS-mode agents
+    // (DeFiInteractorModule.sol:410). When the user wants an oracle-managed
+    // agent on an oracleless module, we queue setAuthorizedOracle() first
+    // — the module is flipped to oracle-managed mode as part of the same
+    // Safe transaction batch, then the agent's setSubAccountLimits writes
+    // BPS limits against the post-flip state.
     let guardianIsOracleless = oracleless
+    let willFlipModuleToOracle = false
     try {
       const moduleIsOracleless = (await publicClient.readContract({
         address: existingModuleAddress,
         abi: GUARDIAN_ABI,
         functionName: 'isOracleless',
       })) as boolean
-      if (moduleIsOracleless) guardianIsOracleless = true
+      if (moduleIsOracleless && oracleless) {
+        guardianIsOracleless = true
+      } else if (moduleIsOracleless && !oracleless) {
+        if (!ORACLE_ADDRESS) {
+          setDeployError(
+            'Oracle address is not configured for this network. Set VITE_ORACLE_ADDRESS to switch the module to oracle-managed mode, or pick the Oracleless trust mode.'
+          )
+          return
+        }
+        willFlipModuleToOracle = true
+        guardianIsOracleless = false
+      } else {
+        guardianIsOracleless = oracleless
+      }
     } catch {
       // If the call fails, fall back to UI toggle.
+    }
+
+    if (willFlipModuleToOracle && ORACLE_ADDRESS) {
+      addTransaction(
+        {
+          to: existingModuleAddress,
+          data: encodeContractCall(existingModuleAddress, GUARDIAN_ABI, 'setAuthorizedOracle', [
+            ORACLE_ADDRESS,
+          ]),
+        },
+        {
+          title: 'Switch module to oracle-managed',
+          description: `Sets authorizedOracle to ${ORACLE_ADDRESS.slice(0, 6)}…${ORACLE_ADDRESS.slice(-4)} on the module so this agent (and any future agents) can use BPS-of-portfolio limits.`,
+        }
+      )
     }
 
     // Early blocker: if this agent already has a role in the vault, stop here.
@@ -1238,7 +1282,7 @@ export function WizardPage() {
               <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
                 <button
                   type="button"
-                  disabled={existingModuleIsOracleless === true}
+                  disabled={existingModuleIsOracleless === true && !ORACLE_ADDRESS}
                   onClick={() => {
                     setOracleless(false)
                   }}
@@ -1246,7 +1290,11 @@ export function WizardPage() {
                     !oracleless
                       ? 'border-accent-primary bg-accent-primary/5'
                       : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                  } ${existingModuleIsOracleless === true ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  } ${
+                    existingModuleIsOracleless === true && !ORACLE_ADDRESS
+                      ? 'opacity-60 cursor-not-allowed'
+                      : ''
+                  }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck className="w-4 h-4 text-accent-primary" />
@@ -1279,12 +1327,30 @@ export function WizardPage() {
                   </p>
                 </button>
               </div>
-              {existingModuleIsOracleless === true && (
+              {existingModuleIsOracleless === true && !oracleless && ORACLE_ADDRESS && (
                 <p className="mt-2 text-amber-400 text-xs">
                   This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
-                  {existingModuleAddress?.slice(-4)}) is in <strong>oracleless</strong> mode, so
-                  every agent under it must use a USD-only limit. To switch the module to
-                  oracle-managed, the Safe owners must call <code>setAuthorizedOracle</code> on it.
+                  {existingModuleAddress?.slice(-4)}) is currently <strong>oracleless</strong>.
+                  Continuing will queue an extra Safe transaction that calls{' '}
+                  <code>
+                    setAuthorizedOracle({ORACLE_ADDRESS.slice(0, 6)}…{ORACLE_ADDRESS.slice(-4)})
+                  </code>{' '}
+                  on the module before the new agent is configured, switching the whole module to
+                  oracle-managed mode. Existing oracleless agents under this module keep their USD
+                  limits and continue to work.
+                </p>
+              )}
+              {existingModuleIsOracleless === true && oracleless && (
+                <p className="mt-2 text-tertiary text-xs">
+                  Module ({existingModuleAddress?.slice(0, 6)}…{existingModuleAddress?.slice(-4)})
+                  is oracleless. Adding an oracleless agent keeps the module as-is. Pick{' '}
+                  <em>Oracle-managed</em> above to migrate the module first.
+                </p>
+              )}
+              {existingModuleIsOracleless === true && !ORACLE_ADDRESS && (
+                <p className="mt-2 text-red-400 text-xs">
+                  No oracle address is configured for this network (<code>VITE_ORACLE_ADDRESS</code>
+                  ), so the module cannot be switched to oracle-managed from here.
                 </p>
               )}
               {existingModuleIsOracleless === false && (
