@@ -1317,8 +1317,7 @@ export function WizardPage() {
                 <p className="mt-1 text-red-400 text-xs">
                   This address is already an agent on the existing module (
                   {existingModuleAddress?.slice(0, 6)}…{existingModuleAddress?.slice(-4)}). Use the
-                  Dashboard to update its config — deploying again here would silently overwrite its
-                  limits and permissions.
+                  Dashboard to update its config.
                 </p>
               )}
             </div>
@@ -1376,22 +1375,10 @@ export function WizardPage() {
               </div>
               {existingModuleIsOracleless === true && !oracleless && ORACLE_ADDRESS && (
                 <p className="mt-2 text-amber-400 text-xs">
-                  This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
-                  {existingModuleAddress?.slice(-4)}) is currently <strong>oracleless</strong>.
-                  Continuing will queue an extra Safe transaction that calls{' '}
-                  <code>
-                    setAuthorizedOracle({ORACLE_ADDRESS.slice(0, 6)}…{ORACLE_ADDRESS.slice(-4)})
-                  </code>{' '}
-                  on the module before the new agent is configured, switching the whole module to
-                  oracle-managed mode. Existing oracleless agents under this module keep their USD
-                  limits and continue to work.
-                </p>
-              )}
-              {existingModuleIsOracleless === true && oracleless && (
-                <p className="mt-2 text-tertiary text-xs">
-                  Module ({existingModuleAddress?.slice(0, 6)}…{existingModuleAddress?.slice(-4)})
-                  is oracleless. Adding an oracleless agent keeps the module as-is. Pick{' '}
-                  <em>Oracle-managed</em> above to migrate the module first.
+                  This Safe's guardian module is currently <strong>oracleless</strong>. Continuing
+                  will queue an extra Safe transaction that sets the oracle before the new agent is
+                  configured. Existing oracleless agents under this module keep their USD limits and
+                  continue to work.
                 </p>
               )}
               {existingModuleIsOracleless === true && !ORACLE_ADDRESS && (
