@@ -170,6 +170,9 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
   } = useAllowedRecipientsList(subAccountAddress)
 
   const [newRecipient, setNewRecipient] = useState('')
+  const [pendingAction, setPendingAction] = useState<
+    'toggle' | 'add' | { type: 'remove'; recipient: Address } | null
+  >(null)
 
   const trimmedNew = newRecipient.trim()
   const newIsValid = trimmedNew.length > 0 && isAddress(trimmedNew)
@@ -195,6 +198,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
     // default the action to "enable" so a fresh agent isn't stuck behind an
     // unclickable button. The contract no-ops if the value is already what we set.
     const next = enabled === undefined ? true : !enabled
+    setPendingAction('toggle')
     try {
       const result = await proposeTransaction(
         {
@@ -217,6 +221,8 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to update whitelist toggle'
       toast.error(msg)
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -233,6 +239,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
       toast.info('This recipient is already whitelisted')
       return
     }
+    setPendingAction('add')
     try {
       const result = await proposeTransaction(
         {
@@ -255,11 +262,14 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to add recipient'
       toast.error(msg)
+    } finally {
+      setPendingAction(null)
     }
   }
 
   const handleRemove = async (recipient: Address) => {
     if (!addresses.guardian) return
+    setPendingAction({ type: 'remove', recipient })
     try {
       const result = await proposeTransaction(
         {
@@ -281,6 +291,8 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to remove recipient'
       toast.error(msg)
+    } finally {
+      setPendingAction(null)
     }
   }
 
@@ -312,13 +324,14 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
           onClick={handleToggle}
           disabled={isPending}
         >
-          {isPending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : enabled ? (
-            'Disable'
-          ) : (
-            'Enable'
-          )}
+          {pendingAction === 'toggle' && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+          {pendingAction === 'toggle'
+            ? enabled
+              ? 'Disabling...'
+              : 'Enabling...'
+            : enabled
+              ? 'Disable'
+              : 'Enable'}
         </Button>
       </div>
 
@@ -359,7 +372,13 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
                   disabled={isPending}
                   title="Remove recipient"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {typeof pendingAction === 'object' &&
+                  pendingAction?.type === 'remove' &&
+                  pendingAction.recipient === recipient ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             ))}
@@ -390,7 +409,10 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
             onClick={handleAdd}
             disabled={isPending || !newIsValid || newAlreadyListed}
           >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+            <span className="inline-flex items-center">
+              {pendingAction === 'add' && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
+              {pendingAction === 'add' ? 'Adding...' : 'Add'}
+            </span>
           </Button>
         </div>
       </div>
