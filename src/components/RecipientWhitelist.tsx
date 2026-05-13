@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAddress, parseAbiItem, type Address, type Log } from 'viem'
 import { usePublicClient, useReadContract } from 'wagmi'
@@ -173,12 +173,51 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
   const [pendingAction, setPendingAction] = useState<
     'toggle' | 'add' | { type: 'remove'; recipient: Address } | null
   >(null)
+  const [optimisticEnabled, setOptimisticEnabled] = useState<boolean | null>(null)
+  const [optimisticAdded, setOptimisticAdded] = useState<readonly Address[]>([])
+  const [optimisticRemoved, setOptimisticRemoved] = useState<readonly Address[]>([])
+
+  const displayedEnabled = optimisticEnabled ?? enabled
+
+  const displayedRecipients = useMemo(() => {
+    const removedSet = new Set(optimisticRemoved.map(r => r.toLowerCase()))
+    const present = recipients.filter(r => !removedSet.has(r.toLowerCase()))
+    const presentSet = new Set(present.map(r => r.toLowerCase()))
+    const appended = optimisticAdded.filter(r => !presentSet.has(r.toLowerCase()))
+    return [...present, ...appended]
+  }, [recipients, optimisticAdded, optimisticRemoved])
+
+  useEffect(() => {
+    if (optimisticEnabled !== null && enabled === optimisticEnabled) {
+      setOptimisticEnabled(null)
+    }
+  }, [enabled, optimisticEnabled])
+
+  // Drop a pending add once the real query surfaces the recipient.
+  useEffect(() => {
+    if (optimisticAdded.length === 0) return
+    const present = new Set(recipients.map(r => r.toLowerCase()))
+    const stillPending = optimisticAdded.filter(r => !present.has(r.toLowerCase()))
+    if (stillPending.length !== optimisticAdded.length) {
+      setOptimisticAdded(stillPending)
+    }
+  }, [recipients, optimisticAdded])
+
+  // Drop a pending remove once the real query no longer lists the recipient.
+  useEffect(() => {
+    if (optimisticRemoved.length === 0) return
+    const present = new Set(recipients.map(r => r.toLowerCase()))
+    const stillPending = optimisticRemoved.filter(r => present.has(r.toLowerCase()))
+    if (stillPending.length !== optimisticRemoved.length) {
+      setOptimisticRemoved(stillPending)
+    }
+  }, [recipients, optimisticRemoved])
 
   const trimmedNew = newRecipient.trim()
   const newIsValid = trimmedNew.length > 0 && isAddress(trimmedNew)
   const newAlreadyListed = useMemo(
-    () => newIsValid && recipients.some(r => r.toLowerCase() === trimmedNew.toLowerCase()),
-    [newIsValid, recipients, trimmedNew]
+    () => newIsValid && displayedRecipients.some(r => r.toLowerCase() === trimmedNew.toLowerCase()),
+    [newIsValid, displayedRecipients, trimmedNew]
   )
 
   const refetchAll = () => {
@@ -197,7 +236,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
     // If we don't yet know the on-chain state (read still loading or RPC error),
     // default the action to "enable" so a fresh agent isn't stuck behind an
     // unclickable button. The contract no-ops if the value is already what we set.
-    const next = enabled === undefined ? true : !enabled
+    const next = displayedEnabled === undefined ? true : !displayedEnabled
     setPendingAction('toggle')
     try {
       const result = await proposeTransaction(
@@ -213,6 +252,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
         { transactionType: TRANSACTION_TYPES.SET_RECIPIENT_WHITELIST_ENABLED }
       )
       if (result.success) {
+        setOptimisticEnabled(next)
         toast.success(next ? 'Whitelist enabled' : 'Whitelist disabled')
         refetchAll()
       } else if (!('cancelled' in result && result.cancelled)) {
@@ -253,6 +293,11 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
         { transactionType: TRANSACTION_TYPES.SET_ALLOWED_RECIPIENTS }
       )
       if (result.success) {
+        const added = trimmedNew as Address
+        setOptimisticAdded(prev =>
+          prev.some(r => r.toLowerCase() === added.toLowerCase()) ? prev : [...prev, added]
+        )
+        setOptimisticRemoved(prev => prev.filter(r => r.toLowerCase() !== added.toLowerCase()))
         toast.success('Recipient added')
         setNewRecipient('')
         refetchAll()
@@ -283,6 +328,10 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
         { transactionType: TRANSACTION_TYPES.SET_ALLOWED_RECIPIENTS }
       )
       if (result.success) {
+        setOptimisticRemoved(prev =>
+          prev.some(r => r.toLowerCase() === recipient.toLowerCase()) ? prev : [...prev, recipient]
+        )
+        setOptimisticAdded(prev => prev.filter(r => r.toLowerCase() !== recipient.toLowerCase()))
         toast.success('Recipient removed')
         refetchAll()
       } else if (!('cancelled' in result && result.cancelled)) {
@@ -304,7 +353,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
           <div>
             <p className="font-medium text-primary text-small">Recipient Whitelist</p>
             <p className="mt-0.5 text-caption text-tertiary">
-              {enabled === undefined
+              {displayedEnabled === undefined
                 ? !addresses.guardian
                   ? 'Waiting for Guardian context...'
                   : isLoadingEnabled
@@ -312,7 +361,7 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
                     : isEnabledError
                       ? 'Could not read on-chain state. You can still toggle the whitelist.'
                       : 'Loading current state...'
-                : enabled
+                : displayedEnabled
                   ? 'ON - this agent can only transfer to addresses listed below.'
                   : 'OFF - this agent can transfer to any recipient (still bounded by spending limits).'}
             </p>
@@ -326,10 +375,10 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
         >
           {pendingAction === 'toggle' && <Loader2 className="mr-2 w-4 h-4 animate-spin" />}
           {pendingAction === 'toggle'
-            ? enabled
+            ? displayedEnabled
               ? 'Disabling...'
               : 'Enabling...'
-            : enabled
+            : displayedEnabled
               ? 'Disable'
               : 'Enable'}
         </Button>
@@ -337,29 +386,34 @@ export function RecipientWhitelist({ subAccountAddress }: RecipientWhitelistProp
 
       <div className="space-y-2">
         <p className="font-medium text-primary text-small">
-          Allowed Recipients{recipients.length > 0 ? ` (${recipients.length})` : ''}
+          Allowed Recipients
+          {displayedRecipients.length > 0 ? ` (${displayedRecipients.length})` : ''}
         </p>
         {isLoadingRecipients ? (
           <div className="flex items-center gap-2 bg-elevated p-3 border border-subtle rounded-xl">
             <Loader2 className="w-4 h-4 text-tertiary animate-spin" />
             <span className="text-caption text-tertiary">Loading recipients...</span>
           </div>
-        ) : recipients.length === 0 ? (
+        ) : displayedRecipients.length === 0 ? (
           <div
             className={cn(
               'p-3 border rounded-xl',
-              enabled ? 'border-yellow-500/20 bg-yellow-500/10' : 'border-subtle bg-elevated'
+              displayedEnabled
+                ? 'border-yellow-500/20 bg-yellow-500/10'
+                : 'border-subtle bg-elevated'
             )}
           >
-            <p className={cn('text-caption', enabled ? 'text-yellow-400' : 'text-tertiary')}>
-              {enabled
+            <p
+              className={cn('text-caption', displayedEnabled ? 'text-yellow-400' : 'text-tertiary')}
+            >
+              {displayedEnabled
                 ? 'No recipients whitelisted. With the whitelist ON, this agent cannot transfer to anyone until you add at least one address.'
                 : 'No recipients whitelisted. (The whitelist is OFF, so this is not enforced.)'}
             </p>
           </div>
         ) : (
           <div className="space-y-1.5">
-            {recipients.map(recipient => (
+            {displayedRecipients.map(recipient => (
               <div
                 key={recipient}
                 className="flex justify-between items-center gap-2 bg-elevated p-2.5 border border-subtle rounded-lg"
