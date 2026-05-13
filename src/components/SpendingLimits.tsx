@@ -27,6 +27,23 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   // Read current limits using hook: [maxSpendingBps, maxSpendingUSD, windowDuration]
   const { data: currentLimits } = useSubAccountLimits(subAccountAddress)
 
+  const [optimisticLimits, setOptimisticLimits] = useState<
+    readonly [bigint, bigint, bigint] | null
+  >(null)
+  const displayedLimits = optimisticLimits ?? currentLimits
+
+  useEffect(() => {
+    if (
+      optimisticLimits !== null &&
+      currentLimits &&
+      currentLimits[0] === optimisticLimits[0] &&
+      currentLimits[1] === optimisticLimits[1] &&
+      currentLimits[2] === optimisticLimits[2]
+    ) {
+      setOptimisticLimits(null)
+    }
+  }, [currentLimits, optimisticLimits])
+
   // Get full sub-account state for preview context
   const { fullState: currentFullState } = useSubAccountFullState(subAccountAddress)
 
@@ -39,16 +56,16 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   const { data: isModuleOracleless } = useIsOracleless()
   const isOracleless =
     Boolean(isModuleOracleless) ||
-    (currentLimits ? currentLimits[0] === 0n && currentLimits[1] > 0n : false)
+    (displayedLimits ? displayedLimits[0] === 0n && displayedLimits[1] > 0n : false)
 
   // Oracle-managed: USD equivalent from BPS × portfolio
   const maxAllowanceUSD =
-    !isOracleless && safeValue && currentLimits
-      ? (safeValue[0] * BigInt(currentLimits[0])) / 10000n
+    !isOracleless && safeValue && displayedLimits
+      ? (safeValue[0] * BigInt(displayedLimits[0])) / 10000n
       : null
 
-  // Oracleless: direct USD value stored in currentLimits[1] (1e18 scale)
-  const maxAllowanceUSDDirect = isOracleless && currentLimits ? currentLimits[1] : null
+  // Oracleless: direct USD value stored in displayedLimits[1] (1e18 scale)
+  const maxAllowanceUSDDirect = isOracleless && displayedLimits ? displayedLimits[1] : null
 
   const [spendingLimit, setSpendingLimit] = useState('10') // % for oracle-managed
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('') // $ for oracleless
@@ -62,34 +79,37 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
   const { toast } = useToast()
   const { showPreview } = useTransactionPreviewContext()
 
-  // Sync form values with contract data when available
+  // Sync form values with displayed limits so that after a successful save the
+  // form snaps to the just-committed values (hasChanges flips false, button
+  // disables) without flickering back to the pre-tx values during the 4s
+  // RPC-sync window.
   useEffect(() => {
-    if (!currentLimits) return
-    const currentWindowHours = Number(currentLimits[2]) / 3600
+    if (!displayedLimits) return
+    const currentWindowHours = Number(displayedLimits[2]) / 3600
     setWindowHours((currentWindowHours > 0 ? currentWindowHours : 24).toString())
-    if (currentLimits[0] === 0n && currentLimits[1] > 0n) {
+    if (displayedLimits[0] === 0n && displayedLimits[1] > 0n) {
       // Oracleless: display the USD value
-      setSpendingLimitUSD(formatUnits(currentLimits[1], 18))
+      setSpendingLimitUSD(formatUnits(displayedLimits[1], 18))
     } else {
-      setSpendingLimit((Number(currentLimits[0]) / 100).toString())
+      setSpendingLimit((Number(displayedLimits[0]) / 100).toString())
     }
-  }, [currentLimits])
+  }, [displayedLimits])
 
   const { proposeTransaction, isPending } = useSafeProposal()
 
   const hasChanges = useMemo(() => {
-    if (!currentLimits) return true
+    if (!displayedLimits) return true
     const inputWindowSeconds = Math.floor(parseFloat(windowHours || '0') * 3600)
     if (isOracleless) {
       const inputUSD = parseUnits(spendingLimitUSD || '0', 18)
-      return inputUSD !== currentLimits[1] || inputWindowSeconds !== Number(currentLimits[2])
+      return inputUSD !== displayedLimits[1] || inputWindowSeconds !== Number(displayedLimits[2])
     }
     const inputSpendingBps = Math.floor(parseFloat(spendingLimit || '0') * 100)
     return (
-      inputSpendingBps !== Number(currentLimits[0]) ||
-      inputWindowSeconds !== Number(currentLimits[2])
+      inputSpendingBps !== Number(displayedLimits[0]) ||
+      inputWindowSeconds !== Number(displayedLimits[2])
     )
-  }, [currentLimits, spendingLimit, spendingLimitUSD, windowHours, isOracleless])
+  }, [displayedLimits, spendingLimit, spendingLimitUSD, windowHours, isOracleless])
 
   // Increment/decrement handlers for custom spinners
   const incrementSpendingLimit = () => {
@@ -197,6 +217,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
         )
 
         if (result.success) {
+          setOptimisticLimits([BigInt(spendingBps), spendingUSD, BigInt(windowSeconds)] as const)
           toast.success('Spending limits updated')
         } else if ('cancelled' in result && result.cancelled) {
           // User cancelled - do nothing
@@ -220,7 +241,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-5">
-          {currentLimits && (
+          {displayedLimits && (
             <div className="bg-gradient-to-br from-info-muted to-success-muted p-4 border border-info/20 rounded-xl">
               <p className="flex items-center gap-2 mb-3 font-medium text-primary text-small">
                 Current Configuration
@@ -235,7 +256,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                   ) : (
                     <>
                       <p className="font-bold text-primary text-2xl">
-                        {(Number(currentLimits[0]) / 100).toFixed(1)}%
+                        {(Number(displayedLimits[0]) / 100).toFixed(1)}%
                       </p>
                       {maxAllowanceUSD !== null && (
                         <p className="text-muted-foreground text-sm">
@@ -248,7 +269,7 @@ export function SpendingLimits({ subAccountAddress }: SpendingLimitsProps) {
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-primary text-2xl">
-                    {(Number(currentLimits[2]) / 3600 || 24).toFixed(0)}h
+                    {(Number(displayedLimits[2]) / 3600 || 24).toFixed(0)}h
                   </p>
                   <p className="mt-1 text-muted-foreground text-xs">Time Window</p>
                 </div>
