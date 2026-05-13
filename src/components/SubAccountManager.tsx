@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,8 @@ import { formatUSD, cn } from '@/lib/utils'
 import { useSafeProposal, encodeContractCall } from '@/hooks/useSafeProposal'
 import { TRANSACTION_TYPES } from '@/lib/transactionTypes'
 import { isAddress, parseUnits } from 'viem'
+import { selectedChain } from '@/lib/chains'
+import { getDeployment } from '@/lib/deployments'
 import { useToast } from '@/contexts/ToastContext'
 import { useTransactionPreviewContext } from '@/contexts/TransactionPreviewContext'
 import type { SubAccount } from '@/types'
@@ -115,15 +117,35 @@ export function SubAccountManager() {
   // Fetch managed accounts from contract
   const { data: managedAccounts = [], isLoading: isLoadingAccounts } = useManagedAccounts()
 
-  // Read the module's actual oracleless flag - locks the trust-mode picker on oracleless modules.
-  // Picking BPS on an oracleless module would revert with OraclelessRequiresUSDMode at submission.
+  // Read the module's actual oracleless flag. An oracleless module rejects
+  // BPS-mode agents (DeFiInteractorModule.sol:410), but the user can still
+  // pick "Oracle-managed" if VITE_ORACLE_ADDRESS is configured — that path
+  // queues a setAuthorizedOracle Safe-tx alongside the agent grant, flipping
+  // the module to oracle-managed mode as part of the same batch.
   const { data: isModuleOracleless } = useIsOracleless()
+  const ORACLE_ADDRESS = getDeployment(selectedChain.id).oracle
+  const initializedForGuardian = useRef<string | null>(null)
   useEffect(() => {
-    if (isModuleOracleless && trustMode !== 'oracleless') {
-      setTrustMode('oracleless')
-      setSetSpendingLimits(true)
+    if (
+      addresses.guardian &&
+      typeof isModuleOracleless === 'boolean' &&
+      initializedForGuardian.current !== addresses.guardian
+    ) {
+      initializedForGuardian.current = addresses.guardian
+      if (isModuleOracleless) {
+        setTrustMode('oracleless')
+        setSetSpendingLimits(true)
+      }
     }
-  }, [isModuleOracleless, trustMode])
+  }, [addresses.guardian, isModuleOracleless])
+
+  // Live duplicate-agent check: block the Add Agent form when the typed
+  // address is already a managed account on this module. Edits to existing
+  // agents go through their row in the managed-accounts list.
+  const agentAlreadyOnModule = useMemo(() => {
+    if (!isAddress(newSubAccount)) return false
+    return managedAccounts.some(acc => acc.address.toLowerCase() === newSubAccount.toLowerCase())
+  }, [newSubAccount, managedAccounts])
 
   // Get Safe portfolio value for USD calculations
   const { data: safeValue } = useSafeValue()
@@ -168,6 +190,18 @@ export function SubAccountManager() {
       return
     }
 
+    // Adding an oracle-managed agent on an oracleless module requires
+    // migrating the module first (setAuthorizedOracle). Refuse early if no
+    // oracle is configured for this network so the user gets a clear error
+    // rather than a chain revert.
+    const willFlipModuleToOracle = isModuleOracleless === true && trustMode === 'oracle-managed'
+    if (willFlipModuleToOracle && !ORACLE_ADDRESS) {
+      toast.warning(
+        'Oracle address is not configured for this network. Pick the Oracleless trust mode, or set VITE_ORACLE_ADDRESS to migrate the module.'
+      )
+      return
+    }
+
     if (trustMode === 'oracleless') {
       if (!spendingLimitUSD || Number(spendingLimitUSD) <= 0) {
         toast.warning('Oracleless mode requires a USD spending limit')
@@ -197,33 +231,24 @@ export function SubAccountManager() {
       return
     }
 
-    // Check if the subaccount already exists and filter roles already granted
+    // Block reusing an existing agent's address. Edits to an existing
+    // agent's roles, limits, or recipient whitelist must go through that
+    // agent's row in the managed-accounts list — not the Add Agent form,
+    // where the user can't see the current config and would risk silently
+    // overwriting it.
     const existingAccount = managedAccounts.find(
       acc => acc.address.toLowerCase() === newSubAccount.toLowerCase()
     )
-
-    const rolesToGrant: number[] = []
-    if (grantExecute && !existingAccount?.hasExecuteRole) {
-      rolesToGrant.push(ROLES.DEFI_EXECUTE_ROLE)
-    }
-    if (grantTransfer && !existingAccount?.hasTransferRole) {
-      rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
-    }
-
-    // Payment Agent: a user re-running this form on an existing Transfer agent
-    // to update its whitelist is a real case. The early-return below would
-    // block that flow ("address already has the selected roles") even though
-    // the whitelist tx batch below has real work to do.
-    const hasPaymentAgentWhitelistWork = isPaymentAgent && validRecipients.length > 0
-    if (
-      rolesToGrant.length === 0 &&
-      allowedProtocolAddresses.length === 0 &&
-      !setSpendingLimits &&
-      !hasPaymentAgentWhitelistWork
-    ) {
-      toast.info('This address already has the selected roles')
+    if (existingAccount) {
+      toast.warning(
+        'This address is already an agent on this module. Use its row to edit its config.'
+      )
       return
     }
+
+    const rolesToGrant: number[] = []
+    if (grantExecute) rolesToGrant.push(ROLES.DEFI_EXECUTE_ROLE)
+    if (grantTransfer) rolesToGrant.push(ROLES.DEFI_TRANSFER_ROLE)
 
     // Build preview data
     const roles: RoleChange[] = [
@@ -287,6 +312,18 @@ export function SubAccountManager() {
     showPreview(previewData, async () => {
       try {
         const transactions: any[] = []
+
+        // If migrating an oracleless module to oracle-managed, queue the
+        // setAuthorizedOracle Safe-tx first so the agent's setSubAccountLimits
+        // below writes BPS limits against the post-flip module state.
+        if (willFlipModuleToOracle && ORACLE_ADDRESS) {
+          transactions.push({
+            to: addresses.guardian!,
+            data: encodeContractCall(addresses.guardian!, GUARDIAN_ABI, 'setAuthorizedOracle', [
+              ORACLE_ADDRESS,
+            ]),
+          })
+        }
 
         // Add grantRole transactions
         rolesToGrant.forEach(roleId => {
@@ -487,6 +524,11 @@ export function SubAccountManager() {
                   value={newSubAccount}
                   onChange={e => setNewSubAccount(e.target.value)}
                 />
+                {agentAlreadyOnModule && (
+                  <p className="mt-1 text-caption text-red-400">
+                    This address is already an agent on this module. Use its row to edit its config.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -495,13 +537,13 @@ export function SubAccountManager() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (isModuleOracleless) return
+                      if (isModuleOracleless && !ORACLE_ADDRESS) return
                       setTrustMode('oracle-managed')
                     }}
-                    disabled={Boolean(isModuleOracleless)}
+                    disabled={Boolean(isModuleOracleless && !ORACLE_ADDRESS)}
                     title={
-                      isModuleOracleless
-                        ? 'This module is configured oracleless; only USD limits are accepted on-chain.'
+                      isModuleOracleless && !ORACLE_ADDRESS
+                        ? 'This module is oracleless and no oracle is configured for this network.'
                         : undefined
                     }
                     className={cn(
@@ -509,7 +551,9 @@ export function SubAccountManager() {
                       trustMode === 'oracle-managed'
                         ? 'border-accent-primary bg-accent-primary/5'
                         : 'border-subtle bg-elevated-2 hover:border-accent-primary/30',
-                      isModuleOracleless && 'opacity-50 cursor-not-allowed hover:border-subtle'
+                      isModuleOracleless &&
+                        !ORACLE_ADDRESS &&
+                        'opacity-50 cursor-not-allowed hover:border-subtle'
                     )}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -543,9 +587,17 @@ export function SubAccountManager() {
                     </p>
                   </button>
                 </div>
-                {isModuleOracleless && (
+                {isModuleOracleless && trustMode === 'oracle-managed' && ORACLE_ADDRESS && (
+                  <p className="text-caption text-amber-400">
+                    This module is currently oracleless. Continuing will queue an extra Safe
+                    transaction that sets the oracle before the new agent is granted. Existing
+                    oracleless agents under this module keep their USD limits and continue to work.
+                  </p>
+                )}
+                {isModuleOracleless && !ORACLE_ADDRESS && (
                   <p className="text-caption text-tertiary">
-                    This module is oracleless - sub-accounts must use USD spending limits.
+                    This module is oracleless and no oracle is configured for this network — new
+                    agents must use USD spending limits.
                   </p>
                 )}
               </div>
@@ -817,7 +869,7 @@ export function SubAccountManager() {
 
               <Button
                 onClick={handleAddSubAccount}
-                disabled={isPending || !newSubAccount}
+                disabled={isPending || !newSubAccount || agentAlreadyOnModule}
                 className="w-full"
               >
                 {'Add Agent'}
