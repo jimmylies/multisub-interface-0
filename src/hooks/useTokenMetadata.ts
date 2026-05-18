@@ -19,54 +19,54 @@ export function useTokensMetadata(tokenAddresses?: `0x${string}`[]) {
 
       const metadataMap = new Map<string, TokenMetadata>()
 
-      // Fetch metadata for each token
-      const results = await Promise.allSettled(
-        tokenAddresses.map(async address => {
-          const addressLower = address.toLowerCase()
+      // Split into cached vs needs-fetch. Cached tokens skip the network
+      // entirely — KNOWN_TOKENS covers USDC/WETH/etc.
+      const toFetch: `0x${string}`[] = []
+      for (const address of tokenAddresses) {
+        const addressLower = address.toLowerCase()
+        const known = KNOWN_TOKENS[addressLower]
+        if (known) {
+          metadataMap.set(addressLower, known)
+        } else {
+          toFetch.push(address)
+        }
+      }
 
-          // Check if token is in KNOWN_TOKENS first (cache hit)
-          const known = KNOWN_TOKENS[addressLower]
-          if (known) {
-            return { address: addressLower, metadata: known }
-          }
+      if (toFetch.length === 0) {
+        return metadataMap
+      }
 
-          // Fetch from contract
-          try {
-            const [symbol, decimals] = await Promise.all([
-              publicClient.readContract({
-                address,
-                abi: ERC20_ABI,
-                functionName: 'symbol',
-              }),
-              publicClient.readContract({
-                address,
-                abi: ERC20_ABI,
-                functionName: 'decimals',
-              }),
-            ])
+      // One multicall covering symbol+decimals for every unknown token,
+      // ordered [s0, d0, s1, d1, …]. Replaces the prior N×2 readContract
+      // fan-out which dominated public-RPC traffic on dashboards with many
+      // acquired tokens.
+      const calls = toFetch.flatMap(address => [
+        { address, abi: ERC20_ABI, functionName: 'symbol' as const },
+        { address, abi: ERC20_ABI, functionName: 'decimals' as const },
+      ])
+      const results = await publicClient.multicall({
+        contracts: calls,
+        allowFailure: true,
+      })
 
-            return {
-              address: addressLower,
-              metadata: { symbol: symbol as string, decimals: decimals as number },
-            }
-          } catch (error) {
-            // Fallback for invalid ERC20 or network errors
-            console.warn(`Failed to fetch metadata for token ${address}:`, error)
-            return {
-              address: addressLower,
-              metadata: {
-                symbol: `${address.slice(0, 6)}...${address.slice(-4)}`,
-                decimals: 18,
-              },
-            }
-          }
-        })
-      )
+      toFetch.forEach((address, idx) => {
+        const symbolResult = results[idx * 2]
+        const decimalsResult = results[idx * 2 + 1]
+        const addressLower = address.toLowerCase()
 
-      // Process results
-      results.forEach(result => {
-        if (result.status === 'fulfilled' && result.value) {
-          metadataMap.set(result.value.address, result.value.metadata)
+        if (symbolResult.status === 'success' && decimalsResult.status === 'success') {
+          metadataMap.set(addressLower, {
+            symbol: symbolResult.result as string,
+            decimals: decimalsResult.result as number,
+          })
+        } else {
+          // Fallback for non-conforming ERC20s — keep the same shape as
+          // before so callers don't need to handle a missing entry.
+          console.warn(`Failed to fetch metadata for token ${address}`)
+          metadataMap.set(addressLower, {
+            symbol: `${address.slice(0, 6)}...${address.slice(-4)}`,
+            decimals: 18,
+          })
         }
       })
 

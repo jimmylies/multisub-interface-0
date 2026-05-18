@@ -235,7 +235,6 @@ export function useIsAddressAllowed(subAccount?: `0x${string}`, target?: `0x${st
 export function useManagedAccounts() {
   const { addresses } = useContractAddresses()
   const publicClient = usePublicClient()
-  const { chainId } = useAccount()
 
   return useQuery({
     queryKey: ['managedAccounts', addresses.guardian],
@@ -247,26 +246,27 @@ export function useManagedAccounts() {
       // Fetch accounts for each role using the contract's getter functions.
       // REPAY is a real on-chain role; if we don't query it here, agents with
       // only REPAY granted are invisible in the dashboard agents list.
-      const [executeAccounts, transferAccounts, repayAccounts] = await Promise.all([
-        publicClient.readContract({
-          address: addresses.guardian,
-          abi: GUARDIAN_ABI,
-          functionName: 'getSubaccountsByRole',
-          args: [ROLES.DEFI_EXECUTE_ROLE],
-        }) as Promise<`0x${string}`[]>,
-        publicClient.readContract({
-          address: addresses.guardian,
-          abi: GUARDIAN_ABI,
-          functionName: 'getSubaccountsByRole',
-          args: [ROLES.DEFI_TRANSFER_ROLE],
-        }) as Promise<`0x${string}`[]>,
-        publicClient.readContract({
-          address: addresses.guardian,
-          abi: GUARDIAN_ABI,
-          functionName: 'getSubaccountsByRole',
-          args: [ROLES.DEFI_REPAY_ROLE],
-        }) as Promise<`0x${string}`[]>,
-      ])
+      // multicall collapses the 3 calls into 1 eth_call against multicall3.
+      // Typed as `any[]` because viem's strict multicall generics try to
+      // exhaustively type each call result against the ABI, which causes
+      // "type instantiation is excessively deep" errors with this ABI shape.
+      const roleCalls = [
+        ROLES.DEFI_EXECUTE_ROLE,
+        ROLES.DEFI_TRANSFER_ROLE,
+        ROLES.DEFI_REPAY_ROLE,
+      ].map(role => ({
+        address: addresses.guardian!,
+        abi: GUARDIAN_ABI,
+        functionName: 'getSubaccountsByRole',
+        args: [role],
+      })) as any[]
+      const roleResults = await publicClient.multicall({
+        contracts: roleCalls,
+        allowFailure: true,
+      })
+      const [executeAccounts, transferAccounts, repayAccounts] = roleResults.map(r =>
+        r.status === 'success' ? (r.result as `0x${string}`[]) : []
+      )
 
       // Build a map of addresses and their roles
       const accountMap = new Map<
@@ -321,31 +321,27 @@ export function useAllowedAddresses(
         return new Set()
       }
 
-      // Query the allowedAddresses mapping for each address
-      const results = await Promise.all(
-        addressesToCheck.map(async targetAddress => {
-          try {
-            const isAllowed = (await publicClient.readContract({
-              address: addresses.guardian,
-              abi: GUARDIAN_ABI as any,
-              functionName: 'allowedAddresses',
-              args: [subAccountAddress, targetAddress],
-            } as any)) as boolean
-            return { address: targetAddress, isAllowed }
-          } catch {
-            return { address: targetAddress, isAllowed: false }
-          }
-        })
-      )
-
-      // Build set of allowed addresses
-      const allowed = new Set<`0x${string}`>()
-      results.forEach(({ address, isAllowed }) => {
-        if (isAllowed) {
-          allowed.add(address)
-        }
+      // multicall batches all allowedAddresses(subAccount, target) probes
+      // into one eth_call — previously this was N separate readContract calls
+      // (one per protocol contract address), which exhausted public RPC quotas
+      // on first dashboard load.
+      const calls = addressesToCheck.map(targetAddress => ({
+        address: addresses.guardian!,
+        abi: GUARDIAN_ABI as any,
+        functionName: 'allowedAddresses',
+        args: [subAccountAddress, targetAddress],
+      }))
+      const results = await publicClient.multicall({
+        contracts: calls,
+        allowFailure: true,
       })
 
+      const allowed = new Set<`0x${string}`>()
+      results.forEach((r, i) => {
+        if (r.status === 'success' && r.result === true) {
+          allowed.add(addressesToCheck[i])
+        }
+      })
       return allowed
     },
     enabled: Boolean(addresses.guardian && publicClient && subAccountAddress && addressesToCheck),
@@ -458,27 +454,24 @@ function useAcquiredBalancesFromContract(
         return new Map()
       }
 
-      // Fetch balance for each token
-      const results = await Promise.all(
-        tokenAddresses.map(async tokenAddress => {
-          try {
-            const balance = await publicClient.readContract({
-              address: addresses.guardian,
-              abi: GUARDIAN_ABI,
-              functionName: 'getAcquiredBalance',
-              args: [subAccountAddress, tokenAddress],
-              code: '0x',
-            })
-            return { address: tokenAddress.toLowerCase(), balance }
-          } catch {
-            return { address: tokenAddress.toLowerCase(), balance: 0n }
-          }
-        })
-      )
+      // Multicall — one batched eth_call instead of N per-token readContract
+      // requests. allowFailure: true preserves the per-token error behavior
+      // (failed reads default to 0n) without aborting the whole query.
+      const calls = tokenAddresses.map(tokenAddress => ({
+        address: addresses.guardian!,
+        abi: GUARDIAN_ABI,
+        functionName: 'getAcquiredBalance',
+        args: [subAccountAddress, tokenAddress],
+      })) as any[]
+      const results = await publicClient.multicall({
+        contracts: calls,
+        allowFailure: true,
+      })
 
-      // Build map of token -> AcquiredTokenWithTimestamp
       const balanceMap = new Map<string, AcquiredTokenWithTimestamp>()
-      results.forEach(({ address, balance }) => {
+      results.forEach((r, i) => {
+        const address = tokenAddresses[i].toLowerCase()
+        const balance = r.status === 'success' ? (r.result as unknown as bigint) : 0n
         balanceMap.set(address, {
           token: address,
           balance,

@@ -1,6 +1,8 @@
 import { mainnet, sepolia, base, baseSepolia } from 'wagmi/chains'
 import { http } from 'wagmi'
-import type { Chain, Transport } from 'wagmi/chains'
+import type { Chain } from 'wagmi/chains'
+import type { Transport } from 'viem'
+import { buildBaseTransport, buildBaseSepoliaTransport } from './rpcPool'
 
 export type NetworkName = 'sepolia' | 'mainnet' | 'base' | 'base-sepolia'
 
@@ -12,12 +14,26 @@ const NETWORK_MAP: Record<NetworkName, Chain> = {
   'base-sepolia': baseSepolia,
 }
 
-// Default RPC URLs per network
-const RPC_MAP: Record<NetworkName, string> = {
+// Default RPC URLs for the non-Base chains. Base + Base Sepolia route through
+// the multi-RPC pool in rpcPool.ts (Alchemy primary + public fallback shards),
+// so they intentionally don't appear here. getRpcUrlForChainId() still
+// surfaces a canonical URL for those for non-transport use (deep links etc).
+const RPC_MAP: Partial<Record<NetworkName, string>> = {
   sepolia: 'https://sepolia.drpc.org',
   mainnet: 'https://eth.llamarpc.com',
-  base: 'https://mainnet.base.org',
-  'base-sepolia': 'https://sepolia.base.org',
+}
+
+// Canonical RPC URLs used outside the wagmi transport (e.g. copy-to-clipboard,
+// MetaMask add-network deep links). For Base we report the primary endpoint
+// from env, falling back to the public RPC so something is always returned.
+const CANONICAL_RPC_MAP: Record<NetworkName, string> = {
+  sepolia: RPC_MAP.sepolia ?? 'https://sepolia.drpc.org',
+  mainnet: RPC_MAP.mainnet ?? 'https://eth.llamarpc.com',
+  base:
+    (import.meta.env.VITE_RPC_URL_BASE_PRIMARY as string | undefined) || 'https://mainnet.base.org',
+  'base-sepolia':
+    (import.meta.env.VITE_RPC_URL_BASE_SEPOLIA_PRIMARY as string | undefined) ||
+    'https://sepolia.base.org',
 }
 
 const EXPLORER_BASE_MAP: Record<number, string> = {
@@ -66,18 +82,10 @@ if (!NETWORK_MAP[networkName]) {
 export const selectedChain = NETWORK_MAP[networkName]
 export const selectedNetworkName: NetworkName = networkName
 
-function getRpcUrl(): string | undefined {
-  return RPC_MAP[networkName]
-}
-
 export function getRpcUrlForChainId(chainId: number): string | undefined {
-  const chain = Object.values(NETWORK_MAP).find(candidate => candidate.id === chainId)
-  if (!chain) return undefined
-
   const name = Object.entries(NETWORK_MAP).find(([, candidate]) => candidate.id === chainId)?.[0]
   if (!name) return undefined
-
-  return RPC_MAP[name as NetworkName]
+  return CANONICAL_RPC_MAP[name as NetworkName]
 }
 
 export function getExplorerBase(chainId: number): string {
@@ -92,18 +100,21 @@ export function getBlockscoutApiUrl(chainId: number): string | undefined {
   return BLOCKSCOUT_API_MAP[chainId]
 }
 
-// Get transports with custom RPC if provided
+// Build the wagmi transport for the active chain. For Base + Base Sepolia we
+// hand off to the multi-RPC pool (Alchemy primary + public fallback shards,
+// staleness-filtered every 15s). For other chains we use the single hardcoded
+// RPC, or viem's default public RPC if none is configured.
 export function getTransports(): Record<number, Transport> {
-  const rpcUrl = getRpcUrl()
+  if (selectedChain.id === base.id) {
+    return { [selectedChain.id]: buildBaseTransport() }
+  }
+  if (selectedChain.id === baseSepolia.id) {
+    return { [selectedChain.id]: buildBaseSepoliaTransport() }
+  }
 
+  const rpcUrl = RPC_MAP[networkName]
   if (rpcUrl) {
-    return {
-      [selectedChain.id]: http(rpcUrl),
-    }
+    return { [selectedChain.id]: http(rpcUrl) }
   }
-
-  // Use default public RPC
-  return {
-    [selectedChain.id]: http(),
-  }
+  return { [selectedChain.id]: http() }
 }
