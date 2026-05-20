@@ -200,7 +200,7 @@ export function WizardPage() {
   // when false the role permits transfers to any recipient (no whitelist).
   const [useWhitelist, setUseWhitelist] = useState(true)
   const [allowedRecipients, setAllowedRecipients] = useState<string[]>([''])
-  const [oracleless, setOracleless] = useState(false)
+  const [oracleless, setOracleless] = useState(!ORACLE_ADDRESS)
   const [deployedModule, setDeployedModule] = useState<string | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -1322,80 +1322,87 @@ export function WizardPage() {
               )}
             </div>
 
-            {/* Trust mode toggle */}
-            <div>
-              <label className="block mb-1.5 font-medium text-primary text-sm">Trust Mode</label>
-              <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={existingModuleIsOracleless === true && !ORACLE_ADDRESS}
-                  onClick={() => {
-                    setOracleless(false)
-                  }}
-                  className={`text-left p-4 rounded-xl border transition-all ${
-                    !oracleless
-                      ? 'border-accent-primary bg-accent-primary/5'
-                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                  } ${
-                    existingModuleIsOracleless === true && !ORACLE_ADDRESS
-                      ? 'opacity-60 cursor-not-allowed'
-                      : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                    <span className="font-medium text-primary text-sm">Oracle-managed</span>
-                  </div>
-                  <p className="text-tertiary text-xs">
-                    Off-chain oracle tracks portfolio value &amp; spending. Supports both BPS and
-                    USD limits. Worst-case oracle compromise: ~40% per window.
+            {/* Trust mode toggle — only shown when an oracle is configured for this network */}
+            {ORACLE_ADDRESS ? (
+              <div>
+                <label className="block mb-1.5 font-medium text-primary text-sm">Trust Mode</label>
+                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={existingModuleIsOracleless === true && !ORACLE_ADDRESS}
+                    onClick={() => {
+                      setOracleless(false)
+                    }}
+                    className={`text-left p-4 rounded-xl border transition-all ${
+                      !oracleless
+                        ? 'border-accent-primary bg-accent-primary/5'
+                        : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                    } ${
+                      existingModuleIsOracleless === true && !ORACLE_ADDRESS
+                        ? 'opacity-60 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                      <span className="font-medium text-primary text-sm">Oracle-managed</span>
+                    </div>
+                    <p className="text-tertiary text-xs">
+                      Off-chain oracle tracks portfolio value &amp; spending. Supports both BPS and
+                      USD limits. Worst-case oracle compromise: ~40% per window.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOracleless(true)
+                      setSpendingLimitUSD('')
+                    }}
+                    className={`text-left p-4 rounded-xl border transition-all ${
+                      oracleless
+                        ? 'border-accent-primary bg-accent-primary/5'
+                        : 'border-subtle bg-elevated hover:border-accent-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                      <span className="font-medium text-primary text-sm">Oracleless</span>
+                    </div>
+                    <p className="text-tertiary text-xs">
+                      Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
+                      counter.
+                    </p>
+                  </button>
+                </div>
+                {existingModuleIsOracleless === true && !oracleless && (
+                  <p className="mt-2 text-amber-400 text-xs">
+                    This Safe's guardian module is currently <strong>oracleless</strong>. Continuing
+                    will queue an extra Safe transaction that sets the oracle before the new agent is
+                    configured. Existing oracleless agents under this module keep their USD limits and
+                    continue to work.
                   </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOracleless(true)
-                    setSpendingLimitUSD('')
-                  }}
-                  className={`text-left p-4 rounded-xl border transition-all ${
-                    oracleless
-                      ? 'border-accent-primary bg-accent-primary/5'
-                      : 'border-subtle bg-elevated hover:border-accent-primary/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                    <span className="font-medium text-primary text-sm">Oracleless</span>
-                  </div>
-                  <p className="text-tertiary text-xs">
-                    Zero off-chain trust. USD-only limits, enforced solely by on-chain cumulative
-                    counter.
+                )}
+                {existingModuleIsOracleless === false && (
+                  <p className="mt-2 text-tertiary text-xs">
+                    This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
+                    {existingModuleAddress?.slice(-4)}) is oracle-managed. You can add agents in
+                    either trust mode — oracle-managed agents use a BPS-of-portfolio cap, oracleless
+                    agents use a fixed USD cap. Both are valid under an oracle module.
                   </p>
-                </button>
+                )}
               </div>
-              {existingModuleIsOracleless === true && !oracleless && ORACLE_ADDRESS && (
-                <p className="mt-2 text-amber-400 text-xs">
-                  This Safe's guardian module is currently <strong>oracleless</strong>. Continuing
-                  will queue an extra Safe transaction that sets the oracle before the new agent is
-                  configured. Existing oracleless agents under this module keep their USD limits and
-                  continue to work.
+            ) : (
+              <div className="p-3 rounded-xl bg-elevated border border-subtle">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                  <span className="font-medium text-primary text-sm">Trust Mode: Oracleless</span>
+                </div>
+                <p className="text-tertiary text-xs">
+                  No oracle is configured for this network. Spending is enforced solely by on-chain
+                  cumulative limits against a fixed USD cap.
                 </p>
-              )}
-              {existingModuleIsOracleless === true && !ORACLE_ADDRESS && (
-                <p className="mt-2 text-red-400 text-xs">
-                  No oracle address is configured for this network (<code>VITE_ORACLE_ADDRESS</code>
-                  ), so the module cannot be switched to oracle-managed from here.
-                </p>
-              )}
-              {existingModuleIsOracleless === false && (
-                <p className="mt-2 text-tertiary text-xs">
-                  This Safe's guardian module ({existingModuleAddress?.slice(0, 6)}…
-                  {existingModuleAddress?.slice(-4)}) is oracle-managed. You can add agents in
-                  either trust mode — oracle-managed agents use a BPS-of-portfolio cap, oracleless
-                  agents use a fixed USD cap. Both are valid under an oracle module.
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Spending limit */}
             <div>

@@ -178,3 +178,53 @@ export const ALLOWED_RECIPIENTS_HISTORY_QUERY = gql`
     }
   }
 `
+
+// Aggregate entities (added with the oracleless mainnet schema). The Account
+// entity is a single mutable row per sub-account with cumulative counters; the
+// AcquiredBalance entity is a single row per (subAccount, token) with the
+// current amount. Reading these replaces N-row event scans with one query.
+export interface AccountAggregate {
+  id: string
+  module: string
+  cumulativeSpentIndexed: string
+  totalTxs: number
+  firstActivityAt: string
+  lastActivityAt: string
+  recipientWhitelistEnabled: boolean
+}
+
+export interface AcquiredBalanceAggregate {
+  id: string
+  subAccount: string
+  token: string
+  amount: string
+  updatedAt: string
+  updatedAtBlock: string
+}
+
+export const ACCOUNT_AGGREGATE_QUERY = gql`
+  query GetAccount($id: ID!) {
+    account(id: $id) {
+      id
+      module
+      cumulativeSpentIndexed
+      totalTxs
+      firstActivityAt
+      lastActivityAt
+      recipientWhitelistEnabled
+    }
+  }
+`
+
+export const ACQUIRED_BALANCES_AGGREGATE_QUERY = gql`
+  query GetAcquiredBalancesAggregate($subAccount: Bytes!) {
+    acquiredBalances(where: { subAccount: $subAccount }, first: 1000) {
+      id
+      subAccount
+      token
+      amount
+      updatedAt
+      updatedAtBlock
+    }
+  }
+`

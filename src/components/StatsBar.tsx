@@ -1,5 +1,11 @@
 import { useAccount, useChainId } from 'wagmi'
-import { useSafeAddress, useManagedAccounts, useSafeValue, useIsValueStale } from '@/hooks/useSafe'
+import {
+  useSafeAddress,
+  useManagedAccounts,
+  useSafeValue,
+  useIsValueStale,
+  useIsOracleless,
+} from '@/hooks/useSafe'
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { ViewSwitcher } from '@/components/ViewSwitcher'
@@ -46,8 +52,11 @@ export function StatsBar() {
 }
 
 function OracleStatusCompact() {
+  const { data: isOracleless } = useIsOracleless()
   const { data: safeValue, isLoading } = useSafeValue()
   const { data: isStale } = useIsValueStale(3600)
+
+  if (isOracleless) return null
 
   if (isLoading || !safeValue) {
     return (

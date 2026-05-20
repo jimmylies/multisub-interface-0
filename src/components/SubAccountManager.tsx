@@ -101,7 +101,9 @@ export function SubAccountManager() {
   const [newSubAccount, setNewSubAccount] = useState('')
   const [grantExecute, setGrantExecute] = useState(false)
   const [grantTransfer, setGrantTransfer] = useState(false)
-  const [trustMode, setTrustMode] = useState<'oracle-managed' | 'oracleless'>('oracle-managed')
+  const [trustMode, setTrustMode] = useState<'oracle-managed' | 'oracleless'>(() =>
+    getDeployment(selectedChain.id).oracle ? 'oracle-managed' : 'oracleless'
+  )
   const [setSpendingLimits, setSetSpendingLimits] = useState(false)
   const [spendingLimit, setSpendingLimit] = useState('5')
   const [spendingLimitUSD, setSpendingLimitUSD] = useState('5000')
@@ -531,76 +533,76 @@ export function SubAccountManager() {
                 )}
               </div>
 
-              <div className="space-y-3">
-                <label className="block font-medium text-primary text-small">Trust Mode</label>
-                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isModuleOracleless && !ORACLE_ADDRESS) return
-                      setTrustMode('oracle-managed')
-                    }}
-                    disabled={Boolean(isModuleOracleless && !ORACLE_ADDRESS)}
-                    title={
-                      isModuleOracleless && !ORACLE_ADDRESS
-                        ? 'This module is oracleless and no oracle is configured for this network.'
-                        : undefined
-                    }
-                    className={cn(
-                      'p-3 border rounded-xl text-left transition-all',
-                      trustMode === 'oracle-managed'
-                        ? 'border-accent-primary bg-accent-primary/5'
-                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30',
-                      isModuleOracleless &&
-                        !ORACLE_ADDRESS &&
-                        'opacity-50 cursor-not-allowed hover:border-subtle'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                      <span className="font-medium text-primary text-small">Oracle-managed</span>
-                    </div>
-                    <p className="text-caption text-tertiary">
-                      Percentage-based daily limit tracked with oracle-backed portfolio value.
+              {ORACLE_ADDRESS ? (
+                <div className="space-y-3">
+                  <label className="block font-medium text-primary text-small">Trust Mode</label>
+                  <div className="gap-3 grid grid-cols-1 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTrustMode('oracle-managed')
+                      }}
+                      className={cn(
+                        'p-3 border rounded-xl text-left transition-all',
+                        trustMode === 'oracle-managed'
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                        <span className="font-medium text-primary text-small">Oracle-managed</span>
+                      </div>
+                      <p className="text-caption text-tertiary">
+                        Percentage-based daily limit tracked with oracle-backed portfolio value.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTrustMode('oracleless')
+                        setSetSpendingLimits(true)
+                        setSpendingLimitUSD('')
+                      }}
+                      className={cn(
+                        'p-3 border rounded-xl text-left transition-all',
+                        trustMode === 'oracleless'
+                          ? 'border-accent-primary bg-accent-primary/5'
+                          : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                        <span className="font-medium text-primary text-small">Oracleless</span>
+                      </div>
+                      <p className="text-caption text-tertiary">
+                        Fixed USD daily limit enforced through on-chain cumulative spending.
+                      </p>
+                    </button>
+                  </div>
+                  {isModuleOracleless && trustMode === 'oracle-managed' && (
+                    <p className="text-caption text-amber-400">
+                      This module is currently oracleless. Continuing will queue an extra Safe
+                      transaction that sets the oracle before the new agent is granted. Existing
+                      oracleless agents under this module keep their USD limits and continue to
+                      work.
                     </p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTrustMode('oracleless')
-                      setSetSpendingLimits(true)
-                      setSpendingLimitUSD('')
-                    }}
-                    className={cn(
-                      'p-3 border rounded-xl text-left transition-all',
-                      trustMode === 'oracleless'
-                        ? 'border-accent-primary bg-accent-primary/5'
-                        : 'border-subtle bg-elevated-2 hover:border-accent-primary/30'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <ShieldCheck className="w-4 h-4 text-accent-primary" />
-                      <span className="font-medium text-primary text-small">Oracleless</span>
-                    </div>
-                    <p className="text-caption text-tertiary">
-                      Fixed USD daily limit enforced through on-chain cumulative spending.
-                    </p>
-                  </button>
+                  )}
                 </div>
-                {isModuleOracleless && trustMode === 'oracle-managed' && ORACLE_ADDRESS && (
-                  <p className="text-caption text-amber-400">
-                    This module is currently oracleless. Continuing will queue an extra Safe
-                    transaction that sets the oracle before the new agent is granted. Existing
-                    oracleless agents under this module keep their USD limits and continue to work.
-                  </p>
-                )}
-                {isModuleOracleless && !ORACLE_ADDRESS && (
+              ) : (
+                <div className="p-3 rounded-xl bg-elevated-2 border border-subtle">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck className="w-4 h-4 text-accent-primary" />
+                    <span className="font-medium text-primary text-small">
+                      Trust Mode: Oracleless
+                    </span>
+                  </div>
                   <p className="text-caption text-tertiary">
-                    This module is oracleless and no oracle is configured for this network — new
-                    agents must use USD spending limits.
+                    No oracle is configured for this network. Spending is enforced solely by
+                    on-chain cumulative limits against a fixed USD cap.
                   </p>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <label className="block font-medium text-primary text-small">Roles</label>

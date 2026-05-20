@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TooltipIcon } from '@/components/ui/tooltip'
 import { Skeleton, SkeletonBadge } from '@/components/ui/skeleton'
-import { useAcquiredBalances } from '@/hooks/useSafe'
+import { useAcquiredBalances, useIsOracleless } from '@/hooks/useSafe'
+import { useAcquiredBalancesAggregate } from '@/hooks/useSubgraph'
 import { formatTokenAmount } from '@/lib/utils'
 import { useTokensMetadata } from '@/hooks/useTokenMetadata'
 import { useTimeRemaining } from '@/hooks/useTimeRemaining'
@@ -20,9 +21,10 @@ interface TokenRowProps {
     decimals: number
     timestamp: number
   }
+  showCountdown: boolean
 }
 
-function TokenRow({ token }: TokenRowProps) {
+function TokenRow({ token, showCountdown }: TokenRowProps) {
   const timeRemaining = useTimeRemaining(token.timestamp)
 
   return (
@@ -38,21 +40,22 @@ function TokenRow({ token }: TokenRowProps) {
       </div>
       <div className="text-right">
         <p className="font-semibold text-sm">{formatTokenAmount(token.balance, token.decimals)}</p>
-        {timeRemaining.isExpired ? (
-          <div>
-            <p className="text-orange-600 dark:text-orange-400 text-xs">
-              {timeRemaining.formatted}
-            </p>
-            <p className="opacity-70 text-muted-foreground text-xs">Pending oracle update</p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-green-600 dark:text-green-400 text-xs">
-              {timeRemaining.formatted}
-              {token.timestamp !== 0 && ' left'}
-            </p>
-          </div>
-        )}
+        {showCountdown &&
+          (timeRemaining.isExpired ? (
+            <div>
+              <p className="text-orange-600 dark:text-orange-400 text-xs">
+                {timeRemaining.formatted}
+              </p>
+              <p className="opacity-70 text-muted-foreground text-xs">Pending oracle update</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-green-600 dark:text-green-400 text-xs">
+                {timeRemaining.formatted}
+                {token.timestamp !== 0 && ' left'}
+              </p>
+            </div>
+          ))}
       </div>
     </div>
   )
@@ -60,7 +63,33 @@ function TokenRow({ token }: TokenRowProps) {
 
 export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
   const tokenAddresses = TRACKED_TOKENS.map(t => t.address)
-  const { data: balances = new Map(), isLoading } = useAcquiredBalances(address, tokenAddresses)
+  const { data: isOracleless } = useIsOracleless()
+
+  // Oracleless mode: read the AcquiredBalance aggregate entity directly (1 query).
+  // Oracle mode: keep the FIFO replay path so the 24h-expiry countdown stays accurate.
+  const { data: aggregateBalances, isLoading: aggregateLoading } = useAcquiredBalancesAggregate(
+    address,
+    { enabled: Boolean(isOracleless) }
+  )
+  const { data: fifoBalances = new Map(), isLoading: fifoLoading } = useAcquiredBalances(
+    address,
+    tokenAddresses
+  )
+
+  const balances = isOracleless
+    ? new Map(
+        (aggregateBalances ? Array.from(aggregateBalances.entries()) : []).map(([addr, row]) => [
+          addr as `0x${string}`,
+          {
+            token: row.token,
+            balance: row.balance,
+            timestamp: row.updatedAt,
+            lastBalance: row.balance,
+          },
+        ])
+      )
+    : fifoBalances
+  const isLoading = isOracleless ? aggregateLoading : fifoLoading
 
   // Extract token addresses from balances
   const tokenAddressesFromBalances = Array.from(balances.keys()).map(addr => addr)
@@ -81,8 +110,11 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {[1, 2].map((i) => (
-              <div key={i} className="flex justify-between items-center p-3 border border-subtle rounded-lg bg-elevated">
+            {[1, 2].map(i => (
+              <div
+                key={i}
+                className="flex justify-between items-center p-3 border border-subtle rounded-lg bg-elevated"
+              >
                 <div className="flex items-center gap-3">
                   <Skeleton className="w-8 h-8 rounded-full" />
                   <div className="space-y-1.5">
@@ -128,13 +160,21 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           Acquired Balances
-          <TooltipIcon content="Tokens received from DeFi operations (swaps, deposits, claims) are FREE to use for 24 hours. They don't count against your spending allowance during this period." />
-          <Badge
-            variant="secondary"
-            className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs"
-          >
-            Free 24h ✨
-          </Badge>
+          <TooltipIcon
+            content={
+              isOracleless
+                ? 'Tokens received from DeFi operations (swaps, deposits, claims). These do not count against the spending limit.'
+                : "Tokens received from DeFi operations (swaps, deposits, claims) are FREE to use for 24 hours. They don't count against your spending allowance during this period."
+            }
+          />
+          {!isOracleless && (
+            <Badge
+              variant="secondary"
+              className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs"
+            >
+              Free 24h ✨
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -143,15 +183,18 @@ export function AcquiredBalancesCard({ address }: AcquiredBalancesCardProps) {
             <TokenRow
               key={token.address}
               token={token}
+              showCountdown={!isOracleless}
             />
           ))}
         </div>
-        <div className="bg-blue-50 dark:bg-blue-950/30 mt-3 p-2 border border-blue-200 dark:border-blue-900 rounded">
-          <p className="text-blue-700 dark:text-blue-300 text-xs">
-            💡 These tokens can be used in operations without affecting your spending limit for the
-            next 24 hours.
-          </p>
-        </div>
+        {!isOracleless && (
+          <div className="bg-blue-50 dark:bg-blue-950/30 mt-3 p-2 border border-blue-200 dark:border-blue-900 rounded">
+            <p className="text-blue-700 dark:text-blue-300 text-xs">
+              💡 These tokens can be used in operations without affecting your spending limit for
+              the next 24 hours.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
